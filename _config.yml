@@ -2,6 +2,7 @@ name: Jack Fraser
 markdown: kramdown
 permalink: /blog/:year/:month/:day/:title
 paginate: 5
+comments: true
 paginate_path: "/blog/page:num/"
 plugins:
   - jekyll-sitemap
