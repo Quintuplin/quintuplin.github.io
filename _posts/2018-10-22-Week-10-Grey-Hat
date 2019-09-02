@@ -1,0 +1,15 @@
+---
+layout: post
+title: "Week 10: Grey Hat"
+date: 2018-10-22
+---
+
+https://mashable.com/2018/04/22/meet-ethical-hackers-who-keep-your-data-safe/#DzGFLRHjTaqb
+
+Hackers will always exist. It seems like a waste to not incentivize them to do the right thing, and luckily, a lot of companies seem to agree. This system will only get more evolved, and hopefully, even more above board.
+
+As programmers, we're not all hackers. For programmers such as us, hacking will always be a little cool, a little scary, but always something kept at arms length (or further). As normal programmers, we must endeavor to build secure and stable software which is resistant to hacking; but without being part of that industry ourselves we will likely be unable to fully understand all the factors involved. For this very reason, we need hackers to help us fix our own code. Yet...  we only need them because hackers exist at all. They create their own demand, and are necessary despite us not wanting to need them.
+
+That said, the ethics involved are complex. Hackers provide an invaluable service when acting ethically, but pose an incalculable risk when acting unethically. As such, hackers are often feared and always watched with caution, as what they do and how they do it is largely up to their ability and discretion. That it can be dangerous to be in such a field is therefore taken for granted. They are equally valuable for illicit means as they are for helping improve security. This puts them in a grey area where anyone wanting to hire or gain the assistance of a hacker must always fear that the individual they are recruiting might be working for the other team. The lack of trust endemic to this situation has a personal cost for those involved, especially for those attempting to be ethical. This can be alienating and harmful, fostering an environment of distrust which is exacerbated by the fact that a hacker might use a "bug bounty" to legitimize searching for such bugs, but then turn to the grey market when deciding who to disclose them to once found.
+
+As our online systems grow more complex and interconnected, it's becoming increasingly important for companies to take any means necessary to ensure the security of their systems, including working with the largely underutilized population of cybersecurity enthusiasts and professionals. However, it is also the job of our governments and legal entities to not only protect us against malicious hackers, but also to protect these "ethical hackers" and ensure they are able to safely carry out their work. This includes expanding freelancer rights to cover those engaging in corporate-sponsored hacking such as 'bug bounties', to ensure that such hackers are not under unreasonable risk of being prosecuted for their good deeds. Until that becomes more widespread, anyone wanting to be in this subset of the industry must be prepared for lots of suspicion and scrutiny in exchange for the occasional payoff. A company is safe only as long as the reward for reporting a security flaw outweighs the reward for abusing that flaw.
