@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "Week 9: Farcebook"
+title: "Week 8: Farcebook"
 date: 2018-10-09
 ---
 
