@@ -1,2 +1,3 @@
-	name: Jack Fraser
-	markdown: kramdown
+name: Jack Fraser
+markdown: kramdown
+permalink: /blog/:year/:month/:day/:title
