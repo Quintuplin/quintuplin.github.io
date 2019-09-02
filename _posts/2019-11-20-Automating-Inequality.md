@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "The Final Post"
+title: "Week 13: Automating Inequality"
 date: 2018-11-20
 ---
 
