@@ -3,7 +3,7 @@ layout: default
 title: Jack Fraser's Blog
 ---
 	<h1>{{ page.title }}</h1>
-	<ul class="cv">
+	<ul class="resume">
 
 	  {% for post in site.posts %}
 	    <li><span>{{ post.date | date_to_string }}</span> » <a href="{{ post.url }}" title="{{ post.title }}">{{ post.title }}</a></li>
