@@ -1,4 +1,12 @@
+---
+layout: post
+title: "HW0: Introduction"
+date: 2019-08-21
+---
+
+
 https://www.wired.com/story/excerpt-from-automating-inequality/
+
 https://www.apex-magazine.com/welcome-to-your-authentic-indian-experience
 
 The excerpt from Automating Inequality definitely has cause to make us stop and think in our scramble to automate everything. The AFST's system of threat rating shares several of the issues we discussed about big data: Since we know the models will have inherent human bios, who should design them? How much of a say should human users have in the machine's decisions? Do the people who will be affected have a right to know which decisions are made by the machine? As developers, we don't have a say in all of these questions, but we do have an ethical responsibility to ensure that they have been considered and that the system we design will not cause undue harm. In the case of the AFST, this includes both false positives (flagging a child as in danger when in reality they are not) and false negatives (missing a child that is actually in danger). While some of the parents in the article showed reasonable concern about being flagged erroneously, the matter of a child's safety is obviously a great importance. An ideal system would focus its models on minimizing false negatives, while simultaneously allowing for human intervention in the case of false positives.
