@@ -4,13 +4,11 @@ title: "HW2: Responses"
 date: 2019-08-26
 ---
 
+* <http://cs.cofc.edu/~bowring/classes/csci%20362/docs/NoSilverBulletOriginal.pdf>
+* <http://cs.cofc.edu/~bowring/classes/csci%20362/docs/p32-neville-neil.pdf>
+* <http://cs.cofc.edu/~bowring/classes/csci%20362/docs/GoogleCodeRepo-78-potvin.pdf?id=0B2El51RQ1MQnTTVWYVNiOWhuX0U>
+
 ### A response to Silver Bullet, Cherry Picking, and Google Code Repo:
-
-http://cs.cofc.edu/~bowring/classes/csci%20362/docs/NoSilverBulletOriginal.pdf
-
-http://cs.cofc.edu/~bowring/classes/csci%20362/docs/p32-neville-neil.pdf
-
-http://cs.cofc.edu/~bowring/classes/csci%20362/docs/GoogleCodeRepo-78-potvin.pdf?id=0B2El51RQ1MQnTTVWYVNiOWhuX0U
 
 No Silver Bullet seems to believe that large-scale coding will always be difficult, and that there are no easy solutions to this. It’s pretty outdated, although while version-control and automated testing have changed, many of the fundamentals of software engineering haven’t. Nonetheless, it seems to have been almost completely disproved by first git, then Google’s versioning control system, in which a massively automated super-git-like-repository allows users to add code, test it, and incorporate it into the main program structure with extreme ease; all despite the ridiculous scale of their combined projects. Perhaps there is a silver bullet after all.
 
