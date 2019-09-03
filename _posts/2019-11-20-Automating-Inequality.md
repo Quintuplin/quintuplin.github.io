@@ -4,6 +4,7 @@ title: "Week 13: Automating Inequality"
 date: 2018-11-20
 ---
 
+Co-Author Anthony Morrell
 
 https://www.wired.com/story/excerpt-from-automating-inequality/
 
