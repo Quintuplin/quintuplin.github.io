@@ -4,6 +4,8 @@ title: "Week 11: Transhumanism and You"
 date: 2018-10-29
 ---
 
+Co-Author Anthony Morrell
+
 https://blogs.bmj.com/medical-ethics/2017/03/21/so-what-is-not-to-like-about-3d-bioprinting/
 
 https://medium.com/@lexikon1/the-ethics-of-experimentation-ethical-cybernetic-enhancements-48f9ad991769
