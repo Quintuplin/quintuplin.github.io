@@ -6,9 +6,8 @@ date: 2018-08-25
 
 Co-Author Anthony Morrell
 
-https://www.youtube.com/watch?v=HAPilyrEzC4
-
-https://www.nytimes.com/2012/08/19/business/new-wave-of-adept-robots-is-changing-global-industry.html?_r=1&hp
+* <https://www.youtube.com/watch?v=HAPilyrEzC4>
+* <https://www.nytimes.com/2012/08/19/business/new-wave-of-adept-robots-is-changing-global-industry.html?_r=1&hp>
 
 While the movie was entertaining, we struggled to draw many parallels to the future of work. Chaplin's character's struggles in the factory raise some warnings about creating technology that is too complex to be understood by any one individual, and his experience with the disastrous feeding machine show that there can sometimes be a rough transition period when adopting new technologies.
 
