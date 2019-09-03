@@ -4,7 +4,7 @@ title: "HW2: Responses"
 date: 2019-08-26
 ---
 
-** A response to Silver Bullet, Cherry Picking, and Google Code Repo:
+### A response to Silver Bullet, Cherry Picking, and Google Code Repo:
 
 http://cs.cofc.edu/~bowring/classes/csci%20362/docs/NoSilverBulletOriginal.pdf
 
