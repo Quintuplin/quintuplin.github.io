@@ -6,9 +6,8 @@ date: 2018-10-29
 
 Co-Author Anthony Morrell
 
-https://blogs.bmj.com/medical-ethics/2017/03/21/so-what-is-not-to-like-about-3d-bioprinting/
-
-https://medium.com/@lexikon1/the-ethics-of-experimentation-ethical-cybernetic-enhancements-48f9ad991769
+* <https://blogs.bmj.com/medical-ethics/2017/03/21/so-what-is-not-to-like-about-3d-bioprinting/>
+* <https://medium.com/@lexikon1/the-ethics-of-experimentation-ethical-cybernetic-enhancements-48f9ad991769>
 
 As technologists, we strive to improve and advance whenever possible. And so, there arise questions. Where is the line in the sand when it comes to improving ourselves? One might argue that our current technology use is already equivalent to direct enhancement in every way that matters: our devices store our data, allow for distant communication, provide a lookup tool for research and entertainment, and never leave our hands. If they are already effectively part of ourselves as humans... how different would it really be if they were built-in?
 
