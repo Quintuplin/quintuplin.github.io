@@ -1,0 +1,67 @@
+---
+layout: post
+title: "HW1: Chapter 1"
+date: 2019-08-21
+---
+
+** Ex 1.3, 1.8, 1.9, 1.10
+
+*** Global 1.3: Briefly discuss why it is usually cheaper in the long run to use software engineering methods and techniques for software systems.
+
+Because Software Engineering methods are thorough, they increase the initial cost/time/effort when creating a new project. However, the same methods lead to a stronger foundation, making software which is easier to support, modify, or expand upon; more approachable for new programmers to come in and be able to understand due to a concrete design process having been used; more accessible to users (or auditors) due to the extensive documentation; and generally more thoroughly tested. While it is possible (especially in smaller projects) for a rogue software to reach all of the targets (acceptability, dependability, security, efficiency, maintainability), software engineering does a lot to ensure and standardize reaching each of these goals, and is essential for larger projects where no amount of ‘good practice’ can outweigh sheer size and complexity.
+
+*** Proper 1.3: What are the four important attributes that all professional software should possess? Suggest four other attributes that may sometimes be significant.
+
+The “figure 1.2” attributes are Acceptability, Dependability (and security), Efficiency, and Maintainability. For my 4, I would formally declare Security independently, as well as add Readability, Reusability (as a component in future projects), and Moddability (flexibility to have new features added). All of these (with the exception of Security), could be defined as a subset of the first 4 core attributes.
+
+*** Global 1.8: Noncertified individuals are still allowed to practice software engineering. Discuss some of the possible drawbacks of this.
+
+Misapplication of Software Engineering processes are, at best, ineffective for what they’re designed for, and a waste of resources. However, at worst, they can be downright counterproductive, create unnecessary confusion, or make otherwise simple code extremely complex as the confused programmer attempts to shoehorn in practices where they do not belong.
+
+*** Proper 1.8: Discuss whether professional engineers should be licensed in the same way as doctors or lawyers.
+
+Licensing is beneficial because it
+
+Can be used to improve one’s resume
+Represents a useful and non-standard skillset
+Can be done incorrectly by a non-certified individual
+Is important enough to be done by a certified individual
+Licensing ‘in the same way as doctors and lawyers’ is ridiculous, however, because medical school and law school both take wasteful amounts of time and money to complete; this is an important skill, but not one that requires a doctorate to be able to practice it. A certification system, therefore, seems like a much better fit.
+
+*** 1.9: For each of the clauses in the ACM/IEEE Code of Ethics shown in Figure 1.4, propose an appropriate example that illustrates that clause.
+
+Act in the Public Interest: If a software is in a high-stakes field (e.g. medical), one must prioritize testing to ensure that there are no failure states for the code; If management wants to release an incomplete product, one should engage in whatever is necessary (within legality) to stop it from being released irresponsibly. An example would be a heart monitor software that has a chance to crash. If management tries to release it, raise the issue (with documentation of your efforts), first to management, then to their bosses, then to legal team, then to the ceo, and finally to news; such a situation can not be allowed to ‘sneak into’ the industry and kill real world people due to unchecked corporate greed.
+
+Client and Employer: One should always engage in good faith, and work toward what the client’s goals are, not what they should be. However, this does not excuse working on an unethical project. An example would be if you work at a facial recognition company who decides to start selling their software to ICE. That’s unethical, and you shouldn’t work there.
+
+Product Professional Standards: One should never release code which is incomplete or not up to personal quality expectations. An example would be a project that is not life-threatening to release early, but still definitely not ready; don’t let management push it out the door without at least some documentation of your disagreement, but don’t take it as far as a public issue.
+
+Integrity of Judgement: One should attempt to retain scientific detachment, especially when testing/bugfixing code, or hearing feedback; the software comes first, not one’s own emotions. An example is if you’re trying to get feedback on your prototype: you have to be detatched enough to listen when a user insults every single element of your design, no matter how attached you are to it, because it’s valid. Some of that feedback might not be actionable; some of it will: your job is to improve what you can, and remember the rest for the next project. There is always room for improvement.
+
+Ethical Management: Managers should be ethical; if they aren’t, you probably don’t want to work for them. As an example, if your manager doesn’t listen in an ethical issue scenario (e.g. the public issue at the top of this list), you definitely don’t want to be working under them. They’ll probably try to blame it on you if something goes wrong anyways, so do keep documentation of everything.
+
+Advance the Profession: It’s your job to make your job look good. (To me, this one is more a ‘strategy for success’, less an ‘ethics’ item. It’s odd to include it here.) For example… if your boss asks what you’ve been doing, try to represent the industry well: work hard, have a lot to show, and make sure it improves on the actual business at hand, rather than just offers an alternative.
+
+Colleagues: Be nice to them. For example, if you have a colleague, be polite to them, and listen to their suggestions.
+
+Self: work to always improve, while retaining ethics. For example, nearly every year, something is released that fundamentally changes (and improves) some process of software development, website design, or programming in general. Keeping up with new frameworks is a full time job, but it keeps you relevant in this ridiculously quickly evolving industry.
+
+*** Global 1.10: The “Drone Revolution” is currently being debated and discussed all over the world. Drones are unmanned flying machines that are built and equipped with various kinds of software systems that allow them to see, hear, and act. Discuss some of the societal challenges of building such kinds of systems.
+
+Drones are a simple example of a technology which the current laws and rules of society simply weren’t designed for. When scaled to their logical conclusion, we’re facing a perfect information system; a surveillance state of unprecedented power, accessibility, and affordability. Ignoring the issues with governments having access to this kind of information – what of neighbors? Corporations?
+
+Privacy becomes unenforceable, and mapping out an individual’s activities, location, or patterns is the first step in any targeted malicious act. Imaging a robbing crew that knows where everyone is at all times: perfect stealth, without having to post a watch? Nah, that’s small-time stuff. Let’s go bigger. Scale it to a national level; automate the data collection, and put some hefty data science to analyze it all in real time. Unified databases with complete activity tracking of the entire population.
+
+Then look at the technologies that such information enables. Try an electronic billboard that displays individually targeted advertisements to people as they go by; ads that are tailored by tracking their actual physical responses to viewing them: a sufficiently advanced system down that path could effectively control an individual, not with a single advertisement, but with a sequence of clever manipulations that lead, inevitably, to a product…. or a candidate. And what use is democracy, if the population itself is compromised?
+
+Drones themselves might be merely the beginning; but they are the beginning of something that will be very difficult to put back into the bottle.
+
+Nonetheless, progress cannot be stopped; we must engage carefully (and with regulation as needed), in order to explore the possible positive futures, while safeguarding against the negative ones. It’s a scary world out there, but any technology can have a positive impact if done right; drones (and perfect information systems) included.
+
+*** Proper 1.10: To help counter terrorism, many countries are planning or have developed computer  systems that track large numbers of their citizens and their actions. Clearly, this has privacy implications. Discuss the ethics of working on the development of this type of system.
+
+The ethics of such a system are complex to say the least. On the one hand, a technologically feasible system which can save lives could be construed as ‘killing people by not being made’. If a global catastrophe would have been preventable with such technology, but wasn’t, then that falls on the ethical heads of anyone who opposes it.
+
+On the other hand, creating a perfect information system has more than a few misuses. When ‘a government’ has access to that kind of power, what it really means is that ‘the people who work in government’ have access to that power; and people are people. People are selfish, greedy, have prejudices, are susceptible to religious fervor, and similarly susceptible to manipulation. Systems are hackable. Someone getting access to the wrong information could allow horrible crimes to be committed; somebody modifying the data within a ‘perfect’ system could allow a hacker to make anyone they want to a target of world governments. Too consolidated an information system, without the social structures in place to limit and manage it’s potential, does far more harm than good.
+
+For now, I think that we are not ready for a system such as this. But the upsides of one done correctly are meaningful, and I would like Humanity to move towards being ready for such applications of technology. After all, they’re coming whether we’re ready or not, so we have to try to do it right the first time before it’s too late.
