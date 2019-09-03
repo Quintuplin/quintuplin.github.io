@@ -4,6 +4,8 @@ title: "Week 6: Flooded With Data"
 date: 2018-09-18
 ---
 
+Co-Author Anthony Morrell
+
 https://www.youtube.com/watch?v=_2u_eHHzRto
 
 https://www.npr.org/2016/09/12/493654950/weapons-of-math-destruction-outlines-dangers-of-relying-on-data-analytics
