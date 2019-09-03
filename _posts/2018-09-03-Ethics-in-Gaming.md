@@ -6,9 +6,8 @@ date: 2018-09-03
 
 Co-Author Anthony Morrell
 
-https://mastersofmedia.hum.uva.nl/blog/2014/09/11/video-games-ethical-issues-faced-by-producers-and-consumers/
-
-https://www.youtube.com/watch?v=unVzwxmyeqs
+* <https://mastersofmedia.hum.uva.nl/blog/2014/09/11/video-games-ethical-issues-faced-by-producers-and-consumers/>
+* <https://www.youtube.com/watch?v=unVzwxmyeqs>
 
 Gaming has so many layers of ethics that even listing only the most significant would fill up this article. That said, we will attempt to focus on the most pertinent elements.
 
