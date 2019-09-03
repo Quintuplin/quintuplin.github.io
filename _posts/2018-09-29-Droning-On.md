@@ -4,6 +4,8 @@ title: "Week 7: Droning On"
 date: 2018-09-29
 ---
 
+Co-Author Anthony Morrell
+
 https://www.wired.com/2012/09/obama-drone/?utm_campaign=Feed%3A+WiredDangerRoom+%28Wired%3A+Blog+-
 
 This 6-year-old article goes lightly into the many questions associated with the specifics of drone usage in U.S.-sanctioned assassinations. Largely, it seems that drones are both extremely effective at wiping out a target and lacking in significant oversight or public understanding of how they are used. This is at odds with most traditional attacks that, being executed by humans, fall into an existing and extensive chain of command. Anyone in that chain can question an order they believe to be wrong.
