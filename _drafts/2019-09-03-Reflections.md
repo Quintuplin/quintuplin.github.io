@@ -15,4 +15,4 @@ date: 2019-09-03
 * <https://www.entrepreneur.com/article/329019>
 * Textbook Ch 13, 14
 
-### Response: Why Software Fails, and What Happens when it Does
+### A Response to Why Software Fails, and What Happens when it Does:
