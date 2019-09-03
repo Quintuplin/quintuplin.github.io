@@ -1,0 +1,45 @@
+---
+layout: post
+title: "HW3: Chapter 10"
+date: 2019-08-27
+---
+
+*** 10.6 Explain why it is reasonable to assume that the use of dependable processes will lead to the creation of dependable software.
+
+The dependable process ensures the creation of code which is reliable, resistant to failure, and stable by ensuring that a number of subqualities are achieved; each with concrete goals and positive outcomes. While it is a specialized process, it is one that is well suited to the title ‘dependable’.
+
+Auditable – something all code should absolutely be; When a system is making judgments that can drastically alter a person’s life, such as a facial recognition system used on security footage of a crime scene, or a heart monitor determining if the heart has stopped or not; it is absolutely important to be able to clearly determine if that code is done correctly by as many individuals, from as many backgrounds, as possible. One can not simply ‘be confident’ in systems that are important enough.
+
+Diverse – even within this chapter, diverse code is argued to be unnecessary if the standard logic is sufficiently tested and vetted; nonetheless, if your software requires redundancies, those redundancies should not fail in the exact same way that the main cycle failed; otherwise, what’s the point in having redundancies at all? Diversity is the only way to implement redundancy properly, so it belongs here, because it makes code, not more efficient, but more dependable. Which is the whole point of this process, after all.
+
+Documentable – All code should be documented. Better documentation means easier to use correctly, and easier to read/modify the code for as needed. Documentability just makes making good documentation itself easier; so it’s a good trait.
+
+Robust – A recoverable error should allow the software to keep going? Sounds like excellent software design, especially for a software that one must depend upon to work under all conditions.
+
+Standardized – why reinvent the wheel (and force yourself to reinvent every wheel afterwards), when you want it to work reliably? Innovation is for cutting-edge systems and hacky scripts, not dependable software.
+
+In summary, all of these traits make code more dependable, and as such, are well suited to belong in a feature list of a ‘dependable’ process. Code made using the dependable process would almost certainly be more dependable than code not made using the dependable process. Therefore, the dependable process makes dependable code.
+
+*** Other 10.6 A multimedia virtual museum system offering virtual experiences of ancient Greece is to be developed for a consortium of European museums. The system should provide users with the facility to view 3-D models of ancient Greece through a standard web browser and should also support an immersive virtual reality experience. What political and organizational difficulties might arise when the system is installed in the museums that make up the consortium?
+
+Such a system sounds primarily to involve issues regarding policy, and technical specifications. Politics and organization are much harder to visualize. However, museums rely on visitors, so in that manner, a virtual reality system might threaten their primary source of income. Meanwhile, doing it poorly might harm them even more. So they must make a good one, which requires resources, but museums are not extremely wealthy, so this is a no-win scenario. The only upside to this is to share art with the people who cannot make it to the museum, for the pure purpose of education. However, this might cause the museum to rely more heavily on public funding in order to stay afloat. Inversely, such a technology might increase interest in the member museums, making tourism rise. The political issues, therefore, might be those of conflicting forces wanting to minimize risks, maximize educational opportunities, minimize costs, and potentially want to properly invest in a future income opportunity. Since any angle could be effectively argued, and because museums are frequently the beneficiaries of public funding, politics will most definitely come into play when determining policies that would directly affect the availability or feature set of the virtual reality experience.
+
+Another potential ‘political’ issue would be if an artist featured in the museum doesn’t want to be featured in the virtual reality museum; because software and physical museums are under different regulations, they might have that right; straining the organizational parameters of the project (display this but not that, somehow still make the museum not look empty in the virtual space) due to the impact of a political situation.
+
+Organizationally, the software needs to be usable in both web-based and vr systems. These are two extremely different platforms, so much so that two completely different softwares under the same name might be the only sane route for attempting this. They will need different levels of details, or even completely different types of access (web-based being, potentially, more web-cam style, whereas the vr system could use a virtual museum with high resolution 3-d scans of the artwork). These are primarily technical and design issues, however. Organization would mostly involve keeping the two projects (vr and web) aligned design and feature-wise.
+
+*** 10.10 It has been suggested that the need for regulation inhibits innovation and that regulators force the use of older methods of systems development that have been used on other systems. Discuss whether or not you think this is true and the desirability of regulators imposing their views on what methods should be used.
+
+Regulation is a necessary part of becoming a valid industry; we shouldn’t be the wild west when our systems are used in life-saving or potentially life-ending technologies. Ultimately, any issue with the regulation process requires reform within that process.
+
+Leaving any industry to self-regulation has time and time again proven to be ineffective and unacceptable. It is simply too tempting to cut a corner that ‘no one will see’, especially when business people are making the decisions; someone can always be found to do a dirty job, and innocents (and customers) are the first to be hurt.
+
+It doesn’t really matter how behind the times a regulator’s practices are; they’re in place because an expert placed them there; it could be for a very good reason. And even if they aren’t, at least the baseline exists at all.
+
+*** Other 10.10 You are an engineer involved in the development of a financial system. During installation, you discover that this system will make a significant number of people redundant. The people in the environment deny you access to essential information to complete the system installation. To what extent should you, as a systems engineer, become involved in this situation? Is it your professional responsibility to complete the installation as contracted? Should you simply abandon the work until the procuring organization has sorted out the problem?
+
+Jobs being made redundant to automation is an unavoidable result of this line of work. Some might even say a goal. Hopefully, those individuals can be reallocated to new positions which have been made possible due to the money saved in their own (former) department. It should be the imperative of employers (and governments) to reinvest funds saved by proper application of technology, not just for moral grounds, but to avoid wasting those resources entirely. CEOs don’t need a pat on the back, a windfall bonus check, and a cookie for managing to make their company up to date technologically; they need to continue to move forwards.
+
+Ultimately this is a systematic issue. We are inevitably automating away every job; even our own. A global long-term solution needs to be found; but progress is progress. Coal mining is no longer a job that anyone should be in; it’s a dead industry, and we shouldn’t artificially keep it alive when doing so costs us investing in future-proof solutions (such as solar), which provide a greater net positive for humanity and create jobs in new places. In the same way, we must look forwards, rather than cling to the past.
+
+However, being denied the resources necessary to complete a job might mean that your employer is unworkable. Put it in writing (in no uncertain terms) how essential their cooperation is for the project to move forward. Document everything. Raise alarm with the bosses. If nothing can be done, make it clear the the project will have to be cancelled. There should be stipulations in your contract for such a contingency. Hopefully it won’t come to that, but ultimately if you cannot complete your job properly, you cannot complete your job.
