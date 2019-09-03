@@ -4,6 +4,8 @@ title: "Week 8: Farcebook"
 date: 2018-10-09
 ---
 
+Co-Author Anthony Morrell
+
 http://archive.ncsa.illinois.edu/prajlich/forster.html - The Machine Stops, E.M. Forster
 
 Social media is a plague on humanity... or so Forster would have us believe. However, one is left to wonder if his horrific prediction is truly accurate, or if it is merely a fear of a different world? While social media does allow for misinformation and directed advertisements to infect the integrity of our widely-held beliefs, it also distributes information and mindsets that would otherwise be lost, restricted, or unreachable. Social media connects communities across the world and allows for a more unified humanity.
