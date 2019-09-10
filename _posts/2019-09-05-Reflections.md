@@ -12,4 +12,4 @@ date: 2019-09-05
 
 ### Reflections on Test Driven Development: 
 
-Dummy answer
+The answer to this question will be posted by the end of 9/10/2019. The delay is due to the (erroneous) assumption that assignments over the hurricane evacuation would be delayed in due date.
