@@ -18,7 +18,7 @@ What this means for TDD? Well, if humans are so limited (and they most definitel
 
 *The Tire Monitoring System* paper, meanwhile, shows that the State Mandated TPMS has a glaring security issue; it broadcasts the tire pressures within a vehicle wirelessly, and with a unique identifier; making any vehicle able to be tracked by simply scanning for signals and tracking where that unique ID is sensable from. While it is range-limited, this leads to the inveitable possiblity of simply installing tracking sensors at common intersections; effectively tracing all movement of the vehicle (and thus, likely, the owner). The further tests and experiments show both that the system is significantly flawed and needs to be fixed; but some fixes can be recommended and solved with more development. 
 
-As a form of response, a *bill* was proposed to ensure cybersecurity requirements be enacted to protect the population from non-secure cars. These requirements include allowing users to disable trackable activities without loss of functionality, as well as requesting.  
+As a form of response, a *bill* was proposed to ensure cybersecurity requirements be enacted to protect the population from non-secure cars. These requirements include allowing users to disable trackable activities without loss of functionality.  
 
 What this has to do with test driven development?  
 
