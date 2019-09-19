@@ -36,7 +36,7 @@ They "deliver working software frequently"; meaning that there is always a rush 
 
 They assert "business people and developers must work together daily"; this allows project parameters to change every day, which agile welcomes; developers, however, might find that they are unable to complete any goals because the goalposts keep being moved.
 
-They "build projects around motivated individuals", which is business slang for "overtime is required to make up for our poor planning and time management"
+They "build projects around motivated individuals", which is business slang for "overtime is required to make up for our poor planning and lack of time management"
 
 They posit "the most efficient method of conveying information (...is...) face-to-face", which means that anything that could be a single sentence email must instead be a scheduled meeting; again, good luck getting work done.
 
