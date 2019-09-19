@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "HW12: Mythical Man Month"
-date: 2019-09-10
+date: 2019-09-18
 ---
 
 * <http://cs.cofc.edu/~bowring/classes/csis%20602/docs/The.Mythical.Man.Month.F.Brooks.pdf>
