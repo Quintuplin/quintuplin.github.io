@@ -4,6 +4,10 @@ title: "HW9: Reflections"
 date: 2019-09-10
 ---
 
+* <http://cs.cofc.edu/~bowring/classes/csci%20362/docs/RapidDevelopmentChapter7.pdf>
+* <https://hub.packtpub.com/11-predictions-for-the-future-of-programming/
+* Textbook Ch 2
+
 ### Reflections on the Future of Programming
 
 With automatable testing and deployment, elements from the iterative design process will only become more prevalent. Meanwhile, with the significant majority of softwares having some form of access to the internet, updates and evolving scopes over time necessitates a software model which allows for future development and long-term support; but also for quick fixes whenever needed.  
