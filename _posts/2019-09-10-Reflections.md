@@ -5,7 +5,7 @@ date: 2019-09-10
 ---
 
 * <http://cs.cofc.edu/~bowring/classes/csci%20362/docs/RapidDevelopmentChapter7.pdf>
-* <https://hub.packtpub.com/11-predictions-for-the-future-of-programming/
+* <https://hub.packtpub.com/11-predictions-for-the-future-of-programming/>
 * Textbook Ch 2
 
 ### Reflections on the Future of Programming
