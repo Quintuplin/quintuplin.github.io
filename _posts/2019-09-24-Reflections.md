@@ -14,7 +14,7 @@ If the files timeout when trying to open them, try this handy linux command:
 
 ##  Reflect on the Readings about Testing
 
-The primary doc starts with a very intimidating quote: "Testing consumes at least half of the labor expended to produce a working program"
+*Software Testing Introduction* starts with a very intimidating quote: "Testing consumes at least half of the labor expended to produce a working program"
 
 However, while it goes in-depth into how disliked testing is, I think that such attitudes are primarily an artifact of time management, rather than one of testing itself being a miserable activity. After all, in an ideal world, your test environment provides more than nothing; it provides validation, and peace-of-mind. But coming back to that time management issue; when someone is simply ready for a project to 'be done', then anything that delays the deployment of code that is 'mostly finished' is the enemy. When testing finds no issues, it was a waste of time; when it finds issues, it's a criticism of the quality of the work, as well as the enemy which creates more work. When viewed from such a perspective, who would ever want to test their code? And who might simply hope that their code is good enough to not need it?
 
