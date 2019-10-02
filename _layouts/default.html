@@ -4,6 +4,16 @@
 			<title>{{ page.title }}</title>
 			<!-- link to main stylesheet -->
 			<link rel="stylesheet" type="text/css" href="/css/main.css">
+			
+			
+			<!-- iframe height resize from: https://www.sitepoint.com/community/t/auto-height-iframe-content-script/67843 -->
+			<script>
+			 function resizeIframe(obj)
+			 {
+			   obj.style.height = obj.contentWindow.document.body.scrollHeight + 'px';
+			   obj.style.width = obj.contentWindow.document.body.scrollWidth + 'px';
+			 }
+			</script>
 		</head>
 		<body>
 			<nav>
