@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "HW21: Team Progress I
+title: "HW21: Team Progress I"
 date: 2019-10-29
 ---
 
