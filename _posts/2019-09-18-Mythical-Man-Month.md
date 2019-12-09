@@ -1,6 +1,6 @@
 ---
 layout: post
-title: "HW12: Mythical Man Month"
+title: "HW12: The Mythical Man-Month"
 date: 2019-09-18
 ---
 
@@ -10,9 +10,9 @@ date: 2019-09-18
 * <https://www.cio.com/article/2385322/agile-development-why-agile-isn-t-working-bringing-common-sense-to-agile-principles.html>
 * Textbook Ch 3
 
-## Reflections on Mythical Man Month; and Why Agile is Unsustainable
+## Reflections on Mythical Man-Month; and Why Agile is Unsustainable
 
-### Mythical Man Month, response and analysis
+### Mythical Man-Month, response and analysis
 
 MMM starts off with an extremely astute observation as to the shared humanity, joys, and woes of programming. It is the magic of creation, but like magic, it is specific in it's implementation lest you summon demons. It also finds itself frequently managed by others, and has layers of dependencies due to the fact that it is, in many ways, an apex field. What it speaks of, quite thoroughly at times, is the complexity and interconnectedness of the trade. But the title is about the "Man-Month", and the myth thus contained. The Man-Month is an optimistic time estimate. "How much can we get done in a month, and can we make it faster by adding more people?" The Man-Month has an answer, but that answer is rarely correct; there is always more than was predicted, no matter what the prediction was. And when something is behind schedule, management wants to throw more people at the problem; people who cause chaos; people who make the process even more complicated, and even more behind schedule. For complex projects, an increase in manpower intended to aid will instead harm, and greatly.
 
