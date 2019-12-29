@@ -49,4 +49,4 @@ Now, as a recent graduate, I am converting all my former Python code to Node.js,
 
 The sql tables have been redesigned to have proper normalization (A spcialized variant of 3NF with deliberate redundant canditate keys to allow for more dynamic search and report generation queries). The software unifies the interface design of a website with the surprisingly good coding capabilities of modern javascript. And it's all contained within a self-updating software with a proper installer, a convenient deployment process through github's release management system, and what I hope is fundamentally sound design within. While I am confident that the future will hold even more significant leaps in design skill and understanding, I am also proud of how far things have come from that original Excel form.
 
-A toast to the future, then; where I hope to be just as embarrassed by this code, and I am now of the code that came before. To progress! To programming! To (currently) electron!
+A toast to the future, then; where I hope to be just as embarrassed by this code, as I am now of the code that came before. To progress! To programming! To (currently) electron!
