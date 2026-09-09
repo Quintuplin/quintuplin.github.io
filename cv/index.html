@@ -3,5 +3,24 @@ layout: default
 title: Resume
 ---
 <h1>{{ page.title }}</h1>
-<p class="resume-links"><a href="https://drive.google.com/file/d/1sNT9jsT8WDnvUEWQ1VWnti8eN9Rod8-y/view">Open in Google Drive</a> &middot; <a href="https://drive.google.com/uc?export=download&id=1sNT9jsT8WDnvUEWQ1VWnti8eN9Rod8-y">Download PDF</a></p>
-<iframe class="resume-frame" src="https://drive.google.com/file/d/1sNT9jsT8WDnvUEWQ1VWnti8eN9Rod8-y/preview" allow="autoplay"></iframe>
+<div id="resume" class="resume-pages" data-pdf="/assets/Jack_Fraser_CV.pdf">
+	<noscript><a href="/assets/Jack_Fraser_CV.pdf">Jack_Fraser_CV.pdf</a></noscript>
+</div>
+<script type="module">
+import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
+const host = document.getElementById("resume");
+const pdf = await pdfjsLib.getDocument(host.dataset.pdf).promise;
+const dpr = window.devicePixelRatio || 1;
+for (let n = 1; n <= pdf.numPages; n++) {
+	const page = await pdf.getPage(n);
+	const base = page.getViewport({ scale: 1 });
+	const scale = host.clientWidth / base.width;
+	const vp = page.getViewport({ scale: scale * dpr });
+	const c = document.createElement("canvas");
+	c.width = vp.width; c.height = vp.height;
+	c.style.width = "100%";
+	host.appendChild(c);
+	await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+}
+</script>
