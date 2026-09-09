@@ -1,5 +1,5 @@
 # quintuplin.github.io
 
-created by following the guide at: http://jmcglone.com/guides/github-pages/
+Personal site of Jack Fraser: home, about, and resume (PDF served from Google Drive). Built with Jekyll on GitHub Pages, originally following http://jmcglone.com/guides/github-pages/ for CSCI 362 at the College of Charleston.
 
-this blog was made for CSCI 362 Software Engineering, but will include imported blog posts from CSCI 392 Seminar on Computing & Society. In future, I hope that it will also include blog posts from an illustrious career in CS - but at very least expect a resume to be added and linked shortly.
+To update the resume, replace the file in Google Drive via **Manage versions → Upload new version** so the file ID stays the same; no commit needed.

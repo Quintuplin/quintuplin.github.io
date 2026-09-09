@@ -1,29 +1,36 @@
 <!DOCTYPE html>
-	<html>
-		<head>
-			<title>{{ page.title }}</title>
-			<!-- link to main stylesheet -->
-			<link rel="stylesheet" type="text/css" href="/css/main.css">
-		</head>
-		<body>
-			<nav>
-	    		<ul>
-	        		<li><a href="/">Home</a></li>
-		        	<li><a href="/about">About</a></li>
-	        		<li><a href="/cv">Resume</a></li>
-	    		</ul>
-			</nav>
-			<div class="container">
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{{ page.title }}{% if page.title != site.name %} · {{ site.name }}{% endif %}</title>
+	<link rel="stylesheet" type="text/css" href="/css/main.css">
+</head>
+<body class="page-{{ page.title | slugify }}">
+	<div class="backdrop" aria-hidden="true"></div>
+	<main class="sheet">
+	<nav>
+		<ul>
+			<li><a href="/"{% if page.url == "/" %} class="active"{% endif %}>Home</a></li>
+			<li><a href="/about"{% if page.url contains "/about" %} class="active"{% endif %}>About</a></li>
+			<li><a href="/cv"{% if page.url contains "/cv" %} class="active"{% endif %}>Resume</a></li>
+			<li class="ext"><a href="https://github.com/quintuplin">GitHub</a></li>
+			<li class="ext"><a href="https://www.linkedin.com/in/jack-fraser-3a137ba3/">LinkedIn</a></li>
+		</ul>
+	</nav>
+	<div class="container">
 
-			{{ content }}
+	{{ content }}
 
-			</div><!-- /.container -->
-			<footer>
-	    		<ul>
-				<li><small>&copy; 2019-2023 Jack Fraser</small></li>
-	        		<li><a href="mailto:quintuplin12@gmail.com">email</a></li>
-	        		<li><a href="https://github.com/quintuplin">github.com/quintuplin</a></li>
-				</ul>
-			</footer>
-		</body>
-	</html>
+	</div><!-- /.container -->
+	<footer>
+		<ul>
+			<li><small>&copy; 2019&ndash;2026 Jack Fraser</small></li>
+			<li><a href="mailto:adamjackfraser@gmail.com">email</a></li>
+			<li><a href="https://github.com/quintuplin">github.com/quintuplin</a></li>
+			<li><a href="https://www.linkedin.com/in/jack-fraser-3a137ba3/">linkedin</a></li>
+		</ul>
+	</footer>
+	</main>
+</body>
+</html>
