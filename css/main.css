@@ -95,7 +95,7 @@ ul.about, ul.list-unstyled {
 }
 ul.about li, ul.list-unstyled li { margin-bottom: 6px; }
 ul.list-unstyled small { color: var(--muted); }
-ul.list-unstyled img.site-icon { width: 48px; height: 48px; vertical-align: middle; margin: 2px 8px 2px 0; }
+ul.list-unstyled img.site-icon { width: 48px; height: 48px; border-radius: 50%; vertical-align: middle; margin: 2px 8px 2px 0; }
 
 /* Resume: pages rendered to canvas by pdf.js, so they sit on the sheet like paper */
 .resume-pages canvas {
