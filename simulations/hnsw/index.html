@@ -349,7 +349,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
       <dl id="index-stats" class="stats" aria-label="Index"></dl>
       <dl id="search-stats" class="stats" aria-label="Last search"></dl>
     </div>
-    <p id="hover-info" class="hover-info">Point at a node to see its details. Drag the layers to rotate them. Click them, then scroll to zoom.</p>
+    <p id="hover-info" class="hover-info">Point at a node to see its details. Click a node to copy its coordinates. Drag the layers to rotate them. Click them, then scroll to zoom.</p>
     <canvas id="layer-canvas" class="stack-canvas" tabindex="0" role="img" aria-label="Graph layers"></canvas>
   </section>
 
@@ -754,7 +754,7 @@ function create_overlay(flashes = []) {
   return {
     op: null, query: null, node: null, k: null, layer: null, current: null, expanding: null,
     candidates: [], results: [], best_per_layer: new Map(), ef_per_layer: new Map(), path: new Map(), explored: new Map(),
-    chosen: [], rejected: [], flashes, final: [], caption: "", lsh: null,
+    chosen: [], rejected: [], flashes, final: [], caption: "", lsh: null, visits: new Map(),
   };
 }
 
@@ -774,6 +774,7 @@ const OVERLAY_HANDLERS = {
   visit(overlay, event) {
     if (overlay.expanding !== null) overlay.explored.get(event.layer).push([overlay.expanding, event.node]);
     overlay.current = event.node;
+    overlay.visits.set(event.layer, (overlay.visits.get(event.layer) ?? 0) + 1);
   },
   candidate_push(overlay, event) {
     insert_sorted(overlay.candidates, { node: event.node, dist: event.dist });
@@ -838,6 +839,16 @@ function format_dist(dist) {
 
 function format_point(point) {
   return `(${point.map((value) => value.toFixed(2)).join(", ")})`;
+}
+
+// Two decimals, the precision the coordinate inputs show. Adding 0 turns -0 into 0.
+function round2(value) {
+  return Math.round(value * 100) / 100 + 0;
+}
+
+// Index of a point at the same two-decimal coordinates, else -1.
+function find_point(points, coords) {
+  return points.findIndex((point) => point.every((value, i) => round2(value) === round2(coords[i])));
 }
 
 function count_noun(count, noun) {
@@ -1012,6 +1023,36 @@ function layer_detail(overlay, layer, size) {
   if (ef === 1) return "greedy, ef = 1";
   return overlay.op === "search" ? `widen: ef = ${ef}, return K = ${overlay.k}` : `widen: ef = ${ef}, then link`;
 }
+
+// ---- Query cost scaling ----
+// Least squares fit of y = slope * x through the origin.
+function fit_origin(xs, ys) {
+  const slope = xs.reduce((s, x, i) => s + x * ys[i], 0) / xs.reduce((s, x) => s + x * x, 0);
+  const sse = xs.reduce((s, x, i) => s + (ys[i] - slope * x) ** 2, 0);
+  return { slope, sse };
+}
+
+// samples hold { n, d }. A query that measured every node says nothing about scaling, so it is dropped.
+// The two fits tie when their errors differ by under 10% of the larger one.
+function scaling_verdict(samples) {
+  const kept = samples.filter((sample) => sample.d < sample.n);
+  const distinct = new Set(kept.map((sample) => sample.n)).size;
+  if (distinct < 3) return { status: "need_more", distinct };
+  const ds = kept.map((sample) => sample.d);
+  const log = fit_origin(kept.map((sample) => Math.log2(sample.n)), ds);
+  const lin = fit_origin(kept.map((sample) => sample.n), ds);
+  const gap = Math.abs(log.sse - lin.sse);
+  const status = gap <= 0.1 * Math.max(log.sse, lin.sse) ? "tie" : log.sse < lin.sse ? "log" : "linear";
+  return { status, c: log.slope, b: lin.slope, sse_log: log.sse, sse_lin: lin.sse, distinct };
+}
+
+// Stored links over all layers, against the cap of 2M on layer 0 and M on each layer above.
+function index_links(index) {
+  let edges = 0;
+  for (const layer of index.layers) for (const links of layer.values()) edges += links.length;
+  const cap = index.levels.reduce((sum, level) => sum + 2 * index.M + index.M * level, 0);
+  return { edges, cap };
+}
 </script>
 
 <script id="app-src">
@@ -1036,7 +1077,7 @@ const TRACE_HOOK = /^\s*yield trace_event\(/;
 const TOKEN_PATTERN = /(\/\/.*$)|("(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)|\b(const|let|function|class|return|yield|for|of|if|else|while|new|this|break|continue|null|get)\b|\b(\d+(?:\.\d+)?)\b/g;
 const TOKEN_CLASSES = ["tok-comment", "tok-string", "tok-keyword", "tok-number"];
 const COORD_IDS = ["coord-x", "coord-y", "coord-z"];
-const HOVER_HINT = "Point at a node to see its details. Drag the layers to rotate them. Click them, then scroll to zoom.";
+const HOVER_HINT = "Point at a node to see its details. Click a node to copy its coordinates. Drag the layers to rotate them. Click them, then scroll to zoom.";
 const ACTION_IDS = ["add-manual", "add-random", "search-manual", "search-random"];
 const COLOUR_TOKENS = [
   "text", "muted", "edge", "prune", "focus", "canvas", "slab", "slab-edge", "node", "trace", "found", "connector", "lsh",
@@ -1050,13 +1091,13 @@ const SKIPPED_ALPHA = 0.35;
 const by_id = (id) => document.getElementById(id);
 const app = {
   index: null, clusters: [], point_rng: null, overlay: create_overlay(), truth: [], hover: null, colours: {},
-  layout: [], fit: null, frame: null, projected: [], lsh_on: false, lsh: null,
+  layout: [], fit: null, frame: null, projected: [], lsh_on: false, lsh: null, cost_samples: [],
 };
 const player = { gen: null, playing: false, budget: 0, last_tick: null, on_done: null };
 const code_pane = { marker_lines: new Map(), active: null };
 // fade scales every alpha the layer painters set, so a layer the LSH seed skips draws faint.
 // tags holds the boxes of tags drawn this frame. label_left is where the label column starts.
-const stack = { canvas: null, ctx: null, width: 0, height: 0, drag: null, label: "", fade: 1, tags: [], label_left: 0 };
+const stack = { canvas: null, ctx: null, width: 0, height: 0, drag: null, press: null, label: "", fade: 1, tags: [], label_left: 0 };
 
 // ---- Camera: one orbit and zoom for the whole stack. The default looks down at an angle. ----
 class Camera {
@@ -1594,11 +1635,12 @@ function draw_trace(ctx) {
 function bind_pointer(canvas) {
   canvas.addEventListener("pointerdown", (event) => {
     stack.drag = { x: event.clientX, y: event.clientY };
+    stack.press = event.button === 0 ? { x: event.clientX, y: event.clientY } : null;
     canvas.setPointerCapture(event.pointerId);
   });
   canvas.addEventListener("pointermove", on_pointer_move);
-  canvas.addEventListener("pointerup", () => { stack.drag = null; });
-  canvas.addEventListener("pointercancel", () => { stack.drag = null; });
+  canvas.addEventListener("pointerup", on_pointer_up);
+  canvas.addEventListener("pointercancel", () => { stack.drag = stack.press = null; });
   canvas.addEventListener("pointerleave", () => set_hover(null));
   canvas.addEventListener("wheel", on_wheel, { passive: false });
   canvas.addEventListener("keydown", on_key);
@@ -1612,6 +1654,15 @@ function on_pointer_move(event) {
     return;
   }
   set_hover(pick_node(event.offsetX, event.offsetY));
+}
+
+// A click with under 4 px of movement on a node copies its coordinates. A drag only rotates.
+function on_pointer_up(event) {
+  const press = stack.press;
+  stack.drag = stack.press = null;
+  if (!press || Math.hypot(event.clientX - press.x, event.clientY - press.y) >= 4) return;
+  const node = pick_node(event.offsetX, event.offsetY);
+  if (node !== null) fill_coords(node);
 }
 
 // Zoom only when the canvas has focus or Ctrl is held, so plain scrolling still scrolls the page.
@@ -1824,6 +1875,7 @@ function bind_sliders() {
   show_speed();
   by_id("param-m").addEventListener("input", rebuild_for_params);
   by_id("param-ef-construction").addEventListener("input", rebuild_for_params);
+  by_id("param-ef").addEventListener("input", reset_cost_samples);
   by_id("param-lsh-k").addEventListener("input", rebuild_lsh_table);
 }
 
@@ -1883,6 +1935,15 @@ function read_xyz() {
   return inputs.map((input) => Number(input.value));
 }
 
+function fill_coords(node) {
+  COORD_IDS.forEach((id, i) => {
+    by_id(id).value = String(round2(app.index.points[node][i]));
+    by_id(id).setAttribute("aria-invalid", "false");
+  });
+  by_id("coord-error").textContent = "";
+  announce(`Coordinates set to node ${node}.`);
+}
+
 function announce(text) {
   by_id("status").textContent = text;
 }
@@ -1910,18 +1971,42 @@ function fill_stats(id, rows) {
 function show_index_stats() {
   const index = app.index;
   const entry = index.entry_point === null ? "none" : `node ${index.entry_point} on layer ${index.levels[index.entry_point]}`;
+  const { edges, cap } = index_links(index);
   fill_stats("index-stats", [
     ["Nodes", String(index.points.length)],
     ["Layers", String(index.layer_count)],
     ["Entry point", entry],
     ["Link limit", `${index.M} above layer 0, ${index.m_max0} on layer 0`],
     ["mL", `${index.mL.toFixed(2)} (1 / ln M)`],
+    ["Links", `${edges} of ${cap} links, O(N·M) by construction.`],
   ]);
 }
 
 function describe_bucket(lsh) {
   if (lsh.reason === "one_layer") return "none, the graph has one layer";
   return lsh.members.length === 0 ? `${lsh.key}, empty` : `${lsh.key}, ${count_noun(lsh.members.length, "member")}`;
+}
+
+const SCALING_RULE = "The paper's projection is O(log N) distance computations, proven for an idealised graph and measured at low dimension. "
+  + "This fit compares c·log2 N with b·N over queries that measured fewer than N nodes. "
+  + "It cannot show behaviour beyond the tested N, other shapes such as N^0.3, constants or dimension, or effects of which regions the queries hit.";
+
+function describe_verdict(verdict) {
+  if (verdict.status === "need_more") return "run queries at 3 or more N to fit";
+  if (verdict.status === "tie") return "no clear winner";
+  return verdict.status === "log" ? `fits c·log2 N better (c = ${verdict.c.toFixed(1)})` : `fits b·N better (b = ${verdict.b.toFixed(2)})`;
+}
+
+// Time is the standard search d against the running fit. Space is the largest visited set of the animated run.
+function scaling_rows(d, total, lsh) {
+  const verdict = scaling_verdict(app.cost_samples);
+  const ratio = (d / Math.log2(total)).toFixed(1);
+  const dropped = d >= total ? " This query is not in the fit because it measured every node." : "";
+  const time = `d = ${d}, d / log2 N = ${ratio}.${dropped} Over ${verdict.distinct} distinct N: ${describe_verdict(verdict)}.`;
+  const space = Math.max(0, ...app.overlay.visits.values());
+  const [time_label, space_label] = lsh ? ["Time of standard search", "Query space of LSH search"] : ["Time", "Query space"];
+  const rows = [[time_label, time], ["How to read it", SCALING_RULE], [space_label, `${count_noun(space, "node")} in the largest visited set`]];
+  return { rows, text: `${time_label} ${time} ${space_label} ${count_noun(space, "node")}.` };
 }
 
 // cost holds this run's distances and hops. other is the standard search on the same query, given in LSH mode.
@@ -1935,9 +2020,10 @@ function show_search_stats(results, cost, other = null) {
   const total = app.index.points.length;
   const found = `${hits} of ${app.truth.length} true neighbours found`;
   const recall = [`Recall at ${SEARCH_K}`, found];
+  const scaling = scaling_rows((other ?? cost).distances, total, other !== null);
   if (!other) {
-    fill_stats("search-stats", [recall, ["Distance computations", `${cost.distances} of ${total}. Brute force needs all ${total}.`]]);
-    return `${found} with ${cost.distances} of ${total} distance computations.`;
+    fill_stats("search-stats", [recall, ["Distance computations", `${cost.distances} of ${total}. Brute force needs all ${total}.`], ...scaling.rows]);
+    return `${found} with ${cost.distances} of ${total} distance computations. ${scaling.text}`;
   }
   fill_stats("search-stats", [
     recall,
@@ -1945,10 +2031,11 @@ function show_search_stats(results, cost, other = null) {
     ["Distance computations", `LSH ${cost.distances}, standard ${other.distances}, brute force ${total}`],
     ["Counted", "The bucket scan counts. Hashing does not. The seed is measured once more when its layer starts."],
     ["Bucket", app.overlay.lsh ? describe_bucket(app.overlay.lsh) : "none, the graph is empty"],
+    ...scaling.rows,
   ]);
   const lsh_cost = `${count_noun(cost.hops, "hop")} and ${count_noun(cost.distances, "distance computation")}`;
   const standard_cost = `${count_noun(other.hops, "hop")} and ${count_noun(other.distances, "distance computation")}`;
-  return `${found}. LSH used ${lsh_cost}. Standard used ${standard_cost}.`;
+  return `${found}. LSH used ${lsh_cost}. Standard used ${standard_cost}. ${scaling.text}`;
 }
 
 // ---- Actions ----
@@ -1974,13 +2061,17 @@ function run_insert(coords, cluster) {
 }
 
 // The counters are read before search_cost reruns the standard search and overwrites them.
+// samples is held so an ef change during the animation drops this run from the new fit.
 function run_search(query) {
   clear_trace_view();
   const ef = Number(by_id("param-ef").value);
   const lsh = app.lsh_on ? app.lsh : null;
+  const samples = app.cost_samples;
   start_trace(app.index.search(query, SEARCH_K, ef, lsh), (results) => {
     const cost = { distances: app.index.distance_count, hops: app.index.hop_count };
     const other = lsh ? search_cost(app.index, query, SEARCH_K, ef, null) : null;
+    const sample = { n: app.index.points.length, d: (other ?? cost).distances };
+    if (sample.d < sample.n) samples.push(sample);
     app.truth = brute_force_knn(app.index.points, query, SEARCH_K);
     announce(`Search done. ${show_search_stats(results, cost, other)}`);
   });
@@ -1988,7 +2079,13 @@ function run_search(query) {
 
 function add_manual() {
   const coords = read_xyz();
-  if (coords) run_insert(coords, -1);
+  if (!coords) return;
+  const existing = find_point(app.index.points, coords);
+  if (existing >= 0) {
+    by_id("coord-error").textContent = `Node ${existing} is already at ${format_point(app.index.points[existing])}.`;
+    return;
+  }
+  run_insert(coords, -1);
 }
 
 function add_random() {
@@ -2005,8 +2102,14 @@ function search_random() {
   run_search(sample_clustered_point(app.point_rng).coords);
 }
 
+// The fit only holds for one set of parameters, so any change starts it over.
+function reset_cost_samples() {
+  app.cost_samples = [];
+}
+
 function rebuild_for_params() {
   finish_trace();
+  reset_cost_samples();
   app.index.rebuild(current_params());
   clear_trace_view();
   by_id("trace-caption").textContent = `Rebuilt ${count_noun(app.index.points.length, "node")} with M = ${app.index.M}.`;
@@ -2052,6 +2155,7 @@ function toggle_lsh() {
 
 function reset() {
   finish_trace();
+  reset_cost_samples();
   app.index = new HnswIndex({ ...current_params(), seed: SEED });
   app.clusters = [];
   app.point_rng = make_rng(SEED + 1);
