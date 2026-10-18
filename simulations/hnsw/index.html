@@ -815,6 +815,7 @@ class HnswIndex {
   // Deletion is not in the paper. Each layer is repaired on its own, so the order does not change
   // the graph. Top down follows insert and search. The id stays reserved as a tombstone.
   *delete(node) {
+    if (!this.layers[0]?.has(node)) return;
     const level = this.levels[node];
     this.version += 1;
     yield trace_event("delete_begin", "delete_begin", { op: "delete", node, level }); // @step:delete_begin
@@ -835,19 +836,30 @@ class HnswIndex {
     return [...this.layers[layer]].filter(([, links]) => links.includes(node)).map(([owner]) => owner);
   }
 
+  // Counts each node's incoming links on one layer, so a sole link test is a lookup.
+  in_degrees(layer) {
+    const counts = new Map();
+    for (const links of this.layers[layer].values()) for (const to of links) counts.set(to, (counts.get(to) ?? 0) + 1);
+    return counts;
+  }
+
   // Each node that linked to the deleted one picks again from its own links and the deleted node's,
   // with the insert heuristic, cap and alpha.
   *repair_layer(node, layer) {
     const lost = this.neighbours(node, layer);
+    const inbound = this.in_degrees(layer);
     for (const owner of this.in_neighbours(node, layer)) {
-      const old = this.neighbours(owner, layer).filter((other) => other !== node);
+      const prior = this.neighbours(owner, layer);
+      const old = prior.filter((other) => other !== node);
       const pool = [...new Set([...old, ...lost])].filter((other) => other !== owner && other !== node);
       const origin = this.points[owner];
       const scored = pool.map((other) => ({ node: other, dist: distance(origin, this.points[other]) })).sort(by_distance);
       const { chosen, rejected } = this.select_neighbors_heuristic(scored, this.max_degree(layer), this.layer_alpha(layer)); // @step:repair
       yield trace_event("select_neighbors", "repair", { layer, node: owner, chosen: node_ids(chosen), rejected: node_ids(rejected) });
-      const kept = node_ids(chosen).concat(yield* this.keep_sole_link(owner, node_ids(rejected), node, layer));
+      const kept = node_ids(chosen).concat(yield* this.keep_sole_link(owner, node_ids(rejected), lost, inbound, layer));
       this.layers[layer].set(owner, kept); // @step:relink
+      for (const to of prior) inbound.set(to, inbound.get(to) - 1);
+      for (const to of kept) inbound.set(to, (inbound.get(to) ?? 0) + 1);
       for (const to of kept.filter((other) => !old.includes(other))) yield trace_event("add_edge", "relink", { layer, from: owner, to });
       for (const to of old.filter((other) => !kept.includes(other))) yield trace_event("prune_edge", "relink", { layer, from: owner, to });
     }
@@ -857,9 +869,11 @@ class HnswIndex {
 
   // Extension 1: a link the repair would drop stays when it is its target's only way in,
   // even past the owner's cap. Links from the deleted node do not count. Inserts never use this rule.
-  *keep_sole_link(owner, dropped, node, layer) {
+  *keep_sole_link(owner, dropped, lost, inbound, layer) {
     if (!this.protect_sole_links) return [];
-    const sole = dropped.filter((to) => this.in_neighbours(to, layer).every((from) => from === owner || from === node)); // @step:protect_edge
+    const links = this.neighbours(owner, layer);
+    const others = (to) => inbound.get(to) - Number(links.includes(to)) - Number(lost.includes(to));
+    const sole = dropped.filter((to) => others(to) === 0); // @step:protect_edge
     for (const to of sole) yield trace_event("protect_edge", "protect_edge", { layer, from: owner, to });
     return sole;
   }
@@ -1338,7 +1352,7 @@ const SKIPPED_ALPHA = 0.35;
 const by_id = (id) => document.getElementById(id);
 const app = {
   index: null, clusters: [], point_rng: null, overlay: create_overlay(), truth: [], hover: null, colours: {},
-  layout: [], fit: null, frame: null, projected: [], mode: "standard", lsh: null, cost_samples: [],
+  layout: [], fit: null, frame: null, projected: [], mode: "standard", lsh: null, cost_samples: [], selected: null,
 };
 const player = { gen: null, playing: false, budget: 0, last_tick: null, on_done: null };
 const code_pane = { marker_lines: new Map(), active: null };
@@ -1938,12 +1952,13 @@ function on_key(event) {
   request_draw();
 }
 
-// Picks the nearest drawn dot on any layer, from the last frame's positions.
+// Picks the nearest drawn live dot on any layer, from the last frame's positions.
 function pick_node(x, y) {
   let best = null;
   let best_dist = 10;
   for (const projected of app.projected) {
     for (const [node, screen] of projected) {
+      if (app.index.dead.has(node)) continue;
       const gap = Math.hypot(screen.x - x, screen.y - y);
       if (gap < best_dist) [best, best_dist] = [node, gap];
     }
@@ -2165,9 +2180,13 @@ function set_busy(busy) {
 }
 
 // Live node at the typed coordinates, else -1. Clicking a node fills them in, so that selects it.
+// The clicked node wins while it still matches, since two nodes can round to the same coordinates.
 function delete_target() {
   const values = COORD_IDS.map((id) => by_id(id).value);
-  return values.every(is_valid_coord) ? find_point(app.index.points, values.map(Number)) : -1;
+  if (!values.every(is_valid_coord)) return -1;
+  const coords = values.map(Number);
+  const picked = app.index.points[app.selected];
+  return picked && find_point([picked], coords) === 0 ? app.selected : find_point(app.index.points, coords);
 }
 
 function update_delete_button() {
@@ -2199,6 +2218,7 @@ function read_xyz() {
 }
 
 function fill_coords(node) {
+  app.selected = node;
   COORD_IDS.forEach((id, i) => {
     by_id(id).value = String(round2(app.index.points[node][i]));
     by_id(id).setAttribute("aria-invalid", "false");
