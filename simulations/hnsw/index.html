@@ -168,7 +168,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   flex: none; border-left: 3px solid var(--focus); background: var(--surface);
   padding: 6px 10px; border-radius: 0 4px 4px 0; min-height: calc(2.9em + 12px);
 }
-.hover-info { flex: none; color: var(--muted); font-size: 0.85rem; min-height: 1.3em; }
+/* A fixed three-line box fits the hint and any node detail, so hovering never moves the canvas. */
+.hover-info { flex: none; color: var(--muted); font-size: 0.85rem; line-height: 1.3; height: 3.9em; overflow: hidden; }
 
 /* One canvas holds the whole layer stack and takes the column height left after the controls. */
 .stack-canvas {
