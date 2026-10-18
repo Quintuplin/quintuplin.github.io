@@ -168,8 +168,9 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   flex: none; border-left: 3px solid var(--focus); background: var(--surface);
   padding: 6px 10px; border-radius: 0 4px 4px 0; min-height: calc(2.9em + 12px);
 }
-/* A fixed three-line box fits the hint and any node detail, so hovering never moves the canvas. */
-.hover-info { flex: none; color: var(--muted); font-size: 0.85rem; line-height: 1.3; height: 3.9em; overflow: hidden; }
+/* A fixed height fits the hint and any node detail, so hovering never moves the canvas. The hint wraps below about 1150 px. */
+.hover-info { flex: none; color: var(--muted); font-size: 0.85rem; line-height: 1.3; height: 1.3em; overflow: hidden; }
+@media (max-width: 1200px) { .hover-info { height: 2.6em; } }
 
 /* One canvas holds the whole layer stack and takes the column height left after the controls. */
 .stack-canvas {
@@ -260,6 +261,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   .slider-row label { grid-column: 1 / -1; }
   .stack-canvas { flex: none; aspect-ratio: 1 / 1; }
   .code-pane { flex: none; height: 28rem; }
+  .hover-info { height: 3.9em; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
@@ -350,7 +352,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
       <dl id="index-stats" class="stats" aria-label="Index"></dl>
       <dl id="search-stats" class="stats" aria-label="Last search"></dl>
     </div>
-    <p id="hover-info" class="hover-info">Point at a node to see its details. Click a node to copy its coordinates. Drag the layers to rotate them. Click them, then scroll to zoom.</p>
+    <p id="hover-info" class="hover-info">Point at a node to see its details. Drag the layers to rotate them. Click them, then scroll to zoom.</p>
     <canvas id="layer-canvas" class="stack-canvas" tabindex="0" role="img" aria-label="Graph layers"></canvas>
   </section>
 
@@ -1078,7 +1080,7 @@ const TRACE_HOOK = /^\s*yield trace_event\(/;
 const TOKEN_PATTERN = /(\/\/.*$)|("(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)|\b(const|let|function|class|return|yield|for|of|if|else|while|new|this|break|continue|null|get)\b|\b(\d+(?:\.\d+)?)\b/g;
 const TOKEN_CLASSES = ["tok-comment", "tok-string", "tok-keyword", "tok-number"];
 const COORD_IDS = ["coord-x", "coord-y", "coord-z"];
-const HOVER_HINT = "Point at a node to see its details. Click a node to copy its coordinates. Drag the layers to rotate them. Click them, then scroll to zoom.";
+const HOVER_HINT = "Point at a node to see its details. Drag the layers to rotate them. Click them, then scroll to zoom.";
 const ACTION_IDS = ["add-manual", "add-random", "search-manual", "search-random"];
 const COLOUR_TOKENS = [
   "text", "muted", "edge", "prune", "focus", "canvas", "slab", "slab-edge", "node", "trace", "found", "connector", "lsh",
@@ -1979,7 +1981,7 @@ function show_index_stats() {
     ["Entry point", entry],
     ["Link limit", `${index.M} above layer 0, ${index.m_max0} on layer 0`],
     ["mL", `${index.mL.toFixed(2)} (1 / ln M)`],
-    ["Links", `${edges} of ${cap} links, O(N·M) by construction.`],
+    ["Links", `${edges} of ${cap}`],
   ]);
 }
 
@@ -1988,26 +1990,21 @@ function describe_bucket(lsh) {
   return lsh.members.length === 0 ? `${lsh.key}, empty` : `${lsh.key}, ${count_noun(lsh.members.length, "member")}`;
 }
 
-const SCALING_RULE = "The paper's projection is O(log N) distance computations, proven for an idealised graph and measured at low dimension. "
-  + "This fit compares c·log2 N with b·N over queries that measured fewer than N nodes. "
-  + "It cannot show behaviour beyond the tested N, other shapes such as N^0.3, constants or dimension, or effects of which regions the queries hit.";
-
 function describe_verdict(verdict) {
-  if (verdict.status === "need_more") return "run queries at 3 or more N to fit";
-  if (verdict.status === "tie") return "no clear winner";
-  return verdict.status === "log" ? `fits c·log2 N better (c = ${verdict.c.toFixed(1)})` : `fits b·N better (b = ${verdict.b.toFixed(2)})`;
+  if (verdict.status === "need_more") return "Needs queries at 3 N";
+  if (verdict.status === "tie") return "No clear winner";
+  return verdict.status === "log" ? `Fits c·log2 N (c = ${verdict.c.toFixed(1)})` : `Fits b·N (b = ${verdict.b.toFixed(2)})`;
 }
 
 // Time is the standard search d against the running fit. Space is the largest visited set of the animated run.
+// A query that measured every node is left out of the fit.
 function scaling_rows(d, total, lsh) {
-  const verdict = scaling_verdict(app.cost_samples);
   const ratio = (d / Math.log2(total)).toFixed(1);
-  const dropped = d >= total ? " This query is not in the fit because it measured every node." : "";
-  const time = `d = ${d}, d / log2 N = ${ratio}.${dropped} Over ${verdict.distinct} distinct N: ${describe_verdict(verdict)}.`;
-  const space = Math.max(0, ...app.overlay.visits.values());
-  const [time_label, space_label] = lsh ? ["Time of standard search", "Query space of LSH search"] : ["Time", "Query space"];
-  const rows = [[time_label, time], ["How to read it", SCALING_RULE], [space_label, `${count_noun(space, "node")} in the largest visited set`]];
-  return { rows, text: `${time_label} ${time} ${space_label} ${count_noun(space, "node")}.` };
+  const dropped = d >= total ? " (not in fit)" : "";
+  const time = `d = ${d}, d / log2 N = ${ratio}${dropped}. ${describe_verdict(scaling_verdict(app.cost_samples))}`;
+  const space = `${count_noun(Math.max(0, ...app.overlay.visits.values()), "node")} visited`;
+  const [time_label, space_label] = lsh ? ["Time, standard", "Query space, LSH"] : ["Time", "Query space"];
+  return { rows: [[time_label, time], [space_label, space]], text: `${time_label}: ${time}. ${space_label}: ${space}.` };
 }
 
 // cost holds this run's distances and hops. other is the standard search on the same query, given in LSH mode.
