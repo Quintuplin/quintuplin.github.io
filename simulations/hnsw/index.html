@@ -143,6 +143,8 @@ fieldset {
   padding: 4px 8px 6px; background: var(--surface);
 }
 legend { padding: 0 4px; font-weight: 600; font-size: 0.85rem; }
+/* The point box holds five buttons, so it takes more of the row. */
+#point-settings { flex: 1.6 1 320px; }
 .slider-row { --output-width: 2.5rem; display: grid; grid-template-columns: fit-content(calc(100% - 3.5rem - var(--output-width))) minmax(0, 1fr) var(--output-width); align-items: center; gap: 0 8px; margin-bottom: 2px; }
 #playback-settings .slider-row { --output-width: 3.5rem; }
 .slider-row label { font-size: 0.85rem; }
@@ -325,7 +327,9 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
           <button id="add-random" type="button">Add random node</button>
           <button id="search-manual" type="button">Search here</button>
           <button id="search-random" type="button">Search random point</button>
+          <button id="delete-node" type="button" disabled aria-describedby="delete-hint">Delete node</button>
         </div>
+        <p id="delete-hint" class="hint desktop-sr">Delete needs a node at these coordinates. Click a node to fill them in.</p>
       </fieldset>
 
       <fieldset id="search-settings">
@@ -484,20 +488,23 @@ function trace_event(type, line, fields) {
 }
 
 class HnswIndex {
-  constructor({ M, ef_construction, seed, alpha }) {
+  constructor({ M, ef_construction, seed, alpha, protect_sole_links }) {
     this.seed = seed;
     this.points = [];
-    this.configure({ M, ef_construction, alpha });
+    this.configure({ M, ef_construction, alpha, protect_sole_links });
   }
 
   // Empties the graph and reseeds level draws, so a rebuild repeats exactly.
   // alpha above 1 keeps longer layer 0 links, as in DiskANN's RobustPrune. version counts graph changes.
-  configure({ M, ef_construction, alpha = 1 }) {
+  // A deleted node leaves a tombstone: its point is null, its level -1 and its id joins dead.
+  configure({ M, ef_construction, alpha = 1, protect_sole_links = true }) {
     this.M = M;
     this.m_max0 = 2 * M;
     this.mL = 1 / Math.log(M);
     this.ef_construction = ef_construction;
     this.alpha = alpha;
+    this.protect_sole_links = protect_sole_links;
+    this.dead = new Set();
     this.levels = [];
     this.layers = [];
     this.entry_point = null;
@@ -509,11 +516,19 @@ class HnswIndex {
     this.level_rng = make_rng(this.seed);
   }
 
+  // Ids stay stable, so a tombstone keeps its slot and draws no level.
   rebuild(options) {
     const points = this.points;
     this.points = [];
-    this.configure({ alpha: this.alpha, ...options });
-    for (const point of points) run_to_end(this.insert(point));
+    this.configure({ alpha: this.alpha, protect_sole_links: this.protect_sole_links, ...options });
+    for (const point of points) {
+      if (point) run_to_end(this.insert(point));
+      else this.tombstone(this.points.push(null) - 1);
+    }
+  }
+
+  get live_count() {
+    return this.points.length - this.dead.size;
   }
 
   get layer_count() {
@@ -796,6 +811,68 @@ class HnswIndex {
       yield trace_event("prune_edge", "shrink", { layer, from: owner, to: dropped });
     }
   }
+
+  // Deletion is not in the paper. Each layer is repaired on its own, so the order does not change
+  // the graph. Top down follows insert and search. The id stays reserved as a tombstone.
+  *delete(node) {
+    const level = this.levels[node];
+    this.version += 1;
+    yield trace_event("delete_begin", "delete_begin", { op: "delete", node, level }); // @step:delete_begin
+    for (let layer = level; layer >= 0; layer -= 1) yield* this.repair_layer(node, layer);
+    if (this.entry_point === node) yield* this.promote_entry();
+    this.tombstone(node); // @step:tombstone
+    yield trace_event("tombstone", "tombstone", { node });
+    yield trace_event("done", "delete_done", { op: "delete", node, results: [] }); // @step:delete_done
+  }
+
+  tombstone(node) {
+    this.points[node] = null;
+    this.levels[node] = -1;
+    this.dead.add(node);
+  }
+
+  in_neighbours(node, layer) {
+    return [...this.layers[layer]].filter(([, links]) => links.includes(node)).map(([owner]) => owner);
+  }
+
+  // Each node that linked to the deleted one picks again from its own links and the deleted node's,
+  // with the insert heuristic, cap and alpha.
+  *repair_layer(node, layer) {
+    const lost = this.neighbours(node, layer);
+    for (const owner of this.in_neighbours(node, layer)) {
+      const old = this.neighbours(owner, layer).filter((other) => other !== node);
+      const pool = [...new Set([...old, ...lost])].filter((other) => other !== owner && other !== node);
+      const origin = this.points[owner];
+      const scored = pool.map((other) => ({ node: other, dist: distance(origin, this.points[other]) })).sort(by_distance);
+      const { chosen, rejected } = this.select_neighbors_heuristic(scored, this.max_degree(layer), this.layer_alpha(layer)); // @step:repair
+      yield trace_event("select_neighbors", "repair", { layer, node: owner, chosen: node_ids(chosen), rejected: node_ids(rejected) });
+      const kept = node_ids(chosen).concat(yield* this.keep_sole_link(owner, node_ids(rejected), node, layer));
+      this.layers[layer].set(owner, kept); // @step:relink
+      for (const to of kept.filter((other) => !old.includes(other))) yield trace_event("add_edge", "relink", { layer, from: owner, to });
+      for (const to of old.filter((other) => !kept.includes(other))) yield trace_event("prune_edge", "relink", { layer, from: owner, to });
+    }
+    this.layers[layer].delete(node); // @step:remove_node
+    yield trace_event("remove_node", "remove_node", { layer, node });
+  }
+
+  // Extension 1: a link the repair would drop stays when it is its target's only way in,
+  // even past the owner's cap. Links from the deleted node do not count. Inserts never use this rule.
+  *keep_sole_link(owner, dropped, node, layer) {
+    if (!this.protect_sole_links) return [];
+    const sole = dropped.filter((to) => this.in_neighbours(to, layer).every((from) => from === owner || from === node)); // @step:protect_edge
+    for (const to of sole) yield trace_event("protect_edge", "protect_edge", { layer, from: owner, to });
+    return sole;
+  }
+
+  // A deleted entry point hands over to a live node on the highest layer left, once empty top layers go.
+  *promote_entry() {
+    while (this.layers.length > 0 && this.layers.at(-1).size === 0) {
+      this.layers.pop(); // @step:drop_layer
+      yield trace_event("drop_layer", "drop_layer", { layer: this.layers.length });
+    }
+    this.entry_point = this.layers.at(-1)?.keys().next().value ?? null; // @step:promote_entry
+    if (this.entry_point !== null) yield trace_event("set_entry_point", "promote_entry", { node: this.entry_point, layer: this.layers.length - 1 });
+  }
 }
 
 // The seed layer is the highest with at least √N nodes, never below layer 1. One layer has nothing to skip.
@@ -858,8 +935,9 @@ function search_cost(index, query, k, ef, table, disk = null) {
   return { results, distances: index.distance_count, hops: index.hop_count, rounds: disk ? index.round_count : null };
 }
 
+// A tombstone's point is null, so it never scores.
 function brute_force_knn(points, query, k) {
-  const scored = points.map((point, node) => ({ node, dist: distance(query, point) }));
+  const scored = points.flatMap((point, node) => (point ? [{ node, dist: distance(query, point) }] : []));
   return scored.sort(by_distance).slice(0, k);
 }
 
@@ -933,6 +1011,13 @@ const OVERLAY_HANDLERS = {
   prune_edge(overlay, event, now) {
     overlay.flashes.push({ kind: "prune", layer: event.layer, from: event.from, to: event.to, born: now });
   },
+  delete_begin(overlay, event) {
+    Object.assign(overlay, create_overlay(overlay.flashes), { op: event.op, node: event.node });
+  },
+  // A kept sole link flashes like a new one, since it now outlives the repair.
+  protect_edge(overlay, event, now) {
+    overlay.flashes.push({ kind: "add", layer: event.layer, from: event.from, to: event.to, born: now });
+  },
   done(overlay, event) {
     Object.assign(overlay, { final: event.results, current: null, layer: null, candidates: [] });
   },
@@ -974,9 +1059,9 @@ function round2(value) {
   return Math.round(value * 100) / 100 + 0;
 }
 
-// Index of a point at the same two-decimal coordinates, else -1.
+// Index of a live point at the same two-decimal coordinates, else -1.
 function find_point(points, coords) {
-  return points.findIndex((point) => point.every((value, i) => round2(value) === round2(coords[i])));
+  return points.findIndex((point) => point?.every((value, i) => round2(value) === round2(coords[i])));
 }
 
 function count_noun(count, noun) {
@@ -989,15 +1074,26 @@ function describe_entries(entry_ids) {
 
 function describe_begin(event) {
   if (event.op === "search") return `Searching for the ${event.k} nodes nearest ${format_point(event.query)}.`;
-  const reach = event.level === 0 ? "layer 0 only" : `layers 0 to ${event.level}`;
+  const reach = describe_reach(event.level);
   return `Placing node ${event.node} at ${format_point(event.query)}. It drew level ${event.level}, so it joins ${reach}.`;
+}
+
+function describe_reach(level) {
+  return level === 0 ? "layer 0 only" : `layers 0 to ${level}`;
 }
 
 function describe_selection(event) {
   const skipped = event.rejected.length;
   const tail = skipped === 0 ? "." : `. ${count_noun(skipped, "other")} skipped as already covered or over the limit.`;
-  return `Layer ${event.layer}: node ${event.node} links to ${count_noun(event.chosen.length, "neighbour")}${tail}`;
+  const verb = event.line === "repair" ? "relinks to" : "links to";
+  return `Layer ${event.layer}: node ${event.node} ${verb} ${count_noun(event.chosen.length, "neighbour")}${tail}`;
 }
+
+const DONE_CAPTIONS = {
+  insert: (e) => `Node ${e.node} is placed.`,
+  delete: (e) => `Node ${e.node} is deleted.`,
+  search: (e) => `Search done. Found ${count_noun(e.results.length, "node")}.`,
+};
 
 function describe_lsh_hash(event) {
   if (event.line === "disk_hash") {
@@ -1031,9 +1127,16 @@ const CAPTIONS = {
   layer_done: (e) => `Layer ${e.layer} done. Closest found is node ${e.results[0].node} at ${format_dist(e.results[0].dist)}.`,
   select_neighbors: describe_selection,
   add_edge: (e) => `Layer ${e.layer}: new link from node ${e.from} to node ${e.to}.`,
-  prune_edge: (e) => `Layer ${e.layer}: node ${e.from} was over its link limit and dropped node ${e.to}.`,
+  prune_edge: (e) => (e.line === "relink"
+    ? `Layer ${e.layer}: node ${e.from} relinks and drops its link to node ${e.to}.`
+    : `Layer ${e.layer}: node ${e.from} was over its link limit and dropped node ${e.to}.`),
   set_entry_point: (e) => `Node ${e.node} is now the entry point, on layer ${e.layer}.`,
-  done: (e) => (e.op === "insert" ? `Node ${e.node} is placed.` : `Search done. Found ${count_noun(e.results.length, "node")}.`),
+  delete_begin: (e) => `Deleting node ${e.node}. It lives on ${describe_reach(e.level)}, so each of those layers is repaired.`,
+  protect_edge: (e) => `Layer ${e.layer}: node ${e.from} keeps its link to node ${e.to}, the only way in, even past its link limit.`,
+  remove_node: (e) => `Layer ${e.layer}: node ${e.node} is removed. Every node that linked to it has relinked.`,
+  drop_layer: (e) => `Layer ${e.layer} is empty and is removed.`,
+  tombstone: (e) => `Node ${e.node} leaves a tombstone, so every other node keeps its id.`,
+  done: (e) => DONE_CAPTIONS[e.op](e),
 };
 
 function describe_event(event) {
@@ -1084,10 +1187,10 @@ function stack_layout(count) {
   });
 }
 
-// Centre and half-range of the cloud. A tiny cloud keeps a floor so one point does not blow up.
+// Centre and half-range of the live cloud. A tiny cloud keeps a floor so one point does not blow up.
 function point_frame(points) {
   const axis = (i) => {
-    const values = points.map((point) => point[i]);
+    const values = points.filter(Boolean).map((point) => point[i]);
     const low = Math.min(...values, Infinity);
     const high = Math.max(...values, -Infinity);
     return low > high ? { mid: 0, half: 0 } : { mid: (low + high) / 2, half: (high - low) / 2 };
@@ -1182,11 +1285,11 @@ function scaling_verdict(samples) {
   return { status, c: log.slope, b: lin.slope, sse_log: log.sse, sse_lin: lin.sse, distinct };
 }
 
-// Stored links over all layers, against the cap of 2M on layer 0 and M on each layer above.
+// Stored links over all layers, against the cap of 2M on layer 0 and M on each layer above. Tombstones add none.
 function index_links(index) {
   let edges = 0;
   for (const layer of index.layers) for (const links of layer.values()) edges += links.length;
-  const cap = index.levels.reduce((sum, level) => sum + 2 * index.M + index.M * level, 0);
+  const cap = index.levels.reduce((sum, level) => (level < 0 ? sum : sum + 2 * index.M + index.M * level), 0);
   return { edges, cap };
 }
 </script>
@@ -2039,6 +2142,8 @@ function bind_buttons() {
   by_id("add-random").addEventListener("click", add_random);
   by_id("search-manual").addEventListener("click", search_manual);
   by_id("search-random").addEventListener("click", search_random);
+  by_id("delete-node").addEventListener("click", run_delete);
+  for (const id of COORD_IDS) by_id(id).addEventListener("input", update_delete_button);
   by_id("play-pause").addEventListener("click", toggle_pause);
   by_id("step").addEventListener("click", manual_step);
   by_id("finish").addEventListener("click", () => {
@@ -2056,6 +2161,17 @@ function set_busy(busy) {
   const can_play = busy && !runs_at_once();
   for (const id of ["play-pause", "step", "finish"]) by_id(id).disabled = !can_play;
   update_pause_button();
+  update_delete_button();
+}
+
+// Live node at the typed coordinates, else -1. Clicking a node fills them in, so that selects it.
+function delete_target() {
+  const values = COORD_IDS.map((id) => by_id(id).value);
+  return values.every(is_valid_coord) ? find_point(app.index.points, values.map(Number)) : -1;
+}
+
+function update_delete_button() {
+  by_id("delete-node").disabled = Boolean(player.gen) || !app.index || delete_target() < 0;
 }
 
 function update_pause_button() {
@@ -2088,6 +2204,7 @@ function fill_coords(node) {
     by_id(id).setAttribute("aria-invalid", "false");
   });
   by_id("coord-error").textContent = "";
+  update_delete_button();
   announce(`Coordinates set to node ${node}.`);
 }
 
@@ -2120,7 +2237,7 @@ function show_index_stats() {
   const entry = index.entry_point === null ? "none" : `node ${index.entry_point} on layer ${index.levels[index.entry_point]}`;
   const { edges, cap } = index_links(index);
   fill_stats("index-stats", [
-    ["Nodes", String(index.points.length)],
+    ["Nodes", String(index.live_count)],
     ["Layers", String(index.layer_count)],
     ["Entry point", entry],
     ["Link limit", `${index.M} above layer 0, ${index.m_max0} on layer 0`],
@@ -2159,7 +2276,7 @@ function show_search_stats(results, cost, other = null) {
     return "";
   }
   const hits = Math.round(recall_at_k(results, app.truth) * app.truth.length);
-  const total = app.index.points.length;
+  const total = app.index.live_count;
   const found = `${hits} of ${app.truth.length} true neighbours found`;
   const recall = [`Recall at ${SEARCH_K}`, found];
   if (app.mode === "disk") return show_disk_stats(recall, cost, other, total);
@@ -2234,10 +2351,22 @@ function run_search(query) {
   start_trace(gen, (results) => {
     const cost = { distances: app.index.distance_count, hops: app.index.hop_count, rounds: app.index.round_count };
     const other = lsh ? search_cost(app.index, query, SEARCH_K, ef, null, disk) : null;
-    const sample = { n: app.index.points.length, d: (other ?? cost).distances };
+    const sample = { n: app.index.live_count, d: (other ?? cost).distances };
     if (!disk && sample.d < sample.n) samples.push(sample);
     app.truth = brute_force_knn(app.index.points, query, SEARCH_K);
     announce(`Search done. ${show_search_stats(results, cost, other)}`);
+  });
+}
+
+// The hover text may name the deleted node, so it clears.
+function run_delete() {
+  const node = delete_target();
+  if (node < 0) return;
+  clear_trace_view();
+  start_trace(app.index.delete(node), () => {
+    set_hover(null);
+    show_index_stats();
+    announce(`Node ${node} deleted. ${count_noun(app.index.live_count, "node")} remain across ${count_noun(app.index.layer_count, "layer")}.`);
   });
 }
 
@@ -2276,7 +2405,7 @@ function rebuild_for_params() {
   reset_cost_samples();
   app.index.rebuild(current_params());
   clear_trace_view();
-  by_id("trace-caption").textContent = `Rebuilt ${count_noun(app.index.points.length, "node")} with M = ${app.index.M}.`;
+  by_id("trace-caption").textContent = `Rebuilt ${count_noun(app.index.live_count, "node")} with M = ${app.index.M}.`;
   show_index_stats();
   request_draw();
 }
@@ -2337,6 +2466,7 @@ function reset() {
   app.hover = null;
   by_id("trace-caption").textContent = "Add a node or run a search to watch the algorithm work.";
   show_index_stats();
+  update_delete_button();
   announce(`Built ${count_noun(SEED_COUNT, "node")} across ${count_noun(app.index.layer_count, "layer")}.`);
   request_draw();
 }
