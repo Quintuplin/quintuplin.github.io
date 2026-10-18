@@ -147,6 +147,7 @@ legend { padding: 0 4px; font-weight: 600; font-size: 0.85rem; }
 #playback-settings .slider-row { --output-width: 3.5rem; }
 .slider-row label { font-size: 0.85rem; }
 .slider-row input { width: 100%; min-width: 0; accent-color: var(--result); }
+.slider-row select { font: inherit; min-width: 0; }
 .slider-row output { font-variant-numeric: tabular-nums; text-align: right; }
 .button-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .hint { color: var(--muted); font-size: 0.8rem; margin-top: 4px; }
@@ -297,7 +298,14 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
           <input id="param-ef-construction" type="range" min="4" max="64" step="1" value="24" aria-describedby="param-m-hint">
           <output id="param-ef-construction-value" for="param-ef-construction">24</output>
         </div>
-        <p id="param-m-hint" class="hint desktop-sr">Changing either setting rebuilds the graph from the same points. efC is efConstruction.</p>
+        <div class="slider-row">
+          <label for="param-alpha">Prune slack (alpha)</label>
+          <select id="param-alpha" aria-describedby="param-m-hint">
+            <option value="1" selected>1, HNSW</option>
+            <option value="1.2">1.2, DiskANN</option>
+          </select>
+        </div>
+        <p id="param-m-hint" class="hint desktop-sr">Changing any setting rebuilds the graph from the same points. efC is efConstruction. Alpha above 1 keeps longer layer 0 links, as DiskANN RobustPrune does.</p>
         <div class="button-row">
           <button id="reset" type="button">Reset to seed points</button>
         </div>
@@ -504,7 +512,7 @@ class HnswIndex {
   rebuild(options) {
     const points = this.points;
     this.points = [];
-    this.configure(options);
+    this.configure({ alpha: this.alpha, ...options });
     for (const point of points) run_to_end(this.insert(point));
   }
 
@@ -616,12 +624,17 @@ class HnswIndex {
   *disk_search(query, k, L, W, table = null) { // @disk:new
     this.distance_count = 0; // @disk:new
     this.hop_count = 0; // @disk:new
+    this.round_count = 0; // @disk:new
     yield trace_event("begin", "disk_begin", { op: "search", query, k }); // @step:disk_begin @disk:new
     let results = []; // @disk:new
     if (this.entry_point !== null) { // @disk:new
-      const seed = table ? (yield* this.entry_seed(query, table)) : null; // @disk:new
-      const start = seed ?? this.medoid(); // @step:disk_medoid @disk:new
-      if (seed === null) yield trace_event("medoid", "disk_medoid", { node: start }); // @disk:new
+      let start = table ? (yield* this.entry_seed(query, table)) : null; // @disk:new
+      if (start === null) { // @disk:new
+        const node = this.medoid(); // @disk:new
+        start = { node, dist: this.count_distance(query, node) }; // @step:disk_medoid @disk:new
+        yield trace_event("medoid", "disk_medoid", { node }); // @disk:new
+        yield trace_event("visit", "disk_medoid", { layer: 0, ...start }); // @disk:new
+      } // @disk:new
       results = yield* this.beam_search(query, k, Math.max(L, k), W, start); // @disk:new
     } // @disk:new
     yield trace_event("done", "disk_done", { op: "search", results }); // @step:disk_done @disk:new
@@ -629,9 +642,9 @@ class HnswIndex {
   } // @disk:new
 
   // Hashes the query into the entry table, built over a fixed sample of layer 0, // @disk:new
-  // and returns the closest sampled member. An empty bucket returns null. // @disk:new
+  // and returns the closest sampled member with its distance. An empty bucket returns null. // @disk:new
   *entry_seed(query, table) { // @disk:new
-    table.sync(0, this.layers[0], this.points, this.version, in_entry_sample); // @disk:new
+    table.sync(0, this.layers[0], this.points, this.version, entry_stride(this.layers[0].size)); // @disk:new
     const key = table.hash_key(query); // @step:disk_hash @disk:new
     const members = table.bucket(key); // @disk:new
     yield trace_event("lsh_hash", "disk_hash", { layer: 0, key, members: members.slice(), skipped: [] }); // @disk:new
@@ -641,7 +654,7 @@ class HnswIndex {
     } // @disk:new
     const seed = yield* this.scan_bucket(query, members, 0); // @disk:new
     yield trace_event("lsh_seed", "disk_seed", { layer: 0, node: seed.node, dist: seed.dist }); // @step:disk_seed @disk:new
-    return seed.node; // @disk:new
+    return seed; // @disk:new
   } // @disk:new
 
   // The node with the least total distance to every other. Built once per graph change, // @disk:new
@@ -658,13 +671,13 @@ class HnswIndex {
 
   // BeamSearch (section 3.3). The list keeps the L closest nodes seen. Each round expands // @disk:new
   // the W closest unexpanded ones together, one disk read in DiskANN, then trims to L. // @disk:new
+  // start is { node, dist }, already measured, so the seed is never measured twice. // @disk:new
   *beam_search(query, k, L, W, start) { // @disk:new
     this.round_count = 0; // @disk:new
-    const seen = new Set([start]); // @disk:new
+    const seen = new Set([start.node]); // @disk:new
     const expanded = new Set(); // @disk:new
-    yield trace_event("enter_layer", "disk_start", { layer: 0, entry_ids: [start], ef: L }); // @disk:new
-    let list = [{ node: start, dist: this.count_distance(query, start) }]; // @step:disk_start @disk:new
-    yield trace_event("visit", "disk_start", { layer: 0, node: start, dist: list[0].dist }); // @disk:new
+    let list = [start]; // @step:disk_start @disk:new
+    yield trace_event("enter_layer", "disk_start", { layer: 0, entry_ids: [start.node], ef: L }); // @disk:new
     let frontier = list.slice(); // @disk:new
     while (frontier.length > 0) { // @disk:new
       this.round_count += 1; // @step:disk_round @disk:new
@@ -802,7 +815,7 @@ class LshTable {
     this.layer = null;
     this.layer_map = null;
     this.version = null;
-    this.keep = null;
+    this.stride = null;
     this.buckets = new Map();
   }
 
@@ -813,13 +826,13 @@ class LshTable {
   }
 
   // Inserts and rebuilds never touch the table, so it rebuilds here when the graph version has changed.
-  // keep, when given, picks which layer nodes the table holds.
-  sync(layer, layer_map, points, version, keep = null) {
-    const same = layer === this.layer && layer_map === this.layer_map && version === this.version && keep === this.keep;
+  // With stride s the table holds only node ids divisible by s.
+  sync(layer, layer_map, points, version, stride = 1) {
+    const same = layer === this.layer && layer_map === this.layer_map && version === this.version && stride === this.stride;
     if (same) return;
-    Object.assign(this, { layer, layer_map: layer_map ?? null, version, keep, buckets: new Map() });
+    Object.assign(this, { layer, layer_map: layer_map ?? null, version, stride, buckets: new Map() });
     for (const node of layer_map?.keys() ?? []) {
-      if (keep && !keep(node)) continue;
+      if (node % stride !== 0) continue;
       const key = this.hash_key(points[node]);
       if (!this.buckets.has(key)) this.buckets.set(key, []);
       this.buckets.get(key).push(node);
@@ -831,9 +844,10 @@ class LshTable {
   }
 }
 
-// The DiskANN entry table holds a fixed 10% of layer 0. Node ids follow random insert order.
-function in_entry_sample(node) {
-  return node % 10 === 0;
+// The DiskANN entry table holds every stride-th node, about max(10% of N, 8) of them,
+// so small graphs still get a usable table. Node ids follow random insert order.
+function entry_stride(count) {
+  return Math.max(1, Math.floor(count / Math.max(Math.ceil(count / 10), 8)));
 }
 
 // Runs one search with no viewer and returns its cost, for side by side numbers.
@@ -856,7 +870,7 @@ function recall_at_k(found, truth) {
 }
 
 globalThis.hnsw = {
-  distance, insert_sorted, random_level, run_to_end, HnswIndex, brute_force_knn, recall_at_k, LshTable, seed_layer, search_cost, in_entry_sample,
+  distance, insert_sorted, random_level, run_to_end, HnswIndex, brute_force_knn, recall_at_k, LshTable, seed_layer, search_cost, entry_stride,
 };
 </script>
 
@@ -2005,6 +2019,7 @@ function bind_sliders() {
   show_speed();
   by_id("param-m").addEventListener("input", rebuild_for_params);
   by_id("param-ef-construction").addEventListener("input", rebuild_for_params);
+  by_id("param-alpha").addEventListener("change", rebuild_for_params);
   by_id("param-ef").addEventListener("input", reset_cost_samples);
   by_id("param-lsh-k").addEventListener("input", rebuild_lsh_table);
 }
@@ -2173,7 +2188,7 @@ function show_disk_stats(recall, cost, medoid, total) {
     recall,
     ["BeamSearch rounds", `entry table ${cost.rounds}, medoid ${medoid.rounds}. Each round reads ${DISK_W} nodes at most.`],
     ["Distance computations", `entry table ${cost.distances}, medoid ${medoid.distances}, brute force ${total}`],
-    ["Counted", "The sampled bucket scan counts. Hashing does not, and the medoid is found once per graph."],
+    ["Counted", "The sampled bucket scan counts and the seed is not measured again. Hashing does not, and the medoid is found once per graph."],
     ["Bucket", app.overlay.lsh ? describe_bucket(app.overlay.lsh) : "none, the graph is empty"],
   ]);
   return `${recall[1]}. The entry table start used ${spend(cost)}. The medoid start used ${spend(medoid)}.`;
@@ -2181,7 +2196,11 @@ function show_disk_stats(recall, cost, medoid, total) {
 
 // ---- Actions ----
 function current_params() {
-  return { M: Number(by_id("param-m").value), ef_construction: Number(by_id("param-ef-construction").value) };
+  return {
+    M: Number(by_id("param-m").value),
+    ef_construction: Number(by_id("param-ef-construction").value),
+    alpha: Number(by_id("param-alpha").value),
+  };
 }
 
 function clear_trace_view() {
