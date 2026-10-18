@@ -677,7 +677,7 @@ class HnswIndex {
     const seen = new Set([start.node]); // @disk:new
     const expanded = new Set(); // @disk:new
     let list = [start]; // @step:disk_start @disk:new
-    yield trace_event("enter_layer", "disk_start", { layer: 0, entry_ids: [start.node], ef: L }); // @disk:new
+    yield trace_event("enter_layer", "disk_start", { layer: 0, entry_ids: [start.node], ef: L, current: start.node }); // @disk:new
     let frontier = list.slice(); // @disk:new
     while (frontier.length > 0) { // @disk:new
       this.round_count += 1; // @step:disk_round @disk:new
@@ -893,7 +893,8 @@ const OVERLAY_HANDLERS = {
     overlay.flashes.push({ kind: "layer", layer: event.layer, born: now });
   },
   enter_layer(overlay, event) {
-    Object.assign(overlay, { layer: event.layer, current: null, expanding: null, candidates: [], results: [], chosen: [], rejected: [] });
+    // A DiskANN start is measured before its layer begins, so the event names it as current.
+    Object.assign(overlay, { layer: event.layer, current: event.current ?? null, expanding: null, candidates: [], results: [], chosen: [], rejected: [] });
     overlay.ef_per_layer.set(event.layer, event.ef);
     overlay.path.set(event.layer, []);
     overlay.explored.set(event.layer, []);
