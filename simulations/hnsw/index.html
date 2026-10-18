@@ -497,6 +497,10 @@ class HnswIndex {
     return this.layers.length;
   }
 
+  get layer_sizes() {
+    return this.layers.map((layer) => layer.size);
+  }
+
   max_degree(layer) {
     return layer === 0 ? this.m_max0 : this.M;
   }
@@ -562,10 +566,10 @@ class HnswIndex {
     return results;
   }
 
-  // Hashes the query into a bucket on a middle layer and seeds the descent // @lsh:new
+  // Hashes the query into a bucket on the seed layer and seeds the descent // @lsh:new
   // from its closest member. The scan counts as distance work. Hashing does not. // @lsh:new
   *lsh_seed(query, top_level, table) { // @lsh:new
-    const layer = seed_layer(top_level); // @lsh:new
+    const layer = seed_layer(this.layer_sizes); // @lsh:new
     table.sync(layer, this.layers[layer], this.points); // @lsh:new
     const key = table.hash_key(query); // @step:lsh_hash @lsh:new
     const members = table.bucket(key); // @lsh:new
@@ -678,9 +682,10 @@ class HnswIndex {
   }
 }
 
-// The LSH seed enters halfway down the hierarchy. A single layer leaves nothing to skip.
-function seed_layer(top_level) {
-  return top_level >= 1 ? Math.ceil(top_level / 2) : null;
+// The seed layer is the highest with at least √N nodes, never below layer 1. One layer has nothing to skip.
+function seed_layer(sizes) {
+  if (sizes.length < 2) return null;
+  return Math.max(1, sizes.findLastIndex((size) => size >= Math.sqrt(sizes[0])));
 }
 
 // E2LSH p-stable hashing (Datar et al. 2004). Each of k hashes is floor((a . p + b) / w)
@@ -1161,7 +1166,7 @@ function flash_ms() {
 function draw_all(now) {
   const { ctx, width, height } = stack;
   if (width === 0 || app.index.layer_count === 0) return;
-  const strata = layer_strata(app.index.layers.map((layer) => layer.size));
+  const strata = layer_strata(app.index.layer_sizes);
   label_stack(strata);
   const ratio = stack.canvas.width / width;
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
@@ -2024,7 +2029,7 @@ function rebuild_lsh_table() {
 
 function describe_lsh_mode() {
   if (!app.lsh_on) return "LSH entry point off. Searches start from the top entry point.";
-  const layer = seed_layer(app.index.layer_count - 1);
+  const layer = seed_layer(app.index.layer_sizes);
   const start = layer === null ? "use the top entry point while there is one layer" : `start from a bucket on layer ${layer}`;
   return `LSH entry point on. Searches ${start}.`;
 }
