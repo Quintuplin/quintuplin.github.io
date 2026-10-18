@@ -1,0 +1,199 @@
+<!doctype html><meta charset=utf-8><title>SKOPE door-event simulator</title>
+<style>body{margin:0;font:13px system-ui;background:#f4f7f9;color:#151b20}
+.top{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:8px 12px;background:#fff;border-bottom:1px solid #ddd}
+.top label{display:flex;gap:4px;align-items:center}main{display:grid;grid-template-columns:1fr 360px;gap:10px;padding:10px}
+#world{width:100%;aspect-ratio:4/3;background:#fff;border:1px solid #ddd;cursor:grab}
+#views{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;margin-top:8px}
+#views canvas{width:100%;aspect-ratio:4/3;background:#1d2226;border:2px solid #ddd;border-radius:4px}
+#views canvas.near{border-color:#c0561c}figure{margin:0}figcaption{font-size:12px;color:#556}
+table{border-collapse:collapse;width:100%;font-size:12px}td,th{border-bottom:1px solid #ddd;padding:3px 5px;text-align:right}
+td:first-child,th:first-child{text-align:left}.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin-bottom:8px}
+.kv b{color:#556;font-weight:600}input[type=range]{width:260px}</style>
+<div class=top>
+<label>config <select id=lay></select></label><label>shelf <select id=sh></select></label>
+<label>lane <select id=col></select></label><label>row <select id=row></select></label>
+<label><select id=ev><option value=1>remove</option><option value=0>insert</option></select></label>
+<button id=play>play</button><input type=range id=tt min=0 max=1 step=0.001 value=0><span id=tl></span>
+<label>shelves <select id=tilt><option value=0>flat (SKOPE standard wire)</option><option value=1>slide-down tilted rows (gravity feed)</option></select></label>
+<label>packs <select id=mix></select></label><label><input type=checkbox id=op> opaque shelves (default off: wire)</label><label><input type=checkbox id=ot checked> other shelves stocked</label>
+<label><input type=checkbox id=rn> random stock, fill <input type=number id=fill min=0 max=100 value=60 style="width:3.5em">%</label>
+<button id=reroll>re-roll</button><span id=seedl></span></div>
+<main><div><canvas id=world></canvas><div id=views></div></div>
+<aside><div class=kv id=kv></div><table id=tbl></table>
+<p style="color:#556;font-size:12px">Packs: the 600 ml model bottle in every lane, or a dairy mix with one pack shape per lane; the moving pack takes its lane's shape. Visible % = share of the moving pack's projected pixels (88x66 ray grid, same ray-cast as the views) not hidden by walls, opaque shelves, other stock or the forearm. Seen time = seconds so far with visible &ge; 50%. Orange border = nearest camera. Camera views are ray-cast: cabinet walls, ceiling and floor, opaque shelves (or the wire grid when see-through), stock (blue-grey), the moving bottle (orange) and the forearm (tan) occlude in depth order; the pale region is the open door side.
+Door camera (config A) swings with the door. Lane is emptied in front of the event row. Random stock keeps each slot with the given probability (seeded; re-roll for a new layout): gaps on flat shelves, front-packed random counts on tilted gravity-feed shelves. Ghost bottles mark 7 instants of the move: green = best camera &ge; 50% at that instant, red = not; ghosts still ahead of the slider are faded.</p></aside></main>
+<script>
+const S={"W": 470, "D": 555, "H": 1570, "shelf_w": 445, "shelf_d": 475, "shelf_y0": 70, "shelves": [100, 390, 680, 970, 1260], "tilt_deg": 7, "r": 32, "h": 250, "rows": [100, 170, 240, 310, 380, 450, 520], "cols": [50, 124, 198, 272, 346, 420], "shapes": {"model bottle": [["cyl", 32, 0, 250]], "PET 600 ml": [["cyl", 32, 0, 160], ["cone", 32, 160, 205, 14], ["cyl", 14, 205, 240]], "can 330 ml": [["cyl", 33, 0, 115]], "tall can 500 ml": [["cyl", 33, 0, 168]], "slim can 250 ml": [["cyl", 27, 0, 134]], "flavoured milk 300 ml": [["cyl", 30, 0, 145], ["cone", 30, 145, 170, 19], ["cyl", 19, 170, 180]], "milk 1 L": [["box", 36, 0, 195], ["cone", 36, 195, 220, 20], ["cyl", 20, 220, 235]], "juice carton 1 L": [["box", 35, 0, 245]]}, "pack_h": {"model bottle": 250, "PET 600 ml": 240, "can 330 ml": 115, "tall can 500 ml": 168, "slim can 250 ml": 134, "flavoured milk 300 ml": 180, "milk 1 L": 235, "juice carton 1 L": 245}, "pack_r": {"model bottle": 32, "PET 600 ml": 32, "can 330 ml": 33, "tall can 500 ml": 33, "slim can 250 ml": 27, "flavoured milk 300 ml": 30, "milk 1 L": 36, "juice carton 1 L": 35}, "lane_rows": {"model bottle": [100, 170, 240, 310, 380, 450, 520], "PET 600 ml": [100, 170, 240, 310, 380, 450, 520], "can 330 ml": [101, 173, 245, 317, 389, 461], "tall can 500 ml": [101, 173, 245, 317, 389, 461], "slim can 250 ml": [95, 155, 215, 275, 335, 395, 455, 515], "flavoured milk 300 ml": [98, 164, 230, 296, 362, 428, 494], "milk 1 L": [104, 182, 260, 338, 416, 494], "juice carton 1 L": [103, 179, 255, 331, 407, 483]}, "mixes": [{"name": "600 ml bottle in every lane", "lanes": null}, {"name": "dairy mix, as stocked", "lanes": [["milk 1 L", "milk 1 L", "milk 1 L", "juice carton 1 L", "juice carton 1 L", "flavoured milk 300 ml"], ["flavoured milk 300 ml", "flavoured milk 300 ml", "PET 600 ml", "PET 600 ml", "juice carton 1 L", "milk 1 L"], ["PET 600 ml", "PET 600 ml", "PET 600 ml", "tall can 500 ml", "PET 600 ml", "PET 600 ml"], ["tall can 500 ml", "tall can 500 ml", "PET 600 ml", "slim can 250 ml", "slim can 250 ml", "PET 600 ml"], ["can 330 ml", "can 330 ml", "slim can 250 ml", "can 330 ml", "tall can 500 ml", "can 330 ml"]]}, {"name": "dairy mix, shortest lanes on the left", "lanes": [["flavoured milk 300 ml", "milk 1 L", "milk 1 L", "milk 1 L", "juice carton 1 L", "juice carton 1 L"], ["flavoured milk 300 ml", "flavoured milk 300 ml", "milk 1 L", "PET 600 ml", "PET 600 ml", "juice carton 1 L"], ["tall can 500 ml", "PET 600 ml", "PET 600 ml", "PET 600 ml", "PET 600 ml", "PET 600 ml"], ["slim can 250 ml", "slim can 250 ml", "tall can 500 ml", "tall can 500 ml", "PET 600 ml", "PET 600 ml"], ["can 330 ml", "can 330 ml", "can 330 ml", "can 330 ml", "slim can 250 ml", "tall can 500 ml"]]}], "layouts": [{"name": "A  AoFrio-class (1 cam, door glass)", "cams": [{"name": "A door-top", "pos": [235, 8, 1470], "yaw": 0, "pitch": -38, "fov": [150, 150], "fisheye": true, "note": "predicted: OV5640-class 5 MP, 150-210 deg, adhesive on inner door glass, 5 V from SCS 800", "frustum": [[862.8517870878944, 140.56892400635618, 1366.4258051523725], [778.7355974295751, 333.8410027685482, 1613.802785100602], [548.9258935439473, 475.32598410692657, 1794.8953030456532], [235.00000000000003, 527.1130815307404, 1861.1797650488313], [-78.92589354394704, 475.3259841069266, 1794.8953030456532], [-308.73559742957514, 333.8410027685482, 1613.802785100602], [-392.8517870878944, 140.56892400635624, 1366.4258051523727], [-308.73559742957525, -52.7031547558358, 1119.0488252041434], [-78.9258935439475, -194.18813609421423, 937.956307259092], [234.9999999999999, -245.97523351802798, 871.6718452559138], [548.9258935439473, -194.18813609421423, 937.956307259092], [778.7355974295749, -52.70315475583609, 1119.048825204143]]}]}, {"name": "A2 AoFrio-class on the frame (1 cam, static, top centre)", "cams": [{"name": "A2 frame-top", "pos": [235, 20, 1550], "yaw": 0, "pitch": -45, "fov": [150, 150], "fisheye": true, "note": "same module as A but on the cabinet top-front frame: wired to the SCS 800 door switch, so no IMU and no need to ride the door", "frustum": [[862.8517870878944, 138.95825622994255, 1431.0417437700573], [778.7355974295751, 360.9373843449139, 1653.0208718850288], [548.9258935439473, 523.4373843449139, 1815.5208718850288], [235.00000000000003, 582.9165124598852, 1875.0], [-78.92589354394704, 523.4373843449139, 1815.5208718850288], [-308.73559742957514, 360.9373843449139, 1653.0208718850288], [-392.8517870878944, 138.9582562299426, 1431.0417437700576], [-308.73559742957525, -83.0208718850286, 1209.0626156550863], [-78.9258935439475, -245.52087188502867, 1046.5626156550861], [234.9999999999999, -305.00000000000006, 987.0834875401148], [548.9258935439473, -245.52087188502878, 1046.5626156550861], [778.7355974295749, -83.02087188502892, 1209.062615655086]]}]}, {"name": "B  Two corner fisheyes (custom)", "cams": [{"name": "B left", "pos": [20, 20, 1550], "yaw": 28, "pitch": -48, "fov": [200, 200], "fisheye": true, "note": "IMX219-200 module, 200 deg, ~NZ$45", "frustum": [[609.5283051060385, -250.52534362337286, 1507.8999294981852], [645.8870079095017, 2.64214748789918, 1724.5398472735083], [519.3082947687565, 269.42890978501447, 1883.1312740325889], [263.70882964883623, 478.34964575914705, 1941.1797650488313], [-52.423717185549364, 573.4242129239123, 1883.1312740325889], [-344.38188510893303, 529.1774577867728, 1724.5398472735083], [-533.9357188025735, 357.4652626544228, 1507.8999294981854], [-570.2944216060367, 104.29777154315083, 1291.2600117228624], [-443.71570846529175, -162.48899075396446, 1132.668584963782], [-188.11624334537143, -371.40972672809716, 1074.6200939475393], [128.01630348901443, -466.4842938928625, 1132.6685849637818], [419.97447141239763, -422.23753875572305, 1291.2600117228621]]}, {"name": "B right", "pos": [450, 20, 1550], "yaw": -28, "pitch": -48, "fov": [200, 200], "fisheye": true, "note": "IMX219-200 module, 200 deg, ~NZ$45", "frustum": [[1003.9357188025735, 357.4652626544227, 1507.8999294981852], [814.381885108933, 529.1774577867728, 1724.5398472735083], [522.4237171855495, 573.4242129239124, 1883.1312740325889], [206.29117035116383, 478.3496457591471, 1941.1797650488313], [-49.3082947687563, 269.42890978501464, 1883.1312740325889], [-175.88700790950168, 2.64214748789918, 1724.5398472735083], [-139.5283051060385, -250.5253436233728, 1507.8999294981854], [50.025528587601855, -422.2375387557229, 1291.2600117228624], [341.9836965109853, -466.4842938928625, 1132.668584963782], [658.1162433453712, -371.40972672809727, 1074.6200939475393], [913.7157084652915, -162.48899075396466, 1132.6685849637818], [1040.2944216060366, 104.29777154315039, 1291.2600117228621]]}]}, {"name": "C  Three Pi Cam 3 Wide (any subset)", "cams": [{"name": "C left", "pos": [70, 20, 1550], "yaw": 16, "pitch": -52, "fov": [67, 102], "fisheye": false, "note": "Pi Camera Module 3 Wide, portrait 67x102 deg, 25x24x12 mm, ~NZ$43", "frustum": [[-407.6018132545929, -84.75617185319852, 543.611916731541], [419.51699493908035, -321.9286735770588, 543.611916731541], [768.2109047328972, 894.1115039172573, 1531.9741035797203], [-58.90790346077608, 1131.2840056411176, 1531.9741035797203]]}, {"name": "C centre", "pos": [235, 20, 1550], "yaw": 0, "pitch": -52, "fov": [67, 102], "fisheye": false, "note": "Pi Camera Module 3 Wide", "frustum": [[-195.2256147771995, -212.34299635451174, 543.611916731541], [665.2256147771996, -212.34299635451174, 543.611916731541], [665.2256147771996, 1052.7029142778674, 1531.9741035797203], [-195.2256147771995, 1052.7029142778674, 1531.9741035797203]]}, {"name": "C right", "pos": [400, 20, 1550], "yaw": -16, "pitch": -52, "fov": [67, 102], "fisheye": false, "note": "Pi Camera Module 3 Wide", "frustum": [[50.48300506091965, -321.9286735770588, 543.611916731541], [877.6018132545929, -84.75617185319852, 543.611916731541], [528.9079034607761, 1131.2840056411176, 1531.9741035797203], [-298.21090473289723, 894.1115039172573, 1531.9741035797203]]}]}, {"name": "D  One cam per shelf, under the shelf above (custom)", "cams": [{"name": "D shelf 1", "pos": [235, 55, 375], "yaw": 0, "pitch": -35, "fov": [160, 160], "fisheye": true, "note": "160 deg fisheye (IMX219-160 class, ~NZ$40), centre front edge of the shelf above, looks back along the cap tops; a 102 deg Pi Cam 3 Wide here misses the outer columns of rows 1-2", "frustum": [[875.1250394579353, 147.45876881990065, 310.2596730987167], [789.3645457690882, 331.03908829557827, 572.4395404349863], [555.0625197289677, 465.4292094215005, 764.3685240468035], [235.00000000000003, 514.6194077712559, 834.6194077712559], [-85.06251972896746, 465.4292094215006, 764.3685240468035], [-319.3645457690882, 331.03908829557827, 572.4395404349863], [-405.12503945793526, 147.45876881990068, 310.25967309871675], [-319.3645457690882, -36.12155065577686, 48.07980576244722], [-85.06251972896791, -170.51167178169916, -143.8491778493701], [234.9999999999999, -219.70187013145454, -214.1000615738226], [555.0625197289677, -170.51167178169925, -143.84917784937022], [789.364545769088, -36.12155065577711, 48.079805762446824]]}, {"name": "D shelf 2", "pos": [235, 55, 665], "yaw": 0, "pitch": -35, "fov": [160, 160], "fisheye": true, "note": "as shelf 1", "frustum": [[875.1250394579353, 147.45876881990065, 600.2596730987167], [789.3645457690882, 331.03908829557827, 862.4395404349863], [555.0625197289677, 465.4292094215005, 1054.3685240468035], [235.00000000000003, 514.6194077712559, 1124.6194077712557], [-85.06251972896746, 465.4292094215006, 1054.3685240468035], [-319.3645457690882, 331.03908829557827, 862.4395404349863], [-405.12503945793526, 147.45876881990068, 600.2596730987168], [-319.3645457690882, -36.12155065577686, 338.0798057624472], [-85.06251972896791, -170.51167178169916, 146.1508221506299], [234.9999999999999, -219.70187013145454, 75.89993842617741], [555.0625197289677, -170.51167178169925, 146.15082215062978], [789.364545769088, -36.12155065577711, 338.0798057624468]]}, {"name": "D shelf 3", "pos": [235, 55, 955], "yaw": 0, "pitch": -35, "fov": [160, 160], "fisheye": true, "note": "as shelf 1", "frustum": [[875.1250394579353, 147.45876881990065, 890.2596730987167], [789.3645457690882, 331.03908829557827, 1152.4395404349862], [555.0625197289677, 465.4292094215005, 1344.3685240468035], [235.00000000000003, 514.6194077712559, 1414.6194077712557], [-85.06251972896746, 465.4292094215006, 1344.3685240468035], [-319.3645457690882, 331.03908829557827, 1152.4395404349862], [-405.12503945793526, 147.45876881990068, 890.2596730987168], [-319.3645457690882, -36.12155065577686, 628.0798057624472], [-85.06251972896791, -170.51167178169916, 436.1508221506299], [234.9999999999999, -219.70187013145454, 365.8999384261774], [555.0625197289677, -170.51167178169925, 436.1508221506298], [789.364545769088, -36.12155065577711, 628.0798057624468]]}, {"name": "D shelf 4", "pos": [235, 55, 1245], "yaw": 0, "pitch": -35, "fov": [160, 160], "fisheye": true, "note": "as shelf 1", "frustum": [[875.1250394579353, 147.45876881990065, 1180.2596730987166], [789.3645457690882, 331.03908829557827, 1442.4395404349862], [555.0625197289677, 465.4292094215005, 1634.3685240468035], [235.00000000000003, 514.6194077712559, 1704.6194077712557], [-85.06251972896746, 465.4292094215006, 1634.3685240468035], [-319.3645457690882, 331.03908829557827, 1442.4395404349862], [-405.12503945793526, 147.45876881990068, 1180.2596730987168], [-319.3645457690882, -36.12155065577686, 918.0798057624472], [-85.06251972896791, -170.51167178169916, 726.1508221506299], [234.9999999999999, -219.70187013145454, 655.8999384261774], [555.0625197289677, -170.51167178169925, 726.1508221506298], [789.364545769088, -36.12155065577711, 918.0798057624468]]}, {"name": "D shelf 5", "pos": [235, 55, 1555], "yaw": 0, "pitch": -35, "fov": [160, 160], "fisheye": true, "note": "as shelf 1", "frustum": [[875.1250394579353, 147.45876881990065, 1490.2596730987166], [789.3645457690882, 331.03908829557827, 1752.4395404349862], [555.0625197289677, 465.4292094215005, 1944.3685240468035], [235.00000000000003, 514.6194077712559, 2014.6194077712557], [-85.06251972896746, 465.4292094215006, 1944.3685240468035], [-319.3645457690882, 331.03908829557827, 1752.4395404349862], [-405.12503945793526, 147.45876881990068, 1490.2596730987168], [-319.3645457690882, -36.12155065577686, 1228.0798057624472], [-85.06251972896791, -170.51167178169916, 1036.15082215063], [234.9999999999999, -219.70187013145454, 965.8999384261774], [555.0625197289677, -170.51167178169925, 1036.1508221506297], [789.364545769088, -36.12155065577711, 1228.0798057624468]]}]}, {"name": "E  Side band: one front-corner cam per shelf (custom)", "cams": [{"name": "E shelf 1", "pos": [15, 60, 375], "yaw": 45, "pitch": -30, "fov": [102, 67], "fisheye": false, "note": "Pi Camera Module 3 Wide, landscape, left front corner under the shelf above, 45 deg across the shelf; all five on one vertical band so one cable run", "frustum": [[-306.64834136733634, 873.5170581227602, -322.5863117558325], [828.5170581227602, -261.64834136733634, -322.5863117558325], [1132.7325077718695, 42.56710828177273, 422.58631175583264], [-2.432891718227271, 1177.7325077718695, 422.58631175583264]]}, {"name": "E shelf 2", "pos": [15, 60, 665], "yaw": 45, "pitch": -30, "fov": [102, 67], "fisheye": false, "note": "as shelf 1", "frustum": [[-306.64834136733634, 873.5170581227602, -32.586311755832526], [828.5170581227602, -261.64834136733634, -32.586311755832526], [1132.7325077718695, 42.56710828177273, 712.5863117558326], [-2.432891718227271, 1177.7325077718695, 712.5863117558326]]}, {"name": "E shelf 3", "pos": [15, 60, 955], "yaw": 45, "pitch": -30, "fov": [102, 67], "fisheye": false, "note": "as shelf 1", "frustum": [[-306.64834136733634, 873.5170581227602, 257.4136882441675], [828.5170581227602, -261.64834136733634, 257.4136882441675], [1132.7325077718695, 42.56710828177273, 1002.5863117558326], [-2.432891718227271, 1177.7325077718695, 1002.5863117558326]]}, {"name": "E shelf 4", "pos": [15, 60, 1245], "yaw": 45, "pitch": -30, "fov": [102, 67], "fisheye": false, "note": "as shelf 1", "frustum": [[-306.64834136733634, 873.5170581227602, 547.4136882441675], [828.5170581227602, -261.64834136733634, 547.4136882441675], [1132.7325077718695, 42.56710828177273, 1292.5863117558326], [-2.432891718227271, 1177.7325077718695, 1292.5863117558326]]}, {"name": "E shelf 5", "pos": [15, 60, 1555], "yaw": 45, "pitch": -30, "fov": [102, 67], "fisheye": false, "note": "as shelf 1", "frustum": [[-306.64834136733634, 873.5170581227602, 857.4136882441675], [828.5170581227602, -261.64834136733634, 857.4136882441675], [1132.7325077718695, 42.56710828177273, 1602.5863117558326], [-2.432891718227271, 1177.7325077718695, 1602.5863117558326]]}]}], "hinge": [470, 0], "door_max": 100, "t_open": 1.0, "t_move": 1.6, "t_close": 1.0, "fps": 20, "hand_r": 40, "hand_len": 350, "ghosts": 7, "img_w": 88, "img_h": 66, "hand_spheres": 9},T=S.t_open+S.t_move+S.t_close;let OPT={op:false,tilt:0};
+
+const rad=d=>d*Math.PI/180,dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],norm=a=>Math.hypot(...a);
+function axes(yaw,pitch){const y=rad(yaw),p=rad(pitch),cy=Math.cos(y),sy=Math.sin(y),cp=Math.cos(p),sp=Math.sin(p);
+ return [[sy*cp,cy*cp,sp],[cy,-sy,0],[-sy*sp,-cy*sp,cp]];}
+function camCoords(c,p){const [f,r,u]=axes(c.yaw,c.pitch),d=sub(p,c.pos);return [dot(d,r),dot(d,u),dot(d,f)];}
+function inFov(c,p){const [x,y,z]=camCoords(c,p);if(c.fisheye){return Math.acos(Math.max(-1,Math.min(1,z/norm([x,y,z]))))*180/Math.PI<=c.fov[0]/2}
+ return z>0&&Math.abs(Math.atan2(x,z))*180/Math.PI<=c.fov[0]/2&&Math.abs(Math.atan2(y,z))*180/Math.PI<=c.fov[1]/2;}
+const shelfZ=(zs,y)=>zs+Math.max(0,y-S.shelf_y0)*Math.tan(rad(OPT.tilt));
+function shelfBlocks(a,b){if(!OPT.op)return false;for(const zs of S.shelves){const fa=a[2]-shelfZ(zs,a[1]),fb=b[2]-shelfZ(zs,b[1]);
+ if(fa*fb<0){const t=fa/(fa-fb),x=a[0]+t*(b[0]-a[0]),y=a[1]+t*(b[1]-a[1]);if(x>=12&&x<=12+S.shelf_w&&y>=S.shelf_y0&&y<=S.shelf_y0+S.shelf_d)return true}}return false;}
+const shp=b=>b[3]||'model bottle',packH=b=>S.pack_h[shp(b)],packR=b=>S.pack_r[shp(b)];
+function segCyl(a,b,cx,cy,r,z0,z1){const dx=b[0]-a[0],dy=b[1]-a[1],dz=b[2]-a[2],fx=a[0]-cx,fy=a[1]-cy;
+ if(dz){const t=(z1-a[2])/dz;if(t>0.001&&t<0.999&&(fx+t*dx)**2+(fy+t*dy)**2<r*r)return true}
+ const A=dx*dx+dy*dy,B=2*(fx*dx+fy*dy),C=fx*fx+fy*fy-r*r,D=B*B-4*A*C;if(A===0||D<0)return false;
+ for(const t of [(-B-Math.sqrt(D))/(2*A),(-B+Math.sqrt(D))/(2*A)]){const z=a[2]+t*dz;if(t>0.001&&t<0.999&&z>=z0&&z<=z1)return true}return false;}
+function coneRoots(p,d,cx,cy,r0,r1,z0,z1){const k=(r1-r0)/(z1-z0),fx=p[0]-cx,fy=p[1]-cy,R=r0+k*(p[2]-z0),A=d[0]*d[0]+d[1]*d[1]-(k*d[2])**2,
+ B=2*(fx*d[0]+fy*d[1]-R*k*d[2]),C=fx*fx+fy*fy-R*R;let ts=[];if(Math.abs(A)>1e-12){const D=B*B-4*A*C;if(D>=0)ts=[(-B-Math.sqrt(D))/(2*A),(-B+Math.sqrt(D))/(2*A)]}
+ else if(Math.abs(B)>1e-12)ts=[-C/B];ts=ts.filter(t=>{const z=p[2]+t*d[2];return z>=z0&&z<=z1});
+ if(d[2]){const t=(z1-p[2])/d[2];if((fx+t*d[0])**2+(fy+t*d[1])**2<r1*r1)ts.push(t)}return ts;}
+function segBox(a,b,lo,hi){let t0=0.001,t1=0.999;for(let k=0;k<3;k++){const d=b[k]-a[k];if(Math.abs(d)<1e-12){if(!(a[k]>lo[k]&&a[k]<hi[k]))return false;continue}
+ const u=(lo[k]-a[k])/d,v=(hi[k]-a[k])/d;t0=Math.max(t0,Math.min(u,v));t1=Math.min(t1,Math.max(u,v));if(t0>t1)return false}return true;}
+function itemBlocks(a,b,it){const [x,y,z0]=it;for(const [k,r,p0,p1,top] of S.shapes[shp(it)]){
+ if(k==='cyl'&&segCyl(a,b,x,y,r,z0+p0,z0+p1))return true;
+ if(k==='cone'&&coneRoots(a,sub(b,a),x,y,r,top,z0+p0,z0+p1).some(t=>t>0.001&&t<0.999))return true;
+ if(k==='box'&&segBox(a,b,[x-r,y-r,z0+p0],[x+r,y+r,z0+p1]))return true}return false;}
+function cylBlocks(a,b,cyls,skip){for(const c of cyls)if(c!==skip&&itemBlocks(a,b,c))return true;return false;}
+function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const laneRows=(s,c)=>OPT.mix?S.lane_rows[OPT.mix[s][c]]:S.rows;
+function bottles(fill,seed,skipFn){const rng=mulberry(seed||0),o=[];S.shelves.forEach((zs,s)=>S.cols.forEach((x,c)=>{const sh=OPT.mix?OPT.mix[s][c]:null,ys=laneRows(s,c);
+ const draws=ys.map(()=>rng()<(fill==null?1:fill)),n=draws.filter(Boolean).length,keep=OPT.tilt?ys.map((_,i)=>i<n):draws;
+ ys.forEach((y,i)=>{if(!keep[i]||(skipFn&&skipFn(x,y,zs)))return;const b=[x,y,shelfZ(zs,y)];if(sh)b.push(sh);b.s=s;b.r=i;o.push(b)})}));return o;}
+function shelfQuad(zs){const y0=S.shelf_y0,y1=y0+S.shelf_d;return [[12,y0,shelfZ(zs,y0)],[12+S.shelf_w,y0,shelfZ(zs,y0)],[12+S.shelf_w,y1,shelfZ(zs,y1)],[12,y1,shelfZ(zs,y1)]];}
+
+const $=id=>document.getElementById(id),opt=(el,arr,f)=>{el.innerHTML='';arr.forEach((v,i)=>el.add(new Option(f?f(v,i):v,i)))};
+opt($('lay'),S.layouts.map(l=>l.name));opt($('mix'),S.mixes.map(m=>m.name));opt($('sh'),S.shelves,(z,i)=>`${i+1} (z=${z})`);opt($('col'),S.cols,(x,i)=>i+1);opt($('row'),S.rows,(y,i)=>i+1);
+$('sh').value=2;$('col').value=2;
+// ---- event geometry (shared geometry is spliced in above from fridge_layouts) ----
+function capsuleBlocks(a,b,c0,c1,r){const n=24,d=sub(c1,c0),L=dot(d,d)||1;for(let i=1;i<n;i++){const p=[0,1,2].map(k=>a[k]+(b[k]-a[k])*i/n);
+ const s=Math.max(0,Math.min(1,dot(sub(p,c0),d)/L)),q=[0,1,2].map(k=>c0[k]+d[k]*s);if(norm(sub(p,q))<r)return true}return false;}
+function rotZ(p,deg,ab){const a=rad(deg),x=p[0]-ab[0],y=p[1]-ab[1];return [ab[0]+x*Math.cos(a)-y*Math.sin(a),ab[1]+x*Math.sin(a)+y*Math.cos(a),p[2]];}
+const doorCam=(c,d)=>c.pos[1]>15?c:{...c,pos:rotZ(c.pos,d,S.hinge),yaw:c.yaw+d};
+const ease=u=>0.5-0.5*Math.cos(Math.PI*Math.max(0,Math.min(1,u)));
+const doorAngle=t=>t<S.t_open?S.door_max*ease(t/S.t_open):t<S.t_open+S.t_move?S.door_max:S.door_max*(1-ease((t-S.t_open-S.t_move)/S.t_close));
+const laneY=(sh,col,row)=>{const ys=laneRows(sh,col);return ys[Math.min(row,ys.length-1)]};
+const bound=b=>[packH(b)/2,packR(b)*(S.shapes[shp(b)].some(p=>p[0]==='box')?Math.SQRT2:1)];
+function bottlePath(sh,col,row,rem,t){const y=laneY(sh,col,row),home=[S.cols[col],y,shelfZ(S.shelves[sh],y)],out=[S.cols[col],-350,S.shelves[sh]+60];
+ const u=Math.max(0,Math.min(1,(t-S.t_open)/S.t_move)),[a,b]=rem?[home,out]:[out,home],lift=30*Math.sin(Math.PI*u);
+ const p=[0,1,2].map(i=>a[i]+(b[i]-a[i])*u+(i==2?lift:0));if(OPT.mix)p.push(OPT.mix[sh][col]);return p;}
+const stock=(sh,col,row)=>{const ey=laneY(sh,col,row);return bottles(opts.rn?opts.fill:null,seed,(x,y,zs)=>(zs===S.shelves[sh]&&x===S.cols[col]&&y<=ey)||(!opts.ot&&zs!==S.shelves[sh]))};
+const hand=(base,t)=>{const h2=bound(base)[0];return (t>=S.t_open&&t<=S.t_open+S.t_move)?[[base[0],base[1],base[2]+h2],[base[0]+60,base[1]-S.hand_len,base[2]+h2+80]]:null};
+// visRay: image-space visibility on the same 88x66 ray grid and hit tests as the camera views (mirrors Python vis_ray)
+function visRay(c,base,cyls,hd){const W=S.img_w,H=S.img_h,P0=camProjWH(c,W,H),pts=[],[h2,br]=bound(base);for(let i=0;i<12;i++)for(const z of [0,2*h2]){const a=2*Math.PI*i/12;
+  const q=P0([base[0]+br*Math.cos(a),base[1]+br*Math.sin(a),base[2]+z]);if(q)pts.push(q)}
+ if(!pts.length)return 0;const x0=Math.max(0,Math.floor(Math.min(...pts.map(q=>q[0])))-1),x1=Math.min(W-1,Math.floor(Math.max(...pts.map(q=>q[0])))+1);
+ const y0=Math.max(0,Math.floor(Math.min(...pts.map(q=>q[1])))-1),y1=Math.min(H-1,Math.floor(Math.max(...pts.map(q=>q[1])))+1);
+ const occ=nearCyls(c,base,cyls);let tot=0,seen=0;
+ for(let py=y0;py<=y1;py++)for(let px=x0;px<=x1;px++){const d=rayDir(c,px+.5,py+.5,W,H);if(!d)continue;const hb=hitItem(c.pos,d,base);if(!hb)continue;
+  tot++;if(!blockedBefore(c.pos,d,hb[0],occ,hd))seen++}return tot?seen/tot:0;}
+function camProjWH(c,W,H){return p=>{const [x,y,z]=camCoords(c,p);if(c.fisheye){const th=Math.atan2(Math.hypot(x,y),z);if(th>rad(c.fov[0]/2))return null;
+  const f=(W/2)/rad(Math.min(c.fov[0],180)/2),rr=f*th,ph=Math.atan2(y,x);return [W/2+rr*Math.cos(ph),H/2-rr*Math.sin(ph)]}
+ if(z<=0)return null;const fx=(W/2)/Math.tan(rad(c.fov[0]/2)),fy=(H/2)/Math.tan(rad(c.fov[1]/2));return [W/2+fx*x/z,H/2-fy*y/z]};}
+function nearCyls(c,base,cyls){const [h2,r]=bound(base),ctr=[base[0],base[1],base[2]+h2],v=sub(ctr,c.pos),L=norm(v)||1,u=v.map(x=>x/L);return cyls.filter(b=>{
+ const [bh2,br]=bound(b),w=sub([b[0],b[1],b[2]+bh2],c.pos),al=dot(w,u);if(al<=0||al>L+br)return false;const perp=Math.sqrt(Math.max(0,dot(w,w)-al*al));return perp<=bh2+br+(h2+r)*al/L});}
+function blockedBefore(p,d,tb,cyls,hd){for(const [ax,v,a,b,c2,e] of WALLS){const t=hitRect(p,d,ax,v,a,b,c2,e);if(t!==null&&t<tb)return true}
+ if(OPT.op){const k=Math.tan(rad(OPT.tilt));for(const zs of S.shelves){const den=d[2]-d[1]*k;if(Math.abs(den)<1e-9)continue;const t=(zs-p[2]+(p[1]-S.shelf_y0)*k)/den;
+  if(t>0&&t<tb){const x=p[0]+t*d[0],y=p[1]+t*d[1];if(x>=12&&x<=12+S.shelf_w&&y>=S.shelf_y0&&y<=S.shelf_y0+S.shelf_d)return true}}}
+ for(const b of cyls){const h=hitItem(p,d,b);if(h&&h[0]<tb)return true}
+ if(hd)for(let i=0;i<S.hand_spheres;i++){const c=[0,1,2].map(k=>hd[0][k]+(hd[1][k]-hd[0][k])*i/(S.hand_spheres-1));const t=hitSphere(p,d,c,S.hand_r);if(t!==null&&t<tb)return true}
+ return false;}
+const WALLS=[[0,0,0,S.D,0,S.H],[0,S.W,0,S.D,0,S.H],[1,S.D,0,S.W,0,S.H],[2,0,0,S.W,0,S.D],[2,S.H,0,S.W,0,S.D]];
+function bearingRange(c,base){const ctr=[base[0],base[1],base[2]+bound(base)[0]],f=axes(c.yaw,c.pitch)[0],v=sub(ctr,c.pos),n=norm(v);
+ return [Math.acos(Math.max(-1,Math.min(1,dot(v,f)/n)))*180/Math.PI,n];}
+// ---- state / timeline ----
+let t=0,playing=false,seen=[],last=0,G=[],seed=1,opts={};
+const readOpts=()=>{opts={op:$('op').checked,ot:$('ot').checked,rn:$('rn').checked,fill:+$('fill').value/100};OPT={op:opts.op,tilt:+$('tilt').value?S.tilt_deg:0,mix:S.mixes[+$('mix').value].lanes};$('seedl').textContent=opts.rn?`seed ${seed}`:''};
+const sel=()=>({L:+$('lay').value,sh:+$('sh').value,col:+$('col').value,row:+$('row').value,rem:+$('ev').value});
+function ghosts(){const {L,sh,col,row,rem}=sel(),cams0=S.layouts[L].cams,cyls=stock(sh,col,row);return [...Array(S.ghosts)].map((_,i)=>{
+ const tg=S.t_open+S.t_move*i/(S.ghosts-1),d=doorAngle(tg),base=bottlePath(sh,col,row,rem,tg),hd=hand(base,tg);
+ return {t:tg,base,v:Math.max(...cams0.map(c=>visRay(doorCam(c,d),base,cyls,hd)))}});}
+function reset(){readOpts();seen=S.layouts[sel().L].cams.map(()=>0);t=0;$('tt').value=0;G=ghosts();buildViews();draw();}
+['lay','sh','col','row','ev','op','ot','rn','fill','tilt','mix'].forEach(id=>$(id).onchange=reset);$('reroll').onclick=()=>{seed=(seed*7919+1)%100000;reset()};
+$('tt').oninput=e=>{t=e.target.value*T;draw()};
+$('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'pause':'play';if(playing){if(t>=T-1e-6)reset();last=performance.now();requestAnimationFrame(tick)}};
+function tick(now){if(!playing)return;t=Math.min(T,t+(now-last)/1000);last=now;$('tt').value=t/T;draw();if(t>=T){playing=false;$('play').textContent='play'}else requestAnimationFrame(tick);}
+// ---- world view (orbit) ----
+let rx=-1.0,rz=0.6,zoom=0.38;const wv=$('world'),wg=wv.getContext('2d');
+function proj(p){const x=p[0]-S.W/2,y=p[1]-S.D/2+150,z=p[2]-S.H/2;const x1=x*Math.cos(rz)-y*Math.sin(rz),y1=x*Math.sin(rz)+y*Math.cos(rz);
+ const y2=y1*Math.cos(rx)-z*Math.sin(rx),z2=y1*Math.sin(rx)+z*Math.cos(rx);const f=1800/(1800-y2);return [wv.width/2+x1*f*zoom,wv.height/2-z2*f*zoom];}
+function line(g,P,a,b,col,w=1){g.strokeStyle=col;g.lineWidth=w;g.beginPath();g.moveTo(...P(a));g.lineTo(...P(b));g.stroke();}
+function boxw(g,P,a,b,col){const Q=[[a[0],a[1],a[2]],[b[0],a[1],a[2]],[b[0],b[1],a[2]],[a[0],b[1],a[2]],[a[0],a[1],b[2]],[b[0],a[1],b[2]],[b[0],b[1],b[2]],[a[0],b[1],b[2]]];
+ [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]].forEach(([i,j])=>line(g,P,Q[i],Q[j],col));}
+// outline of a pack: a ring (circle, or square for a box) at the bottom and top of every part, joined by 4 side lines
+function outline(b){const [x,y,z0]=b,o=[];for(const [k,r,p0,p1,top] of S.shapes[shp(b)]){const r1=k==='cone'?top:r,n=k==='box'?4:12,off=k==='box'?Math.PI/4:0,rr=k==='box'?Math.SQRT2:1;
+  const ring=(z,R)=>[...Array(n+1).keys()].map(i=>{const a=off+2*Math.PI*i/n;return [x+R*rr*Math.cos(a),y+R*rr*Math.sin(a),z0+z]});
+  o.push(ring(p0,r),ring(p1,r1));for(let i=0;i<4;i++){const a=off+Math.PI*i/2;o.push([[x+r*rr*Math.cos(a),y+r*rr*Math.sin(a),z0+p0],[x+r1*rr*Math.cos(a),y+r1*rr*Math.sin(a),z0+p1]])}}return o;}
+function cyl(g,P,base,col,w=1){g.strokeStyle=col;g.lineWidth=w;for(const pl of outline(base)){g.beginPath();pl.forEach((p,i)=>i?g.lineTo(...P(p)):g.moveTo(...P(p)));g.stroke()}}
+function doorCorners(d){return [[0,0,0],[S.W,0,0],[S.W,0,S.H],[0,0,S.H]].map(p=>rotZ(p,d,S.hinge));}
+// ---- camera views ----
+let vcs=[];function buildViews(){const v=$('views');v.innerHTML='';vcs=S.layouts[sel().L].cams.map((c,i)=>{const f=document.createElement('figure');
+ f.innerHTML=`<canvas></canvas><figcaption>${c.name}: ${c.fov[0]}x${c.fov[1]} deg${c.fisheye?' fisheye':''}</figcaption>`;v.appendChild(f);return f.firstChild});}
+function camProj(c,cv){const W=cv.width,H=cv.height;return p=>{const [x,y,z]=camCoords(c,p);
+ if(c.fisheye){const th=Math.atan2(Math.hypot(x,y),z),f=(W/2)/rad(Math.min(c.fov[0],180)/2),rr=f*th,ph=Math.atan2(y,x);return [W/2+rr*Math.cos(ph),H/2-rr*Math.sin(ph),z>0||th<Math.PI/2]}
+ const fx=(W/2)/Math.tan(rad(c.fov[0]/2)),fy=(H/2)/Math.tan(rad(c.fov[1]/2));return [W/2+fx*x/Math.max(z,1),H/2-fy*y/Math.max(z,1),z>0]};}
+// ---- ray-cast camera views: first surface hit per pixel block, so walls, opaque shelves and bottles occlude ----
+const BLK=5,MAT={left:[150,158,166],right:[150,158,166],back:[120,130,140],floor:[95,105,112],ceil:[175,180,186],aisle:[236,240,244],
+ shelf:[128,140,150],wire:[128,140,150],stock:[143,163,176],move:[242,164,68],hand:[232,135,90]};
+function rayDir(c,px,py,W,H){let x,y,z;if(c.fisheye){const f=(W/2)/rad(Math.min(c.fov[0],180)/2),dx=px-W/2,dy=H/2-py,rr=Math.hypot(dx,dy),th=rr/f;
+  if(th>rad(c.fov[0]/2)||rr>W/2)return null;x=Math.sin(th)*dx/(rr||1);y=Math.sin(th)*dy/(rr||1);z=Math.cos(th)}
+ else{const fx=(W/2)/Math.tan(rad(c.fov[0]/2)),fy=(H/2)/Math.tan(rad(c.fov[1]/2));x=(px-W/2)/fx;y=(H/2-py)/fy;z=1}
+ const [f,r,u]=axes(c.yaw,c.pitch),v=[0,1,2].map(k=>x*r[k]+y*u[k]+z*f[k]),n=norm(v);return v.map(a=>a/n);}
+function hitRect(p,d,axis,val,lo1,hi1,lo2,hi2){if(Math.abs(d[axis])<1e-9)return null;const t=(val-p[axis])/d[axis];if(t<=0)return null;
+ const q=[0,1,2].map(k=>p[k]+t*d[k]),[a1,a2]=[0,1,2].filter(k=>k!==axis);return(q[a1]>=lo1&&q[a1]<=hi1&&q[a2]>=lo2&&q[a2]<=hi2)?t:null;}
+function hitCyl(p,d,cx,cy,z0,r,h){const fx=p[0]-cx,fy=p[1]-cy,A=d[0]*d[0]+d[1]*d[1],B=2*(fx*d[0]+fy*d[1]),C=fx*fx+fy*fy-r*r;let best=null,nrm=null;
+ if(A>1e-9){const D=B*B-4*A*C;if(D>=0){for(const t of [(-B-Math.sqrt(D))/(2*A),(-B+Math.sqrt(D))/(2*A)]){const z=p[2]+t*d[2];
+  if(t>0&&z>=z0&&z<=z0+h&&(best===null||t<best)){best=t;nrm=[(p[0]+t*d[0]-cx)/r,(p[1]+t*d[1]-cy)/r,0]}}}}
+ if(Math.abs(d[2])>1e-9){const t=(z0+h-p[2])/d[2];if(t>0&&(best===null||t<best)){const x=p[0]+t*d[0]-cx,y=p[1]+t*d[1]-cy;if(x*x+y*y<=r*r){best=t;nrm=[0,0,1]}}}
+ return best===null?null:[best,nrm];}
+function hitBox(p,d,lo,hi){let t0=1e-6,t1=1e18,ax=-1;for(let k=0;k<3;k++){if(Math.abs(d[k])<1e-12){if(p[k]<lo[k]||p[k]>hi[k])return null;continue}
+ const u=(lo[k]-p[k])/d[k],v=(hi[k]-p[k])/d[k],a=Math.min(u,v);if(a>t0){t0=a;ax=k}t1=Math.min(t1,Math.max(u,v));if(t0>t1)return null}
+ const n=[0,0,0];if(ax>=0)n[ax]=-Math.sign(d[ax]);return [t0,n];}
+// nearest hit on any part of a pack, with the surface normal (mirrors Python hit_item)
+function hitItem(p,d,b){const [x,y,z0]=b;let best=null;for(const [k,r,p0,p1,top] of S.shapes[shp(b)]){let h=null;
+  if(k==='cyl')h=hitCyl(p,d,x,y,z0+p0,r,p1-p0);
+  else if(k==='box')h=hitBox(p,d,[x-r,y-r,z0+p0],[x+r,y+r,z0+p1]);
+  else{const ts=coneRoots(p,d,x,y,r,top,z0+p0,z0+p1).filter(t=>t>1e-6);if(ts.length){const t=Math.min(...ts),q=[0,1,2].map(i=>p[i]+t*d[i]);
+   if(Math.abs(q[2]-z0-p1)<1e-6)h=[t,[0,0,1]];else{const rx=q[0]-x,ry=q[1]-y,rh=Math.hypot(rx,ry)||1,nz=(r-top)/(p1-p0),n=Math.hypot(1,nz);h=[t,[rx/rh/n,ry/rh/n,nz/n]]}}}
+  if(h&&(best===null||h[0]<best[0]))best=h}return best;}
+function hitSphere(p,d,c,r){const o=sub(p,c),b=dot(o,d),cc=dot(o,o)-r*r,D=b*b-cc;if(D<0)return null;const t=-b-Math.sqrt(D);return t>0?t:null;}
+function cast(p,d,cyls,base,hd){let t=Infinity,kind='aisle',nrm=[0,-1,0],h;
+ const walls=[['left',0,0,0,S.D,0,S.H,[1,0,0]],['right',0,S.W,0,S.D,0,S.H,[-1,0,0]],['back',1,S.D,0,S.W,0,S.H,[0,-1,0]],['floor',2,0,0,S.W,0,S.D,[0,0,1]],['ceil',2,S.H,0,S.W,0,S.D,[0,0,-1]]];
+ for(const [k,ax,v,a,b,c2,e,n] of walls){h=hitRect(p,d,ax,v,a,b,c2,e);if(h!==null&&h<t){t=h;kind=k;nrm=n}}
+ for(const zs of S.shelves){const k=Math.tan(rad(OPT.tilt)),den=d[2]-d[1]*k;if(Math.abs(den)<1e-9)continue;
+  const tt=(zs-p[2]+(p[1]-S.shelf_y0)*k)/den;if(tt<=0||tt>=t)continue;const x=p[0]+tt*d[0],y=p[1]+tt*d[1];
+  if(x>=12&&x<=12+S.shelf_w&&y>=S.shelf_y0&&y<=S.shelf_y0+S.shelf_d){if(OPT.op){t=tt;kind='shelf';nrm=[0,-Math.sin(rad(OPT.tilt)),Math.cos(rad(OPT.tilt))]}
+   else{const gx=Math.round(x/25),gy=Math.round(y/25);if(Math.abs(x-gx*25)<1.5||Math.abs(y-gy*25)<1.5){t=tt;kind='wire';nrm=[0,0,1]}}}}
+ for(const b of cyls){h=hitItem(p,d,b);if(h&&h[0]<t){t=h[0];kind='stock';nrm=h[1]}}
+ h=hitItem(p,d,base);if(h&&h[0]<t){t=h[0];kind='move';nrm=h[1]}
+ if(hd)for(let i=0;i<S.hand_spheres;i++){const c=[0,1,2].map(k=>hd[0][k]+(hd[1][k]-hd[0][k])*i/(S.hand_spheres-1));h=hitSphere(p,d,c,S.hand_r);if(h!==null&&h<t){t=h;kind='hand';nrm=[0,0,1]}}
+ return [t,kind,nrm];}
+function drawCam(c,cv,cyls,base,hd,d,near,sh){cv.width=440;cv.height=330;const W=cv.width,H=cv.height,g=cv.getContext('2d');g.fillStyle='#0e1114';g.fillRect(0,0,W,H);
+ for(let py=0;py<H;py+=BLK)for(let px=0;px<W;px+=BLK){const dir=rayDir(c,px+BLK/2,py+BLK/2,W,H);if(!dir)continue;
+  const [t,kind,nrm]=cast(c.pos,dir,cyls,base,hd);const m=MAT[kind],lam=kind==='aisle'?1:0.55+0.45*Math.max(0,-dot(nrm,dir)),fade=kind==='aisle'?1:Math.max(0.35,1-t/2600);
+  g.fillStyle=`rgb(${m.map(v=>Math.round(v*lam*fade)).join(',')})`;g.fillRect(px,py,BLK,BLK)}
+ const P0=camProj(c,cv),P=p=>P0(p).slice(0,2),ok=(a,b)=>P0(a)[2]&&P0(b)[2],L=(a,b,col,w)=>{if(ok(a,b))line(g,P,a,b,col,w)};
+ if(c.fisheye){g.save();g.beginPath();g.arc(W/2,H/2,W/2,0,7);g.clip()}
+ const dc=doorCorners(d);dc.forEach((a,i)=>L(a,dc[(i+1)%4],'#4fb3d4',2));
+ G.forEach(q=>cylv(g,P0,q.base,gcol(q,1),1.5));if(c.fisheye)g.restore();
+ g.strokeStyle='#445';if(!c.fisheye)g.strokeRect(0.5,0.5,W-1,H-1);else{g.beginPath();g.arc(W/2,H/2,W/2,0,7);g.stroke()}
+ cv.className=near?'near':'';}
+function cylv(g,P0,base,col,w=1){g.strokeStyle=col;g.lineWidth=w;for(const pl of outline(base)){g.beginPath();let started=false;
+ for(const p of pl){const q=P0(p);if(!q[2]){started=false;continue}started?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1]);started=true}g.stroke()}}
+const gcol=(q,w)=>(q.v>=.5?'rgba(27,175,122,':'rgba(208,59,59,')+(q.t<=t+1e-9?.9:.35)+')';
+// ---- frame ----
+function draw(){const {L,sh,col,row,rem}=sel(),lay=S.layouts[L],d=doorAngle(t),base=bottlePath(sh,col,row,rem,t),cyls=stock(sh,col,row),hd=hand(base,t);
+ const cams=lay.cams.map(c=>doorCam(c,d)),rep=cams.map((c,i)=>{const [b,r]=bearingRange(c,base);return {i,name:lay.cams[i].name,b,r,v:visRay(c,base,cyls,hd)}});
+ const near=rep.reduce((m,x)=>x.r<m.r?x:m).i;if(playing)rep.forEach(x=>{if(x.v>=.5)seen[x.i]+=(t-drawn_t)});drawn_t=t;
+ const phase=t<S.t_open?'door opening':t<S.t_open+S.t_move?(rem?'removing':'inserting'):'door closing';
+ $('tl').textContent=`${t.toFixed(2)} / ${T.toFixed(1)} s`;
+ $('kv').innerHTML=`<b>phase</b><span>${phase}</span><b>door</b><span>${d.toFixed(0)} deg</span><b>bottle</b><span>x ${base[0].toFixed(0)} y ${base[1].toFixed(0)} z ${base[2].toFixed(0)}</span>
+  <b>any cam &ge;50%</b><span>${rep.some(x=>x.v>=.5)?'yes':'no'}</span><b>nearest</b><span>${rep[near].name}</span>
+  <b>ghosts</b><span>${G.map(q=>`<span style="color:${q.v>=.5?'#1baf7a':'#d03b3b'};font-weight:600">${(100*q.v).toFixed(0)}%</span>`).join(' ')} <small>(${G.filter(q=>q.v>=.5).length}/${S.ghosts} seen)</small></span>`;
+ $('tbl').innerHTML='<tr><th>camera</th><th>bearing</th><th>range mm</th><th>visible</th><th>seen s</th></tr>'+rep.map(x=>`<tr${x.i===near?' style="font-weight:600"':''}><td>${x.name}</td><td>${x.b.toFixed(0)}&deg;</td><td>${x.r.toFixed(0)}</td><td style="background:rgba(27,175,122,${x.v*.6})">${(100*x.v).toFixed(0)}%</td><td>${seen[x.i].toFixed(2)}</td></tr>`).join('');
+ // world
+ wv.width=wv.clientWidth;wv.height=wv.clientHeight;wg.clearRect(0,0,wv.width,wv.height);
+ boxw(wg,proj,[0,0,0],[S.W,S.D,S.H],'#556');S.shelves.forEach((z,i)=>{const q=shelfQuad(z);q.forEach((a,k)=>line(wg,proj,a,q[(k+1)%4],i===sh?'#0b6e8f':'#aab',i===sh?2:1))});
+ const dc=doorCorners(d);dc.forEach((a,i)=>line(wg,proj,a,dc[(i+1)%4],'#4fb3d4',2));
+ cyls.forEach(b=>cyl(wg,proj,b,(b[2]>=S.shelves[sh]&&b[2]<S.shelves[sh]+100)?'#9aa':'#dde'));G.forEach(q=>cyl(wg,proj,q.base,gcol(q),1.5));cyl(wg,proj,base,'#c0561c',2);if(hd)line(wg,proj,hd[0],hd[1],'#e8875a',5);
+ cams.forEach((c,i)=>{boxw(wg,proj,c.pos.map(v=>v-12),c.pos.map(v=>v+12),i===near?'#c0561c':'#889');const f=axes(c.yaw,c.pitch)[0];line(wg,proj,c.pos,c.pos.map((v,k)=>v+180*f[k]),'#c0561c')});
+ cams.forEach((c,i)=>drawCam(c,vcs[i],cyls,base,hd,d,i===near,sh));}
+let drawn_t=0,drag=null;wv.onmousedown=e=>drag=[e.clientX,e.clientY];window.onmouseup=()=>drag=null;
+window.onmousemove=e=>{if(!drag)return;rz+=(e.clientX-drag[0])*.01;rx+=(e.clientY-drag[1])*.01;drag=[e.clientX,e.clientY];draw()};
+wv.onwheel=e=>{zoom*=e.deltaY<0?1.1:.9;draw();e.preventDefault()};window.onresize=draw;reset();
+</script>
