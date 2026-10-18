@@ -15,6 +15,13 @@ for page in hnsw fridge-event-sim; do
 	fi
 done
 
+# A fixed-height hover box keeps hovering from shifting the HNSW page (#13).
+hnsw="$site/simulations/hnsw/index.html"
+if [ -f "$hnsw" ]; then
+	grep -q '^\.hover-info {.*[{;] *height: 1\.3em;.*overflow: hidden;' "$hnsw" || err "hnsw .hover-info lacks height: 1.3em with overflow: hidden"
+	! grep -q '\.hover-info {[^}]*min-height' "$hnsw" || err "hnsw .hover-info uses min-height"
+fi
+
 grep -q 'href="/simulations"' "$site/index.html" 2>/dev/null || err "nav in index.html lacks the Simulations link"
 
 if [ -f "$site/simulations/index.html" ]; then
