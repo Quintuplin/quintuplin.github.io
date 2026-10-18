@@ -18,7 +18,7 @@ done
 grep -q 'href="/simulations"' "$site/index.html" 2>/dev/null || err "nav in index.html lacks the Simulations link"
 
 if [ -f "$site/simulations/index.html" ]; then
-	for href in $(grep -o 'href="/[^"]*"' "$site/simulations/index.html" | sed 's/^href="//; s/"$//; s/[?#].*//'); do
+	for href in $(grep -o 'href="/\([^/"][^"]*\)\{0,1\}"' "$site/simulations/index.html" | sed 's/^href="//; s/"$//; s/[?#].*//'); do
 		target="$site$href"
 		[ -f "$target" ] || [ -f "${target%/}/index.html" ] || err "broken link $href on simulations/index.html"
 	done
