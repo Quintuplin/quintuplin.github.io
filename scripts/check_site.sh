@@ -24,6 +24,11 @@ fi
 
 grep -q 'href="/simulations"' "$site/index.html" 2>/dev/null || err "nav in index.html lacks the Simulations link"
 
+# The about page shows the I Made This comic credited to Nedroid (#17).
+[ -f "$site/assets/i-made-this-ai.webp" ] || err "missing assets/i-made-this-ai.webp"
+grep -q 'src="/assets/i-made-this-ai.webp"' "$site/about/index.html" 2>/dev/null || err "about/index.html lacks the I Made This comic"
+grep -q 'href="https://nedroidcomics.tumblr.com/post/41879001445/the-internet"' "$site/about/index.html" 2>/dev/null || err "about/index.html lacks the Nedroid credit link"
+
 if [ -f "$site/simulations/index.html" ]; then
 	for href in $(grep -o 'href="/\([^/"][^"]*\)\{0,1\}"' "$site/simulations/index.html" | sed 's/^href="//; s/"$//; s/[?#].*//'); do
 		target="$site$href"
