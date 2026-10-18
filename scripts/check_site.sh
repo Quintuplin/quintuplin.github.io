@@ -6,7 +6,7 @@ err() { echo "FAIL: $*" >&2; fail=1; }
 
 [ -f "$site/simulations/index.html" ] || err "missing simulations/index.html"
 
-for page in hnsw fridge-visibility; do
+for page in hnsw fridge-event-sim; do
 	built="$site/simulations/$page/index.html"
 	if [ ! -f "$built" ]; then
 		err "missing simulations/$page/index.html"
