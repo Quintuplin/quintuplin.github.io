@@ -1,27 +1,153 @@
-<!doctype html><meta charset=utf-8><title>SKOPE door-event simulator</title>
-<style>body{margin:0;font:13px system-ui;background:#f4f7f9;color:#151b20}
-.top{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:8px 12px;background:#fff;border-bottom:1px solid #ddd}
-.top label{display:flex;gap:4px;align-items:center}main{display:grid;grid-template-columns:1fr 360px;gap:10px;padding:10px}
-#world{width:100%;aspect-ratio:4/3;background:#fff;border:1px solid #ddd;cursor:grab}
-#views{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px;margin-top:8px}
-#views canvas{width:100%;aspect-ratio:4/3;background:#1d2226;border:2px solid #ddd;border-radius:4px}
-#views canvas.near{border-color:#c0561c}figure{margin:0}figcaption{font-size:12px;color:#556}
-table{border-collapse:collapse;width:100%;font-size:12px}td,th{border-bottom:1px solid #ddd;padding:3px 5px;text-align:right}
-td:first-child,th:first-child{text-align:left}.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin-bottom:8px}
-.kv b{color:#556;font-weight:600}input[type=range]{width:260px}</style>
-<div class=top>
+<!doctype html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<meta name=viewport content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>SKOPE door-event simulator</title>
+<style>
+:root {
+  color-scheme: light;
+  --page-max: 1440px;
+  --bg: #eef1f4; --surface: #ffffff; --surface-2: #f5f7f9; --border: #cbd3db;
+  --text: #19212a; --muted: #56626e; --focus: #1d5cbd;
+  --canvas: #fbfcfd; --floor: #e3e7eb; --wall: #f1f3f6; --seam: #b8c0c8; --shadow: #1a2530; --shadow-alpha: 0.07;
+  --cabinet: #55606c; --shelf: #a9b0bb; --shelf-on: #0b6e8f; --door: #4fb3d4;
+  --stock: #d9dbe6; --stock-on: #94a2a8; --event: #c0561c; --hand: #e8875a; --cam: #878b9b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #11151a; --surface: #181d23; --surface-2: #1e242b; --border: #313a44;
+    --text: #e2e7ec; --muted: #9ca8b4; --focus: #6ea8ff;
+    --canvas: #161b20; --floor: #20262d; --wall: #1a1f25; --seam: #3b454f; --shadow: #000000; --shadow-alpha: 0.18;
+    --cabinet: #9ca8b4; --shelf: #5d6771; --shelf-on: #4cb4d8; --door: #5cc0e0;
+    --stock: #3a434c; --stock-on: #7d8a95; --event: #f08c4e; --hand: #f0a070; --cam: #8994a0;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #11151a; --surface: #181d23; --surface-2: #1e242b; --border: #313a44;
+  --text: #e2e7ec; --muted: #9ca8b4; --focus: #6ea8ff;
+  --canvas: #161b20; --floor: #20262d; --wall: #1a1f25; --seam: #3b454f; --shadow: #000000; --shadow-alpha: 0.18;
+  --cabinet: #9ca8b4; --shelf: #5d6771; --shelf-on: #4cb4d8; --door: #5cc0e0;
+  --stock: #3a434c; --stock-on: #7d8a95; --event: #f08c4e; --hand: #f0a070; --cam: #8994a0;
+}
+html, body { height: 100%; }
+body {
+  margin: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding-block: 12px;
+  /* The third term centres the page once the viewport passes --page-max. */
+  padding-left: max(16px, env(safe-area-inset-left, 0px), calc((100% - var(--page-max)) / 2));
+  padding-right: max(16px, env(safe-area-inset-right, 0px), calc((100% - var(--page-max)) / 2));
+  background: var(--bg); color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+*, *::before, *::after { box-sizing: inherit; }
+h1, p { margin: 0; }
+h1 { font-size: 1.25rem; letter-spacing: -0.01em; }
+.subtitle { color: var(--muted); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.site-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.layout {
+  flex: 1; min-height: 0; display: grid; gap: 10px 16px;
+  grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); grid-template-rows: auto minmax(0, 1fr);
+}
+.column { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.side { overflow: auto; }
+.controls { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+fieldset {
+  margin: 0; min-width: 0; flex: 1 1 200px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px 6px; background: var(--surface);
+  display: flex; flex-wrap: wrap; align-items: center; align-content: flex-start; gap: 4px 10px;
+}
+/* Bases follow content so the row stays about two lines high at full width. */
+.fs-event { flex: 0 1 450px; }
+.fs-play { flex: 1 1 220px; }
+.fs-scene { flex: 1 1 680px; }
+legend { padding: 0 4px; font-weight: 600; font-size: 0.85rem; }
+.controls label { display: inline-flex; gap: 4px; align-items: center; font-size: 0.85rem; max-width: 100%; }
+.controls select { min-width: 0; max-width: 14rem; }
+.slider-row { --output-width: 5.5rem; flex: 1 1 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) var(--output-width); align-items: center; gap: 0 8px; }
+.slider-row input { width: 100%; min-width: 0; accent-color: var(--focus); }
+.slider-row output { font-variant-numeric: tabular-nums; text-align: right; }
+select, input[type=number] { font: inherit; padding: 1px 5px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; max-width: 100%; }
+input[type=number] { width: 4.2rem; }
+input[type=checkbox] { accent-color: var(--focus); }
+button { font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+.hint { color: var(--muted); font-size: 0.8rem; }
+.card { border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 6px 10px; min-width: 0; }
+.world-card { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 4px; }
+/* The orbit view takes the column height left after the controls. */
+#world { display: block; width: 100%; flex: 1 1 0; min-height: 12rem; background: var(--canvas); border-radius: 4px; cursor: grab; }
+#views { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+#views canvas { display: block; width: 100%; aspect-ratio: 4/3; background: #1d2226; border: 2px solid var(--border); border-radius: 4px; }
+#views canvas.near { border-color: var(--event); }
+figure { margin: 0; }
+figcaption { font-size: 0.8rem; color: var(--muted); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin-bottom: 8px; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.kv b { color: var(--muted); font-weight: 600; }
+table { border-collapse: collapse; width: 100%; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+td, th { border-bottom: 1px solid var(--border); padding: 3px 5px; text-align: right; }
+td:first-child, th:first-child { text-align: left; }
+summary { cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+details .hint { margin-top: 4px; }
+/* Desktop fits one screen: controls pack tighter. */
+@media not all and (max-width: 860px) {
+  .controls button { padding: 2px 10px; line-height: 1.3; }
+  /* The readout drops under the slider so the narrow Playback box keeps a usable slider. */
+  .fs-play .slider-row { grid-template-columns: auto minmax(0, 1fr); row-gap: 4px; }
+  .fs-play output { grid-column: 1 / -1; text-align: left; font-size: 0.85rem; }
+  body { padding-block: 8px; gap: 8px; }
+  .layout { row-gap: 8px; }
+  .column { gap: 6px; }
+}
+@media (max-width: 860px) {
+  html, body { height: auto; }
+  body {
+    min-height: 100%;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+  .side { overflow: visible; }
+  .world-card { flex: none; }
+  #world { flex: none; aspect-ratio: 4/3; }
+}
+</style>
+</head>
+<body>
+<header class=site-header>
+<h1>SKOPE door-event simulator</h1>
+<p class=subtitle>One pack removed or inserted through the open door, watched by each camera layout.</p>
+</header>
+<main class=layout>
+<div class=controls>
+<fieldset class=fs-event><legend>Event</legend>
 <label>config <select id=lay></select></label><label>shelf <select id=sh></select></label>
 <label>lane <select id=col></select></label><label>row <select id=row></select></label>
-<label><select id=ev><option value=1>remove</option><option value=0>insert</option></select></label>
-<button id=play>play</button><input type=range id=tt min=0 max=1 step=0.001 value=0><span id=tl></span>
+<label>event <select id=ev><option value=1>remove</option><option value=0>insert</option></select></label>
+</fieldset>
+<fieldset class=fs-play><legend>Playback</legend>
+<div class=slider-row><button id=play>play</button><input type=range id=tt min=0 max=1 step=0.001 value=0 aria-label="time"><output id=tl></output></div>
+</fieldset>
+<fieldset class=fs-scene><legend>Scene</legend>
 <label>shelves <select id=tilt><option value=0>flat (SKOPE standard wire)</option><option value=1>slide-down tilted rows (gravity feed)</option></select></label>
 <label>packs <select id=mix></select></label><label><input type=checkbox id=op> opaque shelves (default off: wire)</label><label><input type=checkbox id=ot checked> other shelves stocked</label>
-<label><input type=checkbox id=rn> random stock, fill <input type=number id=fill min=0 max=100 value=60 style="width:3.5em">%</label>
-<button id=reroll>re-roll</button><span id=seedl></span></div>
-<main><div><canvas id=world></canvas><div id=views></div></div>
-<aside><div class=kv id=kv></div><table id=tbl></table>
-<p style="color:#556;font-size:12px">Packs: the 600 ml model bottle in every lane, or a dairy mix with one pack shape per lane; the moving pack takes its lane's shape. Visible % = share of the moving pack's projected pixels (88x66 ray grid, same ray-cast as the views) not hidden by walls, opaque shelves, other stock or the forearm. Seen time = seconds so far with visible &ge; 50%. Orange border = nearest camera. Camera views are ray-cast: cabinet walls, ceiling and floor, opaque shelves (or the wire grid when see-through), stock (blue-grey), the moving bottle (orange) and the forearm (tan) occlude in depth order; the pale region is the open door side.
-Door camera (config A) swings with the door. Lane is emptied in front of the event row. Random stock keeps each slot with the given probability (seeded; re-roll for a new layout): gaps on flat shelves, front-packed random counts on tilted gravity-feed shelves. Ghost bottles mark 7 instants of the move: green = best camera &ge; 50% at that instant, red = not; ghosts still ahead of the slider are faded.</p></aside></main>
+<label><input type=checkbox id=rn> random stock, fill <input type=number id=fill min=0 max=100 value=60>%</label>
+<button id=reroll>re-roll</button> <span id=seedl class=hint></span>
+</fieldset>
+</div>
+<section class=column>
+<div class="card world-card"><canvas id=world></canvas><p class=hint>drag to orbit, wheel to zoom</p></div>
+</section>
+<section class="column side">
+<div id=views></div>
+<div class=card><div class=kv id=kv></div><table id=tbl></table></div>
+<details class=card><summary>How to read this</summary>
+<p class=hint>Packs: the 600 ml model bottle in every lane, or a dairy mix with one pack shape per lane; the moving pack takes its lane's shape. Visible % = share of the moving pack's projected pixels (88x66 ray grid, same ray-cast as the views) not hidden by walls, opaque shelves, other stock or the forearm. Seen time = seconds so far with visible &ge; 50%. Orange border = nearest camera. Camera views are ray-cast: cabinet walls, ceiling and floor, opaque shelves (or the wire grid when see-through), stock (blue-grey), the moving bottle (orange) and the forearm (tan) occlude in depth order; the pale region is the open door side.
+Door camera (config A) swings with the door. Lane is emptied in front of the event row. Random stock keeps each slot with the given probability (seeded; re-roll for a new layout): gaps on flat shelves, front-packed random counts on tilted gravity-feed shelves. Ghost bottles mark 7 instants of the move: green = best camera &ge; 50% at that instant, red = not; ghosts still ahead of the slider are faded.</p></details>
+</section>
+</main>
 <script>
 const S={"W": 470, "D": 555, "H": 1570, "shelf_w": 445, "shelf_d": 475, "shelf_y0": 70, "shelves": [100, 390, 680, 970, 1260], "tilt_deg": 7, "r": 32, "h": 250, "rows": [100, 170, 240, 310, 380, 450, 520], "cols": [50, 124, 198, 272, 346, 420], "shapes": {"model bottle": [["cyl", 32, 0, 250]], "PET 600 ml": [["cyl", 32, 0, 160], ["cone", 32, 160, 205, 14], ["cyl", 14, 205, 240]], "can 330 ml": [["cyl", 33, 0, 115]], "tall can 500 ml": [["cyl", 33, 0, 168]], "slim can 250 ml": [["cyl", 27, 0, 134]], "flavoured milk 300 ml": [["cyl", 30, 0, 145], ["cone", 30, 145, 170, 19], ["cyl", 19, 170, 180]], "milk 1 L": [["box", 36, 0, 195], ["cone", 36, 195, 220, 20], ["cyl", 20, 220, 235]], "juice carton 1 L": [["box", 35, 0, 245]]}, "pack_h": {"model bottle": 250, "PET 600 ml": 240, "can 330 ml": 115, "tall can 500 ml": 168, "slim can 250 ml": 134, "flavoured milk 300 ml": 180, "milk 1 L": 235, "juice carton 1 L": 245}, "pack_r": {"model bottle": 32, "PET 600 ml": 32, "can 330 ml": 33, "tall can 500 ml": 33, "slim can 250 ml": 27, "flavoured milk 300 ml": 30, "milk 1 L": 36, "juice carton 1 L": 35}, "lane_rows": {"model bottle": [100, 170, 240, 310, 380, 450, 520], "PET 600 ml": [100, 170, 240, 310, 380, 450, 520], "can 330 ml": [101, 173, 245, 317, 389, 461], "tall can 500 ml": [101, 173, 245, 317, 389, 461], "slim can 250 ml": [95, 155, 215, 275, 335, 395, 455, 515], "flavoured milk 300 ml": [98, 164, 230, 296, 362, 428, 494], "milk 1 L": [104, 182, 260, 338, 416, 494], "juice carton 1 L": [103, 179, 255, 331, 407, 483]}, "mixes": [{"name": "600 ml bottle in every lane", "lanes": null}, {"name": "dairy mix, as stocked", "lanes": [["milk 1 L", "milk 1 L", "milk 1 L", "juice carton 1 L", "juice carton 1 L", "flavoured milk 300 ml"], ["flavoured milk 300 ml", "flavoured milk 300 ml", "PET 600 ml", "PET 600 ml", "juice carton 1 L", "milk 1 L"], ["PET 600 ml", "PET 600 ml", "PET 600 ml", "tall can 500 ml", "PET 600 ml", "PET 600 ml"], ["tall can 500 ml", "tall can 500 ml", "PET 600 ml", "slim can 250 ml", "slim can 250 ml", "PET 600 ml"], ["can 330 ml", "can 330 ml", "slim can 250 ml", "can 330 ml", "tall can 500 ml", "can 330 ml"]]}, {"name": "dairy mix, shortest lanes on the left", "lanes": [["flavoured milk 300 ml", "milk 1 L", "milk 1 L", "milk 1 L", "juice carton 1 L", "juice carton 1 L"], ["flavoured milk 300 ml", "flavoured milk 300 ml", "milk 1 L", "PET 600 ml", "PET 600 ml", "juice carton 1 L"], ["tall can 500 ml", "PET 600 ml", "PET 600 ml", "PET 600 ml", "PET 600 ml", "PET 600 ml"], ["slim can 250 ml", "slim can 250 ml", "tall can 500 ml", "tall can 500 ml", "PET 600 ml", "PET 600 ml"], ["can 330 ml", "can 330 ml", "can 330 ml", "can 330 ml", "slim can 250 ml", "tall can 500 ml"]]}], "layouts": [{"name": "A  AoFrio-class (1 cam, door glass)", "cams": [{"name": "A door-top", "pos": [235, 8, 1470], "yaw": 0, "pitch": -38, "fov": [150, 150], "fisheye": true, "note": "predicted: OV5640-class 5 MP, 150-210 deg, adhesive on inner door glass, 5 V from SCS 800", "frustum": [[862.8517870878944, 140.56892400635618, 1366.4258051523725], [778.7355974295751, 333.8410027685482, 1613.802785100602], [548.9258935439473, 475.32598410692657, 1794.8953030456532], [235.00000000000003, 527.1130815307404, 1861.1797650488313], [-78.92589354394704, 475.3259841069266, 1794.8953030456532], [-308.73559742957514, 333.8410027685482, 1613.802785100602], [-392.8517870878944, 140.56892400635624, 1366.4258051523727], [-308.73559742957525, -52.7031547558358, 1119.0488252041434], [-78.9258935439475, -194.18813609421423, 937.956307259092], [234.9999999999999, -245.97523351802798, 871.6718452559138], [548.9258935439473, -194.18813609421423, 937.956307259092], [778.7355974295749, -52.70315475583609, 1119.048825204143]]}]}, {"name": "A2 AoFrio-class on the frame (1 cam, static, top centre)", "cams": [{"name": "A2 frame-top", "pos": [235, 20, 1550], "yaw": 0, "pitch": -45, "fov": [150, 150], "fisheye": true, "note": "same module as A but on the cabinet top-front frame: wired to the SCS 800 door switch, so no IMU and no need to ride the door", "frustum": [[862.8517870878944, 138.95825622994255, 1431.0417437700573], [778.7355974295751, 360.9373843449139, 1653.0208718850288], [548.9258935439473, 523.4373843449139, 1815.5208718850288], [235.00000000000003, 582.9165124598852, 1875.0], [-78.92589354394704, 523.4373843449139, 1815.5208718850288], [-308.73559742957514, 360.9373843449139, 1653.0208718850288], [-392.8517870878944, 138.9582562299426, 1431.0417437700576], [-308.73559742957525, -83.0208718850286, 1209.0626156550863], [-78.9258935439475, -245.52087188502867, 1046.5626156550861], [234.9999999999999, -305.00000000000006, 987.0834875401148], [548.9258935439473, -245.52087188502878, 1046.5626156550861], [778.7355974295749, -83.02087188502892, 1209.062615655086]]}]}, {"name": "B  Two corner fisheyes (custom)", "cams": [{"name": "B left", "pos": [20, 20, 1550], "yaw": 28, "pitch": -48, "fov": [200, 200], "fisheye": true, "note": "IMX219-200 module, 200 deg, ~NZ$45", "frustum": [[609.5283051060385, -250.52534362337286, 1507.8999294981852], [645.8870079095017, 2.64214748789918, 1724.5398472735083], [519.3082947687565, 269.42890978501447, 1883.1312740325889], [263.70882964883623, 478.34964575914705, 1941.1797650488313], [-52.423717185549364, 573.4242129239123, 1883.1312740325889], [-344.38188510893303, 529.1774577867728, 1724.5398472735083], [-533.9357188025735, 357.4652626544228, 1507.8999294981854], [-570.2944216060367, 104.29777154315083, 1291.2600117228624], [-443.71570846529175, -162.48899075396446, 1132.668584963782], [-188.11624334537143, -371.40972672809716, 1074.6200939475393], [128.01630348901443, -466.4842938928625, 1132.6685849637818], [419.97447141239763, -422.23753875572305, 1291.2600117228621]]}, {"name": "B right", "pos": [450, 20, 1550], "yaw": -28, "pitch": -48, "fov": [200, 200], "fisheye": true, "note": "IMX219-200 module, 200 deg, ~NZ$45", "frustum": [[1003.9357188025735, 357.4652626544227, 1507.8999294981852], [814.381885108933, 529.1774577867728, 1724.5398472735083], [522.4237171855495, 573.4242129239124, 1883.1312740325889], [206.29117035116383, 478.3496457591471, 1941.1797650488313], [-49.3082947687563, 269.42890978501464, 1883.1312740325889], [-175.88700790950168, 2.64214748789918, 1724.5398472735083], [-139.5283051060385, -250.5253436233728, 1507.8999294981854], [50.025528587601855, -422.2375387557229, 1291.2600117228624], [341.9836965109853, -466.4842938928625, 1132.668584963782], [658.1162433453712, -371.40972672809727, 1074.6200939475393], [913.7157084652915, -162.48899075396466, 1132.6685849637818], [1040.2944216060366, 104.29777154315039, 1291.2600117228621]]}]}, {"name": "C  Three Pi Cam 3 Wide (any subset)", "cams": [{"name": "C left", "pos": [70, 20, 1550], "yaw": 16, "pitch": -52, "fov": [67, 102], "fisheye": false, "note": "Pi Camera Module 3 Wide, portrait 67x102 deg, 25x24x12 mm, ~NZ$43", "frustum": [[-407.6018132545929, -84.75617185319852, 543.611916731541], [419.51699493908035, -321.9286735770588, 543.611916731541], [768.2109047328972, 894.1115039172573, 1531.9741035797203], [-58.90790346077608, 1131.2840056411176, 1531.9741035797203]]}, {"name": "C centre", "pos": [235, 20, 1550], "yaw": 0, "pitch": -52, "fov": [67, 102], "fisheye": false, "note": "Pi Camera Module 3 Wide", "frustum": [[-195.2256147771995, -212.34299635451174, 543.611916731541], [665.2256147771996, -212.34299635451174, 543.611916731541], [665.2256147771996, 1052.7029142778674, 1531.9741035797203], [-195.2256147771995, 1052.7029142778674, 1531.9741035797203]]}, {"name": "C right", "pos": [400, 20, 1550], "yaw": -16, "pitch": -52, "fov": [67, 102], "fisheye": false, "note": "Pi Camera Module 3 Wide", "frustum": [[50.48300506091965, -321.9286735770588, 543.611916731541], [877.6018132545929, -84.75617185319852, 543.611916731541], [528.9079034607761, 1131.2840056411176, 1531.9741035797203], [-298.21090473289723, 894.1115039172573, 1531.9741035797203]]}]}, {"name": "D  One cam per shelf, under the shelf above (custom)", "cams": [{"name": "D shelf 1", "pos": [235, 55, 375], "yaw": 0, "pitch": -35, "fov": [160, 160], "fisheye": true, "note": "160 deg fisheye (IMX219-160 class, ~NZ$40), centre front edge of the shelf above, looks back along the cap tops; a 102 deg Pi Cam 3 Wide here misses the outer columns of rows 1-2", "frustum": [[875.1250394579353, 147.45876881990065, 310.2596730987167], [789.3645457690882, 331.03908829557827, 572.4395404349863], [555.0625197289677, 465.4292094215005, 764.3685240468035], [235.00000000000003, 514.6194077712559, 834.6194077712559], [-85.06251972896746, 465.4292094215006, 764.3685240468035], [-319.3645457690882, 331.03908829557827, 572.4395404349863], [-405.12503945793526, 147.45876881990068, 310.25967309871675], [-319.3645457690882, -36.12155065577686, 48.07980576244722], [-85.06251972896791, -170.51167178169916, -143.8491778493701], [234.9999999999999, -219.70187013145454, -214.1000615738226], [555.0625197289677, -170.51167178169925, -143.84917784937022], [789.364545769088, -36.12155065577711, 48.079805762446824]]}, {"name": "D shelf 2", "pos": [235, 55, 665], "yaw": 0, "pitch": -35, "fov": [160, 160], "fisheye": true, "note": "as shelf 1", "frustum": [[875.1250394579353, 147.45876881990065, 600.2596730987167], [789.3645457690882, 331.03908829557827, 862.4395404349863], [555.0625197289677, 465.4292094215005, 1054.3685240468035], [235.00000000000003, 514.6194077712559, 1124.6194077712557], [-85.06251972896746, 465.4292094215006, 1054.3685240468035], [-319.3645457690882, 331.03908829557827, 862.4395404349863], [-405.12503945793526, 147.45876881990068, 600.2596730987168], [-319.3645457690882, -36.12155065577686, 338.0798057624472], [-85.06251972896791, -170.51167178169916, 146.1508221506299], [234.9999999999999, -219.70187013145454, 75.89993842617741], [555.0625197289677, -170.51167178169925, 146.15082215062978], [789.364545769088, -36.12155065577711, 338.0798057624468]]}, {"name": "D shelf 3", "pos": [235, 55, 955], "yaw": 0, "pitch": -35, "fov": [160, 160], "fisheye": true, "note": "as shelf 1", "frustum": [[875.1250394579353, 147.45876881990065, 890.2596730987167], [789.3645457690882, 331.03908829557827, 1152.4395404349862], [555.0625197289677, 465.4292094215005, 1344.3685240468035], [235.00000000000003, 514.6194077712559, 1414.6194077712557], [-85.06251972896746, 465.4292094215006, 1344.3685240468035], [-319.3645457690882, 331.03908829557827, 1152.4395404349862], [-405.12503945793526, 147.45876881990068, 890.2596730987168], [-319.3645457690882, -36.12155065577686, 628.0798057624472], [-85.06251972896791, -170.51167178169916, 436.1508221506299], [234.9999999999999, -219.70187013145454, 365.8999384261774], [555.0625197289677, -170.51167178169925, 436.1508221506298], [789.364545769088, -36.12155065577711, 628.0798057624468]]}, {"name": "D shelf 4", "pos": [235, 55, 1245], "yaw": 0, "pitch": -35, "fov": [160, 160], "fisheye": true, "note": "as shelf 1", "frustum": [[875.1250394579353, 147.45876881990065, 1180.2596730987166], [789.3645457690882, 331.03908829557827, 1442.4395404349862], [555.0625197289677, 465.4292094215005, 1634.3685240468035], [235.00000000000003, 514.6194077712559, 1704.6194077712557], [-85.06251972896746, 465.4292094215006, 1634.3685240468035], [-319.3645457690882, 331.03908829557827, 1442.4395404349862], [-405.12503945793526, 147.45876881990068, 1180.2596730987168], [-319.3645457690882, -36.12155065577686, 918.0798057624472], [-85.06251972896791, -170.51167178169916, 726.1508221506299], [234.9999999999999, -219.70187013145454, 655.8999384261774], [555.0625197289677, -170.51167178169925, 726.1508221506298], [789.364545769088, -36.12155065577711, 918.0798057624468]]}, {"name": "D shelf 5", "pos": [235, 55, 1555], "yaw": 0, "pitch": -35, "fov": [160, 160], "fisheye": true, "note": "as shelf 1", "frustum": [[875.1250394579353, 147.45876881990065, 1490.2596730987166], [789.3645457690882, 331.03908829557827, 1752.4395404349862], [555.0625197289677, 465.4292094215005, 1944.3685240468035], [235.00000000000003, 514.6194077712559, 2014.6194077712557], [-85.06251972896746, 465.4292094215006, 1944.3685240468035], [-319.3645457690882, 331.03908829557827, 1752.4395404349862], [-405.12503945793526, 147.45876881990068, 1490.2596730987168], [-319.3645457690882, -36.12155065577686, 1228.0798057624472], [-85.06251972896791, -170.51167178169916, 1036.15082215063], [234.9999999999999, -219.70187013145454, 965.8999384261774], [555.0625197289677, -170.51167178169925, 1036.1508221506297], [789.364545769088, -36.12155065577711, 1228.0798057624468]]}]}, {"name": "E  Side band: one front-corner cam per shelf (custom)", "cams": [{"name": "E shelf 1", "pos": [15, 60, 375], "yaw": 45, "pitch": -30, "fov": [102, 67], "fisheye": false, "note": "Pi Camera Module 3 Wide, landscape, left front corner under the shelf above, 45 deg across the shelf; all five on one vertical band so one cable run", "frustum": [[-306.64834136733634, 873.5170581227602, -322.5863117558325], [828.5170581227602, -261.64834136733634, -322.5863117558325], [1132.7325077718695, 42.56710828177273, 422.58631175583264], [-2.432891718227271, 1177.7325077718695, 422.58631175583264]]}, {"name": "E shelf 2", "pos": [15, 60, 665], "yaw": 45, "pitch": -30, "fov": [102, 67], "fisheye": false, "note": "as shelf 1", "frustum": [[-306.64834136733634, 873.5170581227602, -32.586311755832526], [828.5170581227602, -261.64834136733634, -32.586311755832526], [1132.7325077718695, 42.56710828177273, 712.5863117558326], [-2.432891718227271, 1177.7325077718695, 712.5863117558326]]}, {"name": "E shelf 3", "pos": [15, 60, 955], "yaw": 45, "pitch": -30, "fov": [102, 67], "fisheye": false, "note": "as shelf 1", "frustum": [[-306.64834136733634, 873.5170581227602, 257.4136882441675], [828.5170581227602, -261.64834136733634, 257.4136882441675], [1132.7325077718695, 42.56710828177273, 1002.5863117558326], [-2.432891718227271, 1177.7325077718695, 1002.5863117558326]]}, {"name": "E shelf 4", "pos": [15, 60, 1245], "yaw": 45, "pitch": -30, "fov": [102, 67], "fisheye": false, "note": "as shelf 1", "frustum": [[-306.64834136733634, 873.5170581227602, 547.4136882441675], [828.5170581227602, -261.64834136733634, 547.4136882441675], [1132.7325077718695, 42.56710828177273, 1292.5863117558326], [-2.432891718227271, 1177.7325077718695, 1292.5863117558326]]}, {"name": "E shelf 5", "pos": [15, 60, 1555], "yaw": 45, "pitch": -30, "fov": [102, 67], "fisheye": false, "note": "as shelf 1", "frustum": [[-306.64834136733634, 873.5170581227602, 857.4136882441675], [828.5170581227602, -261.64834136733634, 857.4136882441675], [1132.7325077718695, 42.56710828177273, 1602.5863117558326], [-2.432891718227271, 1177.7325077718695, 1602.5863117558326]]}]}], "hinge": [470, 0], "door_max": 100, "t_open": 1.0, "t_move": 1.6, "t_close": 1.0, "fps": 20, "hand_r": 40, "hand_len": 350, "ghosts": 7, "img_w": 88, "img_h": 66, "hand_spheres": 9},T=S.t_open+S.t_move+S.t_close;let OPT={op:false,tilt:0};
 
@@ -109,6 +235,9 @@ $('tt').oninput=e=>{t=e.target.value*T;draw()};
 $('play').onclick=()=>{playing=!playing;$('play').textContent=playing?'pause':'play';if(playing){if(t>=T-1e-6)reset();last=performance.now();requestAnimationFrame(tick)}};
 function tick(now){if(!playing)return;t=Math.min(T,t+(now-last)/1000);last=now;$('tt').value=t/T;draw();if(t>=T){playing=false;$('play').textContent='play'}else requestAnimationFrame(tick);}
 // ---- world view (orbit) ----
+// world colours come from the CSS tokens so both themes stay in one place; C.shelfOn reads --shelf-on
+const TOKENS=['floor','wall','seam','shadow','shadow-alpha','cabinet','shelf','shelf-on','door','stock','stock-on','event','hand','cam'],C={};
+function readCols(){const s=getComputedStyle(document.documentElement);TOKENS.forEach(k=>C[k.replace(/-(\w)/g,(_,c)=>c.toUpperCase())]=s.getPropertyValue('--'+k).trim())}
 let rx=-1.0,rz=0.6,zoom=0.38;const wv=$('world'),wg=wv.getContext('2d');
 function proj(p){const x=p[0]-S.W/2,y=p[1]-S.D/2+150,z=p[2]-S.H/2;const x1=x*Math.cos(rz)-y*Math.sin(rz),y1=x*Math.sin(rz)+y*Math.cos(rz);
  const y2=y1*Math.cos(rx)-z*Math.sin(rx),z2=y1*Math.sin(rx)+z*Math.cos(rx);const f=1800/(1800-y2);return [wv.width/2+x1*f*zoom,wv.height/2-z2*f*zoom];}
@@ -121,6 +250,13 @@ function outline(b){const [x,y,z0]=b,o=[];for(const [k,r,p0,p1,top] of S.shapes[
   o.push(ring(p0,r),ring(p1,r1));for(let i=0;i<4;i++){const a=off+Math.PI*i/2;o.push([[x+r*rr*Math.cos(a),y+r*rr*Math.sin(a),z0+p0],[x+r1*rr*Math.cos(a),y+r1*rr*Math.sin(a),z0+p1]])}}return o;}
 function cyl(g,P,base,col,w=1){g.strokeStyle=col;g.lineWidth=w;for(const pl of outline(base)){g.beginPath();pl.forEach((p,i)=>i?g.lineTo(...P(p)):g.moveTo(...P(p)));g.stroke()}}
 function doorCorners(d){return [[0,0,0],[S.W,0,0],[S.W,0,S.H],[0,0,S.H]].map(p=>rotZ(p,d,S.hinge));}
+function poly(g,P,pts,fill){g.fillStyle=fill;g.beginPath();pts.forEach((p,i)=>i?g.lineTo(...P(p)):g.moveTo(...P(p)));g.closePath();g.fill();}
+// room backdrop: floor, back wall and a baked contact shadow under the cabinet so up and down read at any orbit
+function room(g,P){const yw=S.D+40,x0=-600,x1=S.W+600,wall=[[x0,yw,0],[x1,yw,0],[x1,yw,S.H+400],[x0,yw,S.H+400]],[a,b,c]=wall.map(P);
+ const front=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0])<0;   // screen winding of the wall: negative faces the viewer, positive once orbited behind it
+ poly(g,P,[[x0,-900,0],[x1,-900,0],[x1,yw,0],[x0,yw,0]],C.floor);if(front)poly(g,P,wall,C.wall);
+ g.globalAlpha=+C.shadowAlpha||0.07;for(const m of [120,80,45,15]){const y1=Math.min(S.D+m,yw);poly(g,P,[[-m,-m,0],[S.W+m,-m,0],[S.W+m,y1,0],[-m,y1,0]],C.shadow)}
+ g.globalAlpha=1;if(front)line(g,P,[x0,yw,0],[x1,yw,0],C.seam);}
 // ---- camera views ----
 let vcs=[];function buildViews(){const v=$('views');v.innerHTML='';vcs=S.layouts[sel().L].cams.map((c,i)=>{const f=document.createElement('figure');
  f.innerHTML=`<canvas></canvas><figcaption>${c.name}: ${c.fov[0]}x${c.fov[1]} deg${c.fisheye?' fisheye':''}</figcaption>`;v.appendChild(f);return f.firstChild});}
@@ -128,6 +264,8 @@ function camProj(c,cv){const W=cv.width,H=cv.height;return p=>{const [x,y,z]=cam
  if(c.fisheye){const th=Math.atan2(Math.hypot(x,y),z),f=(W/2)/rad(Math.min(c.fov[0],180)/2),rr=f*th,ph=Math.atan2(y,x);return [W/2+rr*Math.cos(ph),H/2-rr*Math.sin(ph),z>0||th<Math.PI/2]}
  const fx=(W/2)/Math.tan(rad(c.fov[0]/2)),fy=(H/2)/Math.tan(rad(c.fov[1]/2));return [W/2+fx*x/Math.max(z,1),H/2-fy*y/Math.max(z,1),z>0]};}
 // ---- ray-cast camera views: first surface hit per pixel block, so walls, opaque shelves and bottles occlude ----
+// sensor-side colours stay fixed in every theme so the report's camera snapshots do not change
+const CAM_DOOR='rgb(79,179,212)';
 const BLK=5,MAT={left:[150,158,166],right:[150,158,166],back:[120,130,140],floor:[95,105,112],ceil:[175,180,186],aisle:[236,240,244],
  shelf:[128,140,150],wire:[128,140,150],stock:[143,163,176],move:[242,164,68],hand:[232,135,90]};
 function rayDir(c,px,py,W,H){let x,y,z;if(c.fisheye){const f=(W/2)/rad(Math.min(c.fov[0],180)/2),dx=px-W/2,dy=H/2-py,rr=Math.hypot(dx,dy),th=rr/f;
@@ -169,7 +307,7 @@ function drawCam(c,cv,cyls,base,hd,d,near,sh){cv.width=440;cv.height=330;const W
   g.fillStyle=`rgb(${m.map(v=>Math.round(v*lam*fade)).join(',')})`;g.fillRect(px,py,BLK,BLK)}
  const P0=camProj(c,cv),P=p=>P0(p).slice(0,2),ok=(a,b)=>P0(a)[2]&&P0(b)[2],L=(a,b,col,w)=>{if(ok(a,b))line(g,P,a,b,col,w)};
  if(c.fisheye){g.save();g.beginPath();g.arc(W/2,H/2,W/2,0,7);g.clip()}
- const dc=doorCorners(d);dc.forEach((a,i)=>L(a,dc[(i+1)%4],'#4fb3d4',2));
+ const dc=doorCorners(d);dc.forEach((a,i)=>L(a,dc[(i+1)%4],CAM_DOOR,2));
  G.forEach(q=>cylv(g,P0,q.base,gcol(q,1),1.5));if(c.fisheye)g.restore();
  g.strokeStyle='#445';if(!c.fisheye)g.strokeRect(0.5,0.5,W-1,H-1);else{g.beginPath();g.arc(W/2,H/2,W/2,0,7);g.stroke()}
  cv.className=near?'near':'';}
@@ -187,13 +325,18 @@ function draw(){const {L,sh,col,row,rem}=sel(),lay=S.layouts[L],d=doorAngle(t),b
   <b>ghosts</b><span>${G.map(q=>`<span style="color:${q.v>=.5?'#1baf7a':'#d03b3b'};font-weight:600">${(100*q.v).toFixed(0)}%</span>`).join(' ')} <small>(${G.filter(q=>q.v>=.5).length}/${S.ghosts} seen)</small></span>`;
  $('tbl').innerHTML='<tr><th>camera</th><th>bearing</th><th>range mm</th><th>visible</th><th>seen s</th></tr>'+rep.map(x=>`<tr${x.i===near?' style="font-weight:600"':''}><td>${x.name}</td><td>${x.b.toFixed(0)}&deg;</td><td>${x.r.toFixed(0)}</td><td style="background:rgba(27,175,122,${x.v*.6})">${(100*x.v).toFixed(0)}%</td><td>${seen[x.i].toFixed(2)}</td></tr>`).join('');
  // world
- wv.width=wv.clientWidth;wv.height=wv.clientHeight;wg.clearRect(0,0,wv.width,wv.height);
- boxw(wg,proj,[0,0,0],[S.W,S.D,S.H],'#556');S.shelves.forEach((z,i)=>{const q=shelfQuad(z);q.forEach((a,k)=>line(wg,proj,a,q[(k+1)%4],i===sh?'#0b6e8f':'#aab',i===sh?2:1))});
- const dc=doorCorners(d);dc.forEach((a,i)=>line(wg,proj,a,dc[(i+1)%4],'#4fb3d4',2));
- cyls.forEach(b=>cyl(wg,proj,b,(b[2]>=S.shelves[sh]&&b[2]<S.shelves[sh]+100)?'#9aa':'#dde'));G.forEach(q=>cyl(wg,proj,q.base,gcol(q),1.5));cyl(wg,proj,base,'#c0561c',2);if(hd)line(wg,proj,hd[0],hd[1],'#e8875a',5);
- cams.forEach((c,i)=>{boxw(wg,proj,c.pos.map(v=>v-12),c.pos.map(v=>v+12),i===near?'#c0561c':'#889');const f=axes(c.yaw,c.pitch)[0];line(wg,proj,c.pos,c.pos.map((v,k)=>v+180*f[k]),'#c0561c')});
+ wv.width=wv.clientWidth;wv.height=wv.clientHeight;wg.clearRect(0,0,wv.width,wv.height);room(wg,proj);
+ boxw(wg,proj,[0,0,0],[S.W,S.D,S.H],C.cabinet);S.shelves.forEach((z,i)=>{const q=shelfQuad(z);q.forEach((a,k)=>line(wg,proj,a,q[(k+1)%4],i===sh?C.shelfOn:C.shelf,i===sh?2:1))});
+ const dc=doorCorners(d);dc.forEach((a,i)=>line(wg,proj,a,dc[(i+1)%4],C.door,2));
+ cyls.forEach(b=>cyl(wg,proj,b,(b[2]>=S.shelves[sh]&&b[2]<S.shelves[sh]+100)?C.stockOn:C.stock));G.forEach(q=>cyl(wg,proj,q.base,gcol(q),1.5));cyl(wg,proj,base,C.event,2);if(hd)line(wg,proj,hd[0],hd[1],C.hand,5);
+ cams.forEach((c,i)=>{boxw(wg,proj,c.pos.map(v=>v-12),c.pos.map(v=>v+12),i===near?C.event:C.cam);const f=axes(c.yaw,c.pitch)[0];line(wg,proj,c.pos,c.pos.map((v,k)=>v+180*f[k]),C.event)});
  cams.forEach((c,i)=>drawCam(c,vcs[i],cyls,base,hd,d,i===near,sh));}
 let drawn_t=0,drag=null;wv.onmousedown=e=>drag=[e.clientX,e.clientY];window.onmouseup=()=>drag=null;
 window.onmousemove=e=>{if(!drag)return;rz+=(e.clientX-drag[0])*.01;rx+=(e.clientY-drag[1])*.01;drag=[e.clientX,e.clientY];draw()};
-wv.onwheel=e=>{zoom*=e.deltaY<0?1.1:.9;draw();e.preventDefault()};window.onresize=draw;reset();
+wv.onwheel=e=>{zoom*=e.deltaY<0?1.1:.9;draw();e.preventDefault()};window.onresize=draw;
+const watchTheme=()=>{readCols();draw()};matchMedia('(prefers-color-scheme: dark)').addEventListener('change',watchTheme);
+new MutationObserver(watchTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+readCols();reset();
 </script>
+</body>
+</html>
