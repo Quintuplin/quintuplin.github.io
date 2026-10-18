@@ -1,2 +1,3 @@
 # Simulation pages are served byte for byte from their source projects
 simulations/*/index.html -text
+scripts/*.sh text eol=lf
