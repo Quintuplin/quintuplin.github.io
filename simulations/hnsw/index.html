@@ -35,6 +35,7 @@
   --code-hook: #6a7580;
   --code-active: #dce9fb;
   --lsh: #a3238f;
+  --disk: #0b6e80;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -64,6 +65,7 @@
     --code-hook: #808b97;
     --code-active: #23354d;
     --lsh: #f07fdc;
+    --disk: #5fcfe0;
   }
 }
 :root[data-theme="dark"] {
@@ -93,6 +95,7 @@
   --code-hook: #808b97;
   --code-active: #23354d;
   --lsh: #f07fdc;
+  --disk: #5fcfe0;
 }
 
 html, body { height: 100%; }
@@ -196,17 +199,19 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .line.is-hook span { color: inherit; }
 .line.is-active { background: var(--code-active); box-shadow: inset 4px 0 0 var(--focus); font-weight: 600; }
 .line.is-active.is-hook { color: var(--text); }
-/* LSH lines carry a gutter bar in every mode. The label sits on the first line of each tagged run. */
-.line.is-lsh-new, .line.is-lsh-skip { border-left-color: var(--lsh); }
-.line[data-lsh]::after {
-  content: attr(data-lsh); display: inline-block; margin-left: 2ch; padding: 0 5px;
-  border: 1px solid var(--lsh); border-radius: 3px; color: var(--lsh);
+/* Mode lines carry a gutter bar in every mode. The label sits on the first line of each tagged run. */
+.line.is-lsh-new, .line.is-lsh-skip { --tag: var(--lsh); border-left-color: var(--lsh); }
+.line.is-disk-new, .line.is-disk-skip { --tag: var(--disk); border-left-color: var(--disk); }
+.line[data-tag]::after {
+  content: attr(data-tag); display: inline-block; margin-left: 2ch; padding: 0 5px;
+  border: 1px solid var(--tag); border-radius: 3px; color: var(--tag);
   font: 600 0.8em/1.4 system-ui, sans-serif; font-style: normal;
 }
-.code-pane:not(.lsh-on) .is-lsh-new { opacity: 0.55; }
-.lsh-on .is-lsh-skip { text-decoration: line-through; opacity: 0.6; }
+.code-pane:not(.lsh-on) .is-lsh-new, .code-pane:not(.disk-on) .is-disk-new { opacity: 0.55; }
+.lsh-on .is-lsh-skip, .disk-on .is-disk-skip { text-decoration: line-through; opacity: 0.6; }
 .lsh-on.lsh-fallback .is-lsh-skip { text-decoration: none; opacity: 1; }
 #lsh-toggle[aria-pressed="true"] { background: var(--lsh); color: var(--surface); border-color: var(--lsh); }
+#disk-toggle[aria-pressed="true"] { background: var(--disk); color: var(--surface); border-color: var(--disk); }
 .tok-keyword { color: var(--code-keyword); }
 .tok-string { color: var(--code-string); }
 .tok-number { color: var(--code-number); }
@@ -272,6 +277,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 <header class="site-header">
   <h1>HNSW Explorer</h1>
   <p class="subtitle">Build and search a hierarchical navigable small world graph one step at a time.</p>
+  <button id="disk-toggle" type="button" aria-pressed="false" aria-describedby="disk-toggle-hint">DiskANN entry point</button>
+  <p id="disk-toggle-hint" class="hint">Off. Searches use the HNSW layers.</p>
   <button id="lsh-toggle" type="button" aria-pressed="false" aria-describedby="lsh-toggle-hint">LSH entry point</button>
   <p id="lsh-toggle-hint" class="hint">Off. Searches start from the top entry point.</p>
 </header>
@@ -326,7 +333,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
           <input id="param-lsh-k" type="range" min="1" max="4" step="1" value="2" disabled aria-describedby="param-lsh-hint">
           <output id="param-lsh-k-value" for="param-lsh-k">2</output>
         </div>
-        <p id="param-lsh-hint" class="hint desktop-sr">Used in LSH entry point mode. More hashes make smaller buckets. Bucket width is w = 1.</p>
+        <p id="param-lsh-hint" class="hint desktop-sr">Used in both entry point modes. More hashes make smaller buckets. Bucket width is w = 1.</p>
       </fieldset>
 
       <fieldset id="playback-settings">
@@ -469,23 +476,28 @@ function trace_event(type, line, fields) {
 }
 
 class HnswIndex {
-  constructor({ M, ef_construction, seed }) {
+  constructor({ M, ef_construction, seed, alpha }) {
     this.seed = seed;
     this.points = [];
-    this.configure({ M, ef_construction });
+    this.configure({ M, ef_construction, alpha });
   }
 
   // Empties the graph and reseeds level draws, so a rebuild repeats exactly.
-  configure({ M, ef_construction }) {
+  // alpha above 1 keeps longer layer 0 links, as in DiskANN's RobustPrune. version counts graph changes.
+  configure({ M, ef_construction, alpha = 1 }) {
     this.M = M;
     this.m_max0 = 2 * M;
     this.mL = 1 / Math.log(M);
     this.ef_construction = ef_construction;
+    this.alpha = alpha;
     this.levels = [];
     this.layers = [];
     this.entry_point = null;
     this.distance_count = 0;
     this.hop_count = 0;
+    this.round_count = 0;
+    this.version = 0;
+    this.medoid_cache = null;
     this.level_rng = make_rng(this.seed);
   }
 
@@ -521,6 +533,7 @@ class HnswIndex {
   *insert(point) {
     const node = this.points.length;
     this.points.push(point);
+    this.version += 1;
     this.distance_count = 0;
     const level = random_level(this.level_rng, this.mL); // @step:draw_level
     this.levels.push(level);
@@ -561,8 +574,8 @@ class HnswIndex {
       const top_level = this.levels[this.entry_point];
       let start = { node: this.entry_point, layer: top_level }; // @lsh:skip
       if (lsh) start = (yield* this.lsh_seed(query, top_level, lsh)) ?? start; // @lsh:new
-      const entry_ids = yield* this.greedy_descend(query, [start.node], start.layer, 1);
-      const found = yield* this.search_layer(query, entry_ids, Math.max(ef, k), 0);
+      const entry_ids = yield* this.greedy_descend(query, [start.node], start.layer, 1); // @disk:skip
+      const found = yield* this.search_layer(query, entry_ids, Math.max(ef, k), 0); // @disk:skip
       results = found.slice(0, k);
     }
     yield trace_event("done", "search_done", { op: "search", results }); // @step:search_done
@@ -573,7 +586,7 @@ class HnswIndex {
   // from its closest member. The scan counts as distance work. Hashing does not. // @lsh:new
   *lsh_seed(query, top_level, table) { // @lsh:new
     const layer = seed_layer(this.layer_sizes); // @lsh:new
-    table.sync(layer, this.layers[layer], this.points); // @lsh:new
+    table.sync(layer, this.layers[layer], this.points, this.version); // @lsh:new
     const key = table.hash_key(query); // @step:lsh_hash @lsh:new
     const members = table.bucket(key); // @lsh:new
     const skipped = layer === null ? [] : Array.from({ length: top_level - layer }, (_, i) => top_level - i); // @lsh:new
@@ -583,15 +596,97 @@ class HnswIndex {
       yield trace_event("lsh_fallback", "lsh_fallback", { layer, key, reason }); // @step:lsh_fallback @lsh:new
       return null; // @lsh:new
     } // @lsh:new
-    let seed = null; // @lsh:new
-    for (const node of members) { // @lsh:new
-      const dist = this.count_distance(query, node); // @step:lsh_scan @lsh:new
-      yield trace_event("visit", "lsh_scan", { layer, node, dist }); // @lsh:new
-      if (seed === null || dist < seed.dist) seed = { node, dist }; // @lsh:new
-    } // @lsh:new
+    const seed = yield* this.scan_bucket(query, members, layer); // @lsh:new
     yield trace_event("lsh_seed", "lsh_seed", { layer, node: seed.node, dist: seed.dist }); // @step:lsh_seed @lsh:new
     return { node: seed.node, layer }; // @lsh:new
   } // @lsh:new
+
+  // Measures every bucket member and returns the closest. The scan counts as distance work. Hashing does not.
+  *scan_bucket(query, members, layer) {
+    let seed = null;
+    for (const node of members) {
+      const dist = this.count_distance(query, node); // @step:lsh_scan
+      yield trace_event("visit", "lsh_scan", { layer, node, dist });
+      if (seed === null || dist < seed.dist) seed = { node, dist };
+    }
+    return seed;
+  }
+
+  // DiskANN search on layer 0 (Subramanya et al. 2019). The entry table picks the start, else the medoid. // @disk:new
+  *disk_search(query, k, L, W, table = null) { // @disk:new
+    this.distance_count = 0; // @disk:new
+    this.hop_count = 0; // @disk:new
+    yield trace_event("begin", "disk_begin", { op: "search", query, k }); // @step:disk_begin @disk:new
+    let results = []; // @disk:new
+    if (this.entry_point !== null) { // @disk:new
+      const seed = table ? (yield* this.entry_seed(query, table)) : null; // @disk:new
+      const start = seed ?? this.medoid(); // @step:disk_medoid @disk:new
+      if (seed === null) yield trace_event("medoid", "disk_medoid", { node: start }); // @disk:new
+      results = yield* this.beam_search(query, k, Math.max(L, k), W, start); // @disk:new
+    } // @disk:new
+    yield trace_event("done", "disk_done", { op: "search", results }); // @step:disk_done @disk:new
+    return results; // @disk:new
+  } // @disk:new
+
+  // Hashes the query into the entry table, built over a fixed sample of layer 0, // @disk:new
+  // and returns the closest sampled member. An empty bucket returns null. // @disk:new
+  *entry_seed(query, table) { // @disk:new
+    table.sync(0, this.layers[0], this.points, this.version, in_entry_sample); // @disk:new
+    const key = table.hash_key(query); // @step:disk_hash @disk:new
+    const members = table.bucket(key); // @disk:new
+    yield trace_event("lsh_hash", "disk_hash", { layer: 0, key, members: members.slice(), skipped: [] }); // @disk:new
+    if (members.length === 0) { // @disk:new
+      yield trace_event("entry_fallback", "disk_fallback", { key }); // @step:disk_fallback @disk:new
+      return null; // @disk:new
+    } // @disk:new
+    const seed = yield* this.scan_bucket(query, members, 0); // @disk:new
+    yield trace_event("lsh_seed", "disk_seed", { layer: 0, node: seed.node, dist: seed.dist }); // @step:disk_seed @disk:new
+    return seed.node; // @disk:new
+  } // @disk:new
+
+  // The node with the least total distance to every other. Built once per graph change, // @disk:new
+  // so it is index work and does not count as query distances. // @disk:new
+  medoid() { // @disk:new
+    if (this.medoid_cache?.version !== this.version) { // @disk:new
+      const nodes = [...this.layers[0].keys()]; // @disk:new
+      const total = (node) => nodes.reduce((sum, other) => sum + distance(this.points[node], this.points[other]), 0); // @disk:new
+      const scored = nodes.map((node) => ({ node, dist: total(node) })).sort(by_distance); // @disk:new
+      this.medoid_cache = { version: this.version, node: scored[0].node }; // @disk:new
+    } // @disk:new
+    return this.medoid_cache.node; // @disk:new
+  } // @disk:new
+
+  // BeamSearch (section 3.3). The list keeps the L closest nodes seen. Each round expands // @disk:new
+  // the W closest unexpanded ones together, one disk read in DiskANN, then trims to L. // @disk:new
+  *beam_search(query, k, L, W, start) { // @disk:new
+    this.round_count = 0; // @disk:new
+    const seen = new Set([start]); // @disk:new
+    const expanded = new Set(); // @disk:new
+    yield trace_event("enter_layer", "disk_start", { layer: 0, entry_ids: [start], ef: L }); // @disk:new
+    let list = [{ node: start, dist: this.count_distance(query, start) }]; // @step:disk_start @disk:new
+    yield trace_event("visit", "disk_start", { layer: 0, node: start, dist: list[0].dist }); // @disk:new
+    let frontier = list.slice(); // @disk:new
+    while (frontier.length > 0) { // @disk:new
+      this.round_count += 1; // @step:disk_round @disk:new
+      yield trace_event("disk_round", "disk_round", { layer: 0, round: this.round_count, nodes: node_ids(frontier) }); // @disk:new
+      for (const { node, dist } of frontier) { // @disk:new
+        expanded.add(node); // @disk:new
+        this.hop_count += 1; // @disk:new
+        yield trace_event("candidate_pop", "disk_round", { layer: 0, node, dist }); // @disk:new
+        for (const neighbour of this.neighbours(node, 0).filter((other) => !seen.has(other))) { // @disk:new
+          seen.add(neighbour); // @disk:new
+          const near = { node: neighbour, dist: this.count_distance(query, neighbour) }; // @step:disk_visit @disk:new
+          yield trace_event("visit", "disk_visit", { layer: 0, ...near }); // @disk:new
+          insert_sorted(list, near); // @disk:new
+        } // @disk:new
+      } // @disk:new
+      list = list.slice(0, L); // @step:disk_trim @disk:new
+      yield trace_event("best_update", "disk_trim", { layer: 0, results: list.slice() }); // @disk:new
+      frontier = list.filter((item) => !expanded.has(item.node)).slice(0, W); // @disk:new
+    } // @disk:new
+    yield trace_event("layer_done", "disk_trim", { layer: 0, results: list.slice() }); // @disk:new
+    return list.slice(0, k); // @disk:new
+  } // @disk:new
 
   // Walks down the upper layers keeping only the single closest node (ef = 1).
   *greedy_descend(query, entry_ids, top_level, bottom_level) {
@@ -641,11 +736,12 @@ class HnswIndex {
 
   // Keeps a candidate only when it is closer to the base node than to every
   // neighbour already kept, so links spread in different directions (algorithm 4).
-  select_neighbors_heuristic(candidates, count) {
+  // With alpha above 1 this is RobustPrune's alpha test (DiskANN algorithm 2).
+  select_neighbors_heuristic(candidates, count, alpha = 1) {
     const chosen = [];
     const rejected = [];
     for (const candidate of candidates) {
-      if (chosen.length < count && !this.is_covered(candidate, chosen)) chosen.push(candidate);
+      if (chosen.length < count && !this.is_covered(candidate, chosen, alpha)) chosen.push(candidate);
       else rejected.push(candidate);
     }
     // keep_pruned: refill from the closest skipped ones, so every node stays reachable.
@@ -653,14 +749,18 @@ class HnswIndex {
     return { chosen, rejected };
   }
 
-  is_covered(candidate, chosen) {
+  is_covered(candidate, chosen, alpha = 1) {
     const point = this.points[candidate.node];
-    return chosen.some((kept) => distance(point, this.points[kept.node]) < candidate.dist);
+    return chosen.some((kept) => alpha * distance(point, this.points[kept.node]) < candidate.dist);
+  }
+
+  layer_alpha(layer) {
+    return layer === 0 ? this.alpha : 1;
   }
 
   // Links the new node to its chosen neighbours both ways, then trims overfull lists.
   *connect(node, found, layer) {
-    const { chosen, rejected } = this.select_neighbors_heuristic(found, this.M); // @step:select
+    const { chosen, rejected } = this.select_neighbors_heuristic(found, this.M, this.layer_alpha(layer)); // @step:select
     yield trace_event("select_neighbors", "select", { layer, node, chosen: node_ids(chosen), rejected: node_ids(rejected) });
     for (const neighbour of node_ids(chosen)) {
       this.neighbours(node, layer).push(neighbour); // @step:link_out
@@ -677,7 +777,7 @@ class HnswIndex {
     if (links.length <= this.max_degree(layer)) return;
     const origin = this.points[owner];
     const scored = links.map((node) => ({ node, dist: distance(origin, this.points[node]) })).sort(by_distance);
-    const kept = node_ids(this.select_neighbors_heuristic(scored, this.max_degree(layer)).chosen);
+    const kept = node_ids(this.select_neighbors_heuristic(scored, this.max_degree(layer), this.layer_alpha(layer)).chosen);
     this.layers[layer].set(owner, kept); // @step:shrink
     for (const dropped of links.filter((node) => !kept.includes(node))) {
       yield trace_event("prune_edge", "shrink", { layer, from: owner, to: dropped });
@@ -701,7 +801,8 @@ class LshTable {
     this.offsets = Array.from({ length: k }, () => rng() * w);
     this.layer = null;
     this.layer_map = null;
-    this.size = 0;
+    this.version = null;
+    this.keep = null;
     this.buckets = new Map();
   }
 
@@ -711,12 +812,14 @@ class LshTable {
     return `(${values.join(", ")})`;
   }
 
-  // Inserts and rebuilds never touch the table, so it rebuilds here when its layer has changed.
-  sync(layer, layer_map, points) {
-    const size = layer_map ? layer_map.size : 0;
-    if (layer === this.layer && layer_map === this.layer_map && size === this.size) return;
-    Object.assign(this, { layer, layer_map: layer_map ?? null, size, buckets: new Map() });
+  // Inserts and rebuilds never touch the table, so it rebuilds here when the graph version has changed.
+  // keep, when given, picks which layer nodes the table holds.
+  sync(layer, layer_map, points, version, keep = null) {
+    const same = layer === this.layer && layer_map === this.layer_map && version === this.version && keep === this.keep;
+    if (same) return;
+    Object.assign(this, { layer, layer_map: layer_map ?? null, version, keep, buckets: new Map() });
     for (const node of layer_map?.keys() ?? []) {
+      if (keep && !keep(node)) continue;
       const key = this.hash_key(points[node]);
       if (!this.buckets.has(key)) this.buckets.set(key, []);
       this.buckets.get(key).push(node);
@@ -728,10 +831,17 @@ class LshTable {
   }
 }
 
+// The DiskANN entry table holds a fixed 10% of layer 0. Node ids follow random insert order.
+function in_entry_sample(node) {
+  return node % 10 === 0;
+}
+
 // Runs one search with no viewer and returns its cost, for side by side numbers.
-function search_cost(index, query, k, ef, table) {
-  const results = run_to_end(index.search(query, k, ef, table));
-  return { results, distances: index.distance_count, hops: index.hop_count };
+// disk = { W } runs DiskANN BeamSearch with list size ef in place of the HNSW search.
+function search_cost(index, query, k, ef, table, disk = null) {
+  const gen = disk ? index.disk_search(query, k, ef, disk.W, table) : index.search(query, k, ef, table);
+  const results = run_to_end(gen);
+  return { results, distances: index.distance_count, hops: index.hop_count, rounds: disk ? index.round_count : null };
 }
 
 function brute_force_knn(points, query, k) {
@@ -746,7 +856,7 @@ function recall_at_k(found, truth) {
 }
 
 globalThis.hnsw = {
-  distance, insert_sorted, random_level, run_to_end, HnswIndex, brute_force_knn, recall_at_k, LshTable, seed_layer, search_cost,
+  distance, insert_sorted, random_level, run_to_end, HnswIndex, brute_force_knn, recall_at_k, LshTable, seed_layer, search_cost, in_entry_sample,
 };
 </script>
 
@@ -875,6 +985,9 @@ function describe_selection(event) {
 }
 
 function describe_lsh_hash(event) {
+  if (event.line === "disk_hash") {
+    return `Entry table: the query hashes to bucket ${event.key}, which holds ${count_noun(event.members.length, "sampled node")}.`;
+  }
   if (event.layer === null) return `LSH: the query hashes to bucket ${event.key}. The graph has one layer, so there is no layer to seed.`;
   const count = count_noun(event.members.length, "node");
   return `LSH: the query hashes to bucket ${event.key}. On layer ${event.layer} that bucket holds ${count}.`;
@@ -890,8 +1003,13 @@ const CAPTIONS = {
     ? `LSH: scanning bucket member node ${e.node} on layer ${e.layer}, distance ${format_dist(e.dist)}.`
     : `Layer ${e.layer}: measuring node ${e.node}, distance ${format_dist(e.dist)}.`),
   lsh_hash: describe_lsh_hash,
-  lsh_seed: (e) => `LSH: seed is node ${e.node} at ${format_dist(e.dist)}, the closest bucket member. The descent starts on layer ${e.layer}.`,
+  lsh_seed: (e) => (e.line === "disk_seed"
+    ? `Entry table: seed is node ${e.node} at ${format_dist(e.dist)}, the closest sampled member. BeamSearch starts there.`
+    : `LSH: seed is node ${e.node} at ${format_dist(e.dist)}, the closest bucket member. The descent starts on layer ${e.layer}.`),
   lsh_fallback: (e) => `LSH: ${FALLBACK_REASONS[e.reason]}, starting from the top entry point.`,
+  entry_fallback: (e) => `Entry table: bucket ${e.key} holds no sampled node, so BeamSearch starts from the medoid.`,
+  medoid: (e) => `DiskANN: starting from the medoid, node ${e.node}, which has the least total distance to all nodes.`,
+  disk_round: (e) => `DiskANN round ${e.round}: reading the links of ${count_noun(e.nodes.length, "node")} at once, the closest not yet expanded.`,
   candidate_push: (e) => `Layer ${e.layer}: node ${e.node} joins the candidates to expand.`,
   candidate_pop: (e) => `Layer ${e.layer}: expanding node ${e.node}, the closest candidate left.`,
   best_update: (e) => `Layer ${e.layer}: best so far is node ${e.results[0].node} at ${format_dist(e.results[0].dist)}.`,
@@ -1066,16 +1184,24 @@ const SEED_COUNT = 24;
 const SEARCH_K = 5;
 // Bucket width for the LSH hashes. The cloud spans about 2 per axis, so a few buckets per hash.
 const LSH_WIDTH = 1;
+// DiskANN reads this many neighbourhoods per round. The paper uses 2 to 8.
+const DISK_W = 4;
 const FLASH_MS = 1000;
 // Covers the top finite speed down to 15 fps.
 const MAX_STEPS_PER_FRAME = 160;
 const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)");
 const DARK_SCHEME = matchMedia("(prefers-color-scheme: dark)");
 // One trailing tag comment such as // @step:x @lsh:new, with the tags in any order.
-const MARKER_PATTERN = /\s*\/\/((?: @(?:step|lsh):\w+)+)\s*$/;
+const MARKER_PATTERN = /\s*\/\/((?: @(?:step|lsh|disk):\w+)+)\s*$/;
 const STEP_TAG = /@step:(\w+)/;
-const LSH_TAG = /@lsh:(new|skip)/;
-const LSH_LABELS = { new: "LSH only", skip: "replaced by LSH seed" };
+const MODE_TAG = /@(lsh|disk):(new|skip)/;
+const MODE_LABELS = {
+  "lsh-new": "LSH only", "lsh-skip": "replaced by LSH seed", "disk-new": "DiskANN only", "disk-skip": "replaced by BeamSearch",
+};
+const MODE_HINTS = {
+  lsh: ["Off. Searches start from the top entry point.", "On. Searches start from a hashed bucket."],
+  disk: ["Off. Searches use the HNSW layers.", "On. BeamSearch on layer 0 starts from a sampled bucket."],
+};
 const TRACE_HOOK = /^\s*yield trace_event\(/;
 const TOKEN_PATTERN = /(\/\/.*$)|("(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)|\b(const|let|function|class|return|yield|for|of|if|else|while|new|this|break|continue|null|get)\b|\b(\d+(?:\.\d+)?)\b/g;
 const TOKEN_CLASSES = ["tok-comment", "tok-string", "tok-keyword", "tok-number"];
@@ -1094,7 +1220,7 @@ const SKIPPED_ALPHA = 0.35;
 const by_id = (id) => document.getElementById(id);
 const app = {
   index: null, clusters: [], point_rng: null, overlay: create_overlay(), truth: [], hover: null, colours: {},
-  layout: [], fit: null, frame: null, projected: [], lsh_on: false, lsh: null, cost_samples: [],
+  layout: [], fit: null, frame: null, projected: [], mode: "standard", lsh: null, cost_samples: [],
 };
 const player = { gen: null, playing: false, budget: 0, last_tick: null, on_done: null };
 const code_pane = { marker_lines: new Map(), active: null };
@@ -1740,7 +1866,8 @@ function colour_line(text) {
 
 function line_tags(line) {
   const tags = line.match(MARKER_PATTERN)?.[1] ?? "";
-  return { text: line.replace(MARKER_PATTERN, ""), step: tags.match(STEP_TAG)?.[1], lsh: tags.match(LSH_TAG)?.[1] };
+  const mode = tags.match(MODE_TAG);
+  return { text: line.replace(MARKER_PATTERN, ""), step: tags.match(STEP_TAG)?.[1], tag: mode ? `${mode[1]}-${mode[2]}` : undefined };
 }
 
 function find_marker_lines(tagged) {
@@ -1751,10 +1878,10 @@ function find_marker_lines(tagged) {
   return marker_lines;
 }
 
-// Only the first line of each run of LSH lines carries the label, so a block reads as one change.
-function render_line({ text, lsh }, i, tagged) {
-  const classes = ["line", TRACE_HOOK.test(text) && "is-hook", lsh && `is-lsh-${lsh}`].filter(Boolean).join(" ");
-  const label = lsh && tagged[i - 1]?.lsh !== lsh ? ` data-lsh="${LSH_LABELS[lsh]}"` : "";
+// Only the first line of each run of mode lines carries the label, so a block reads as one change.
+function render_line({ text, tag }, i, tagged) {
+  const classes = ["line", TRACE_HOOK.test(text) && "is-hook", tag && `is-${tag}`].filter(Boolean).join(" ");
+  const label = tag && tagged[i - 1]?.tag !== tag ? ` data-tag="${MODE_LABELS[tag]}"` : "";
   return `<span class="${classes}"${label}>${colour_line(text) || " "}</span>`;
 }
 
@@ -1904,7 +2031,8 @@ function bind_buttons() {
   });
   by_id("reset").textContent = `Reset to ${SEED_COUNT} seed points`;
   by_id("reset").addEventListener("click", reset);
-  by_id("lsh-toggle").addEventListener("click", toggle_lsh);
+  by_id("lsh-toggle").addEventListener("click", () => toggle_mode("lsh"));
+  by_id("disk-toggle").addEventListener("click", () => toggle_mode("disk"));
 }
 
 function set_busy(busy) {
@@ -2018,6 +2146,7 @@ function show_search_stats(results, cost, other = null) {
   const total = app.index.points.length;
   const found = `${hits} of ${app.truth.length} true neighbours found`;
   const recall = [`Recall at ${SEARCH_K}`, found];
+  if (app.mode === "disk") return show_disk_stats(recall, cost, other, total);
   const scaling = scaling_rows((other ?? cost).distances, total, other !== null);
   if (!other) {
     fill_stats("search-stats", [recall, ["Distance computations", `${cost.distances} of ${total}. Brute force needs all ${total}.`], ...scaling.rows]);
@@ -2034,6 +2163,20 @@ function show_search_stats(results, cost, other = null) {
   const lsh_cost = `${count_noun(cost.hops, "hop")} and ${count_noun(cost.distances, "distance computation")}`;
   const standard_cost = `${count_noun(other.hops, "hop")} and ${count_noun(other.distances, "distance computation")}`;
   return `${found}. LSH used ${lsh_cost}. Standard used ${standard_cost}. ${scaling.text}`;
+}
+
+// cost is the entry table run and medoid the same BeamSearch started from the medoid.
+// The HNSW scaling fit stays out, since its samples come from the layered search.
+function show_disk_stats(recall, cost, medoid, total) {
+  const spend = (run) => `${count_noun(run.rounds, "round")} and ${count_noun(run.distances, "distance computation")}`;
+  fill_stats("search-stats", [
+    recall,
+    ["BeamSearch rounds", `entry table ${cost.rounds}, medoid ${medoid.rounds}. Each round reads ${DISK_W} nodes at most.`],
+    ["Distance computations", `entry table ${cost.distances}, medoid ${medoid.distances}, brute force ${total}`],
+    ["Counted", "The sampled bucket scan counts. Hashing does not, and the medoid is found once per graph."],
+    ["Bucket", app.overlay.lsh ? describe_bucket(app.overlay.lsh) : "none, the graph is empty"],
+  ]);
+  return `${recall[1]}. The entry table start used ${spend(cost)}. The medoid start used ${spend(medoid)}.`;
 }
 
 // ---- Actions ----
@@ -2058,18 +2201,21 @@ function run_insert(coords, cluster) {
   });
 }
 
-// The counters are read before search_cost reruns the standard search and overwrites them.
+// The counters are read before search_cost reruns the plain search and overwrites them.
+// The plain search is standard HNSW, or in DiskANN mode BeamSearch from the medoid with ef as L.
 // samples is held so an ef change during the animation drops this run from the new fit.
 function run_search(query) {
   clear_trace_view();
   const ef = Number(by_id("param-ef").value);
-  const lsh = app.lsh_on ? app.lsh : null;
+  const disk = app.mode === "disk" ? { W: DISK_W } : null;
+  const lsh = app.mode === "standard" ? null : app.lsh;
   const samples = app.cost_samples;
-  start_trace(app.index.search(query, SEARCH_K, ef, lsh), (results) => {
-    const cost = { distances: app.index.distance_count, hops: app.index.hop_count };
-    const other = lsh ? search_cost(app.index, query, SEARCH_K, ef, null) : null;
+  const gen = disk ? app.index.disk_search(query, SEARCH_K, ef, DISK_W, lsh) : app.index.search(query, SEARCH_K, ef, lsh);
+  start_trace(gen, (results) => {
+    const cost = { distances: app.index.distance_count, hops: app.index.hop_count, rounds: app.index.round_count };
+    const other = lsh ? search_cost(app.index, query, SEARCH_K, ef, null, disk) : null;
     const sample = { n: app.index.points.length, d: (other ?? cost).distances };
-    if (sample.d < sample.n) samples.push(sample);
+    if (!disk && sample.d < sample.n) samples.push(sample);
     app.truth = brute_force_knn(app.index.points, query, SEARCH_K);
     announce(`Search done. ${show_search_stats(results, cost, other)}`);
   });
@@ -2128,26 +2274,32 @@ function rebuild_lsh_table() {
   request_draw();
 }
 
-function describe_lsh_mode() {
-  if (!app.lsh_on) return "LSH entry point off. Searches start from the top entry point.";
+function describe_mode() {
+  if (app.mode === "standard") return "Entry point modes off. Searches start from the top entry point.";
+  if (app.mode === "disk") return `DiskANN entry point on. BeamSearch on layer 0 reads ${DISK_W} nodes per round from a sampled bucket, else the medoid.`;
   const layer = seed_layer(app.index.layer_sizes);
   const start = layer === null ? "use the top entry point while there is one layer" : `start from a bucket on layer ${layer}`;
   return `LSH entry point on. Searches ${start}.`;
 }
 
+// The two entry point modes exclude each other. Pressing the active one returns to standard search.
 // Finishes any run first, so its stats and highlights belong to the mode it ran in.
-function toggle_lsh() {
+function toggle_mode(mode) {
   finish_trace();
-  app.lsh_on = !app.lsh_on;
-  by_id("lsh-toggle").setAttribute("aria-pressed", String(app.lsh_on));
-  by_id("lsh-toggle-hint").textContent = app.lsh_on ? "On. Searches start from a hashed bucket." : "Off. Searches start from the top entry point.";
-  by_id("param-lsh-k").disabled = !app.lsh_on;
-  by_id("code-pane").classList.toggle("lsh-on", app.lsh_on);
+  app.mode = app.mode === mode ? "standard" : mode;
+  for (const name of ["lsh", "disk"]) {
+    const on = app.mode === name;
+    by_id(`${name}-toggle`).setAttribute("aria-pressed", String(on));
+    by_id(`${name}-toggle-hint`).textContent = MODE_HINTS[name][Number(on)];
+    by_id("code-pane").classList.toggle(`${name}-on`, on);
+  }
+  by_id("param-lsh-k").disabled = app.mode === "standard";
   clear_trace_view();
-  const message = describe_lsh_mode();
+  const message = describe_mode();
   by_id("trace-caption").textContent = message;
   announce(message);
-  if (app.lsh_on) scroll_line_into_view(by_id("code-lines").querySelector(".is-lsh-skip"));
+  const skipped = by_id("code-lines").querySelector(`.is-${app.mode}-skip`);
+  if (skipped) scroll_line_into_view(skipped);
   request_draw();
 }
 
