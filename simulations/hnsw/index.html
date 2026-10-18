@@ -1,0 +1,2081 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HNSW Explorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Build and search a hierarchical navigable small world graph one step at a time, with the running code beside it.">
+<style>
+:root {
+  color-scheme: light;
+  --page-max: 1440px;
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --surface-2: #f5f7f9;
+  --border: #cbd3db;
+  --text: #19212a;
+  --muted: #56626e;
+  --canvas: #fbf8f1;
+  --slab: #f2ede2;
+  --slab-edge: #cdc4b2;
+  --node: #1f2d52;
+  --edge: #a3a9b0;
+  --connector: #bdb5a6;
+  --trace: #c25418;
+  --found: #158a6e;
+  --prune: #c42f2a;
+  --result: #1d5cbd;
+  --focus: #1d5cbd;
+  --code-bg: #f7f9fb;
+  --code-keyword: #6a3fb0;
+  --code-string: #1c7a45;
+  --code-number: #a5520c;
+  --code-comment: #6b7682;
+  --code-hook: #6a7580;
+  --code-active: #dce9fb;
+  --lsh: #a3238f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #11151a;
+    --surface: #181d23;
+    --surface-2: #1e242b;
+    --border: #313a44;
+    --text: #e2e7ec;
+    --muted: #9ca8b4;
+    --canvas: #191815;
+    --slab: #24221e;
+    --slab-edge: #4a463e;
+    --node: #b9c8ee;
+    --edge: #6a7079;
+    --connector: #5b564c;
+    --trace: #f08c4e;
+    --found: #46c9a5;
+    --prune: #ff6d64;
+    --result: #6ea8ff;
+    --focus: #6ea8ff;
+    --code-bg: #14191e;
+    --code-keyword: #c3a6ff;
+    --code-string: #7fd3a0;
+    --code-number: #f2b072;
+    --code-comment: #8994a0;
+    --code-hook: #808b97;
+    --code-active: #23354d;
+    --lsh: #f07fdc;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #11151a;
+  --surface: #181d23;
+  --surface-2: #1e242b;
+  --border: #313a44;
+  --text: #e2e7ec;
+  --muted: #9ca8b4;
+  --canvas: #191815;
+  --slab: #24221e;
+  --slab-edge: #4a463e;
+  --node: #b9c8ee;
+  --edge: #6a7079;
+  --connector: #5b564c;
+  --trace: #f08c4e;
+  --found: #46c9a5;
+  --prune: #ff6d64;
+  --result: #6ea8ff;
+  --focus: #6ea8ff;
+  --code-bg: #14191e;
+  --code-keyword: #c3a6ff;
+  --code-string: #7fd3a0;
+  --code-number: #f2b072;
+  --code-comment: #8994a0;
+  --code-hook: #808b97;
+  --code-active: #23354d;
+  --lsh: #f07fdc;
+}
+
+html, body { height: 100%; }
+body {
+  margin: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-block: 12px;
+  /* The third term centres the page once the viewport passes --page-max. */
+  padding-left: max(16px, env(safe-area-inset-left, 0px), calc((100% - var(--page-max)) / 2));
+  padding-right: max(16px, env(safe-area-inset-right, 0px), calc((100% - var(--page-max)) / 2));
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+*, *::before, *::after { box-sizing: inherit; }
+h1, h2, p { margin: 0; }
+h1 { font-size: 1.25rem; letter-spacing: -0.01em; }
+h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.subtitle { color: var(--muted); }
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.site-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+
+.layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px 16px;
+}
+.column { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+
+.controls { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+fieldset {
+  margin: 0; min-width: 0; flex: 1 1 200px;
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 8px 6px; background: var(--surface);
+}
+legend { padding: 0 4px; font-weight: 600; font-size: 0.85rem; }
+.slider-row { --output-width: 2.5rem; display: grid; grid-template-columns: fit-content(calc(100% - 3.5rem - var(--output-width))) minmax(0, 1fr) var(--output-width); align-items: center; gap: 0 8px; margin-bottom: 2px; }
+#playback-settings .slider-row { --output-width: 3.5rem; }
+.slider-row label { font-size: 0.85rem; }
+.slider-row input { width: 100%; min-width: 0; accent-color: var(--result); }
+.slider-row output { font-variant-numeric: tabular-nums; text-align: right; }
+.button-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.hint { color: var(--muted); font-size: 0.8rem; margin-top: 4px; }
+.coords { display: flex; gap: 6px; flex-wrap: wrap; }
+.coords label { display: flex; align-items: center; gap: 4px; }
+.coords input { width: 4.8rem; font: inherit; padding: 3px 5px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; }
+.coords input[aria-invalid="true"] { border-color: var(--prune); box-shadow: inset 0 0 0 1px var(--prune); }
+.error { color: var(--prune); font-size: 0.85rem; min-height: 0; margin-top: 4px; }
+.error:empty { display: none; }
+
+button {
+  font: inherit; color: var(--text); background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px; cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--muted); }
+button.primary { background: var(--text); color: var(--surface); border-color: var(--text); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Text rows never shrink in the column, so wrapped text pushes the canvas down instead of overlapping.
+   The caption reserves two lines, so most steps do not shift the layout. */
+.caption-bar {
+  flex: none; border-left: 3px solid var(--focus); background: var(--surface);
+  padding: 6px 10px; border-radius: 0 4px 4px 0; min-height: calc(2.9em + 12px);
+}
+.hover-info { flex: none; color: var(--muted); font-size: 0.85rem; min-height: 1.3em; }
+
+/* One canvas holds the whole layer stack and takes the column height left after the controls. */
+.stack-canvas {
+  display: block; width: 100%; flex: 1 1 0; min-height: 12rem;
+  background: var(--canvas); border: 1px solid var(--border); border-radius: 6px;
+  touch-action: pan-y; cursor: grab;
+}
+
+.code-pane {
+  flex: 1; min-height: 0; margin: 0; overflow: auto; position: relative;
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 0; tab-size: 2;
+  font: 12.5px/1.5 ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+}
+.code-pane code { display: block; counter-reset: line; min-width: max-content; }
+.line { display: block; padding-right: 12px; white-space: pre; border-left: 3px solid transparent; }
+.line::before {
+  counter-increment: line; content: counter(line);
+  display: inline-block; width: 3.5ch; margin-right: 1.5ch; padding-left: 4px;
+  text-align: right; color: var(--muted); user-select: none;
+}
+.line.is-hook { color: var(--code-hook); }
+.line.is-hook span { color: inherit; }
+.line.is-active { background: var(--code-active); box-shadow: inset 4px 0 0 var(--focus); font-weight: 600; }
+.line.is-active.is-hook { color: var(--text); }
+/* LSH lines carry a gutter bar in every mode. The label sits on the first line of each tagged run. */
+.line.is-lsh-new, .line.is-lsh-skip { border-left-color: var(--lsh); }
+.line[data-lsh]::after {
+  content: attr(data-lsh); display: inline-block; margin-left: 2ch; padding: 0 5px;
+  border: 1px solid var(--lsh); border-radius: 3px; color: var(--lsh);
+  font: 600 0.8em/1.4 system-ui, sans-serif; font-style: normal;
+}
+.code-pane:not(.lsh-on) .is-lsh-new { opacity: 0.55; }
+.lsh-on .is-lsh-skip { text-decoration: line-through; opacity: 0.6; }
+.lsh-on.lsh-fallback .is-lsh-skip { text-decoration: none; opacity: 1; }
+#lsh-toggle[aria-pressed="true"] { background: var(--lsh); color: var(--surface); border-color: var(--lsh); }
+.tok-keyword { color: var(--code-keyword); }
+.tok-string { color: var(--code-string); }
+.tok-number { color: var(--code-number); }
+.tok-comment { color: var(--code-comment); font-style: italic; }
+
+.card { border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 6px 10px; min-width: 0; }
+.stats-row { flex: none; display: flex; flex-wrap: wrap; gap: 2px 16px; }
+.stats { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 0; font-size: 0.85rem; }
+.stats div { display: flex; gap: 5px; min-width: 0; }
+.stats dt { color: var(--muted); }
+.stats dd { margin: 0; font-variant-numeric: tabular-nums; }
+.legend { list-style: none; margin: 2px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 2px 10px; font-size: 0.8rem; }
+.legend li { display: flex; align-items: center; gap: 6px; }
+.legend svg { flex: none; width: 34px; height: 14px; overflow: visible; }
+.sw-edge { stroke: var(--edge); fill: none; }
+.sw-trace { stroke: var(--trace); fill: none; }
+.sw-found { stroke: var(--found); fill: none; }
+.sw-prune { stroke: var(--prune); fill: none; }
+.sw-connector { stroke: var(--connector); fill: none; }
+.sw-fill-edge { fill: var(--edge); }
+.sw-fill-trace { fill: var(--trace); }
+.sw-fill-found { fill: var(--found); }
+.sw-fill-node { fill: var(--node); }
+.sw-lsh { stroke: var(--lsh); fill: none; }
+.sw-slab { fill: var(--slab); stroke: var(--slab-edge); }
+
+/* Desktop fits one screen: long hints stay for screen readers only and controls pack tighter. */
+@media not all and (max-width: 860px) {
+  .hint.desktop-sr {
+    position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap; margin: 0;
+  }
+  .controls button { padding: 2px 10px; line-height: 1.3; }
+  .controls .button-row { margin-top: 4px; gap: 4px 6px; }
+  .coords input { padding: 1px 5px; }
+  body { padding-block: 8px; gap: 8px; }
+  .layout { row-gap: 8px; }
+  .column { gap: 6px; }
+  .caption-bar { padding-block: 4px; min-height: calc(2.9em + 8px); }
+  .stats-row, .stats { row-gap: 0; line-height: 1.3; }
+}
+
+@media (max-width: 860px) {
+  html, body { height: auto; }
+  body {
+    min-height: 100%;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+  .slider-row { grid-template-columns: minmax(0, 1fr) var(--output-width); }
+  .slider-row label { grid-column: 1 / -1; }
+  .stack-canvas { flex: none; aspect-ratio: 1 / 1; }
+  .code-pane { flex: none; height: 28rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body>
+<header class="site-header">
+  <h1>HNSW Explorer</h1>
+  <p class="subtitle">Build and search a hierarchical navigable small world graph one step at a time.</p>
+  <button id="lsh-toggle" type="button" aria-pressed="false" aria-describedby="lsh-toggle-hint">LSH entry point</button>
+  <p id="lsh-toggle-hint" class="hint">Off. Searches start from the top entry point.</p>
+</header>
+
+<main class="layout">
+    <form id="controls" class="controls" aria-label="Graph, point, search and playback settings" novalidate>
+      <fieldset id="graph-settings">
+        <legend>Graph</legend>
+        <div class="slider-row">
+          <label for="param-m">Links per node (M)</label>
+          <input id="param-m" type="range" min="3" max="16" step="1" value="5" aria-describedby="param-m-hint">
+          <output id="param-m-value" for="param-m">5</output>
+        </div>
+        <div class="slider-row">
+          <label for="param-ef-construction">Build breadth (efC)</label>
+          <input id="param-ef-construction" type="range" min="4" max="64" step="1" value="24" aria-describedby="param-m-hint">
+          <output id="param-ef-construction-value" for="param-ef-construction">24</output>
+        </div>
+        <p id="param-m-hint" class="hint desktop-sr">Changing either setting rebuilds the graph from the same points. efC is efConstruction.</p>
+        <div class="button-row">
+          <button id="reset" type="button">Reset to seed points</button>
+        </div>
+      </fieldset>
+
+      <fieldset id="point-settings">
+        <legend>Point</legend>
+        <div class="coords">
+          <label for="coord-x">x <input id="coord-x" type="number" min="-1" max="1" step="0.05" value="0.2" inputmode="decimal" aria-describedby="coord-hint coord-error"></label>
+          <label for="coord-y">y <input id="coord-y" type="number" min="-1" max="1" step="0.05" value="-0.1" inputmode="decimal" aria-describedby="coord-hint coord-error"></label>
+          <label for="coord-z">z <input id="coord-z" type="number" min="-1" max="1" step="0.05" value="0.3" inputmode="decimal" aria-describedby="coord-hint coord-error"></label>
+        </div>
+        <p id="coord-hint" class="hint desktop-sr">Each coordinate runs from -1 to 1.</p>
+        <p id="coord-error" class="error" aria-live="polite"></p>
+        <div class="button-row">
+          <button id="add-manual" type="submit" class="primary">Add node here</button>
+          <button id="add-random" type="button">Add random node</button>
+          <button id="search-manual" type="button">Search here</button>
+          <button id="search-random" type="button">Search random point</button>
+        </div>
+      </fieldset>
+
+      <fieldset id="search-settings">
+        <legend>Search</legend>
+        <div class="slider-row">
+          <label for="param-ef">Search breadth (ef)</label>
+          <input id="param-ef" type="range" min="1" max="64" step="1" value="12" aria-describedby="param-ef-hint">
+          <output id="param-ef-value" for="param-ef">12</output>
+        </div>
+        <p id="param-ef-hint" class="hint desktop-sr">Search returns the 5 nearest nodes (k = 5) and uses at least k as breadth.</p>
+        <div class="slider-row">
+          <label for="param-lsh-k">Hash count (k)</label>
+          <input id="param-lsh-k" type="range" min="1" max="4" step="1" value="2" disabled aria-describedby="param-lsh-hint">
+          <output id="param-lsh-k-value" for="param-lsh-k">2</output>
+        </div>
+        <p id="param-lsh-hint" class="hint desktop-sr">Used in LSH entry point mode. More hashes make smaller buckets. Bucket width is w = 1.</p>
+      </fieldset>
+
+      <fieldset id="playback-settings">
+        <legend>Playback</legend>
+        <div class="slider-row">
+          <label for="param-speed">Speed (steps per second)</label>
+          <input id="param-speed" type="range" min="0" max="12" step="1" value="3" aria-valuetext="8 steps per second">
+          <output id="param-speed-value" for="param-speed">8</output>
+        </div>
+        <div class="button-row">
+          <button id="play-pause" type="button" disabled>Pause</button>
+          <button id="step" type="button" disabled>Step</button>
+          <button id="finish" type="button" disabled>Finish</button>
+        </div>
+        <p id="motion-note" class="hint" hidden>Your system asks for reduced motion, so each run finishes at once.</p>
+      </fieldset>
+    </form>
+
+  <section class="column" aria-labelledby="viz-title">
+    <h2 id="viz-title">Graph layers</h2>
+    <p id="trace-caption" class="caption-bar">Add a node or run a search to watch the algorithm work.</p>
+    <div class="stats-row">
+      <dl id="index-stats" class="stats" aria-label="Index"></dl>
+      <dl id="search-stats" class="stats" aria-label="Last search"></dl>
+    </div>
+    <p id="hover-info" class="hover-info">Point at a node to see its details. Drag the layers to rotate them. Click them, then scroll to zoom.</p>
+    <canvas id="layer-canvas" class="stack-canvas" tabindex="0" role="img" aria-label="Graph layers"></canvas>
+  </section>
+
+  <section class="column" aria-labelledby="code-title">
+    <h2 id="code-title">The code running now</h2>
+    <pre id="code-pane" class="code-pane" tabindex="0" aria-label="HNSW source code. The highlighted line is the step shown in the layer views."><code id="code-lines"></code></pre>
+    <div class="card">
+        <h2 id="legend-title">Legend</h2>
+        <ul class="legend" aria-labelledby="legend-title">
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><circle class="sw-fill-node" cx="17" cy="7" r="3.5"/></svg>Node</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><line class="sw-edge" x1="5" y1="7" x2="29" y2="7"/><path class="sw-fill-edge" d="M2 7 L6 5 L6 9 Z M32 7 L28 5 L28 9 Z"/></svg>Two-way link</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><line class="sw-edge" x1="2" y1="7" x2="28" y2="7" stroke-dasharray="3 2"/><path class="sw-fill-edge" d="M32 7 L28 5 L28 9 Z"/></svg>One-way link</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><line class="sw-connector" x1="17" y1="0" x2="17" y2="14" stroke-dasharray="2 3"/></svg>Same node, next layer</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><line class="sw-trace" x1="2" y1="7" x2="26" y2="7" stroke-width="2.2"/><path class="sw-fill-trace" d="M33 7 L25 3 L25 11 Z"/></svg>Greedy step</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><line class="sw-trace" x1="17" y1="0" x2="17" y2="8" stroke-width="1.8" stroke-dasharray="3 2"/><path class="sw-fill-trace" d="M17 14 L13.5 7.5 L20.5 7.5 Z"/></svg>Drop a layer</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><line class="sw-trace" x1="2" y1="7" x2="32" y2="7"/></svg>Explored</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><circle class="sw-fill-node" cx="17" cy="7" r="3"/><circle class="sw-trace" cx="17" cy="7" r="6" stroke-width="1.3" stroke-dasharray="1.5 2"/></svg>In list (size ef)</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><circle class="sw-trace" cx="17" cy="7" r="6" stroke-width="1.8"/></svg>Current node</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><circle class="sw-fill-found" cx="17" cy="7" r="3.5"/><circle class="sw-found" cx="17" cy="7" r="6.5" stroke-width="1.4" stroke-dasharray="1.5 2"/></svg>Returned best K</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><path class="sw-fill-found" d="M17 0.5 L18.53 4.9 L23.18 4.99 L19.47 7.8 L20.82 12.26 L17 9.6 L13.18 12.26 L14.53 7.8 L10.82 4.99 L15.47 4.9 Z"/></svg>Query or new point</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><circle class="sw-trace" cx="17" cy="7" r="5.5" stroke-width="1.6"/></svg>Entry point</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><circle class="sw-prune" cx="17" cy="7" r="5.5" stroke-width="1.4" stroke-dasharray="1 2.5"/></svg>True neighbour missed</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><line class="sw-found" x1="2" y1="7" x2="32" y2="7" stroke-width="1.8"/></svg>Link just added</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><line class="sw-prune" x1="2" y1="7" x2="32" y2="7" stroke-width="1.5" stroke-dasharray="3 2"/></svg>Link just pruned</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><circle class="sw-fill-node" cx="17" cy="7" r="3"/><rect class="sw-lsh" x="11" y="1" width="12" height="12" stroke-width="1.4"/></svg>LSH bucket member</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><circle class="sw-fill-node" cx="17" cy="7" r="3"/><path class="sw-lsh" d="M17 0 L24 7 L17 14 L10 7 Z" stroke-width="1.8"/></svg>LSH seed</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><rect class="sw-slab" x="3" y="3" width="28" height="8" opacity="0.35"/></svg>Skipped by LSH</li>
+        </ul>
+    </div>
+  </section>
+</main>
+<p id="status" class="visually-hidden" role="status" aria-live="polite"></p>
+
+<script id="data-src">
+// mulberry32: a tiny seeded PRNG, so one seed always replays the same points.
+function make_rng(seed) {
+  let state = seed >>> 0;
+  return function next() {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(state ^ (state >>> 15), state | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Box-Muller turns two uniform draws into one standard normal draw.
+function gaussian(rng) {
+  const u = 1 - rng();
+  const v = rng();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+const CLUSTER_CENTRES = [
+  [-0.5, -0.45, 0.45],
+  [0.5, 0.45, -0.4],
+  [0.45, -0.5, -0.45],
+  [-0.45, 0.5, -0.35],
+];
+const CLUSTER_SPREAD = 0.2;
+
+function clamp(value, low, high) {
+  return Math.min(high, Math.max(low, value));
+}
+
+function sample_clustered_point(rng) {
+  const cluster = Math.floor(rng() * CLUSTER_CENTRES.length);
+  const coords = CLUSTER_CENTRES[cluster].map((centre) => clamp(centre + CLUSTER_SPREAD * gaussian(rng), -1, 1));
+  return { coords, cluster };
+}
+
+function seed_points(count, seed) {
+  const rng = make_rng(seed);
+  return Array.from({ length: count }, () => sample_clustered_point(rng));
+}
+</script>
+
+<script id="hnsw-src">
+// HNSW after Malkov and Yashunin (2016). insert and search are generators:
+// each yield reports one step to the viewer and pauses until it asks for the next.
+
+function distance(a, b) {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+function by_distance(a, b) {
+  return a.dist - b.dist;
+}
+
+function node_ids(results) {
+  return results.map((result) => result.node);
+}
+
+// Keeps a list sorted by dist, like Python's bisect.insort.
+function insert_sorted(items, item) {
+  const index = items.findIndex((other) => other.dist > item.dist);
+  if (index === -1) items.push(item);
+  else items.splice(index, 0, item);
+}
+
+// Each level up is M times less likely than the one below.
+function random_level(rng, mL) {
+  return Math.floor(-Math.log(1 - rng()) * mL);
+}
+
+// Runs a trace generator with no viewer and returns its result.
+function run_to_end(gen) {
+  let step = gen.next();
+  while (!step.done) step = gen.next();
+  return step.value;
+}
+
+function trace_event(type, line, fields) {
+  return { type, line, ...fields };
+}
+
+class HnswIndex {
+  constructor({ M, ef_construction, seed }) {
+    this.seed = seed;
+    this.points = [];
+    this.configure({ M, ef_construction });
+  }
+
+  // Empties the graph and reseeds level draws, so a rebuild repeats exactly.
+  configure({ M, ef_construction }) {
+    this.M = M;
+    this.m_max0 = 2 * M;
+    this.mL = 1 / Math.log(M);
+    this.ef_construction = ef_construction;
+    this.levels = [];
+    this.layers = [];
+    this.entry_point = null;
+    this.distance_count = 0;
+    this.hop_count = 0;
+    this.level_rng = make_rng(this.seed);
+  }
+
+  rebuild(options) {
+    const points = this.points;
+    this.points = [];
+    this.configure(options);
+    for (const point of points) run_to_end(this.insert(point));
+  }
+
+  get layer_count() {
+    return this.layers.length;
+  }
+
+  max_degree(layer) {
+    return layer === 0 ? this.m_max0 : this.M;
+  }
+
+  neighbours(node, layer) {
+    return this.layers[layer].get(node);
+  }
+
+  // Counts query-to-node distances, the cost a search pays.
+  count_distance(query, node) {
+    this.distance_count += 1;
+    return distance(query, this.points[node]);
+  }
+
+  *insert(point) {
+    const node = this.points.length;
+    this.points.push(point);
+    this.distance_count = 0;
+    const level = random_level(this.level_rng, this.mL); // @step:draw_level
+    this.levels.push(level);
+    yield trace_event("begin", "draw_level", { op: "insert", query: point, node, level });
+    while (this.layers.length <= level) {
+      this.layers.push(new Map()); // @step:new_layer
+      yield trace_event("new_layer", "new_layer", { layer: this.layers.length - 1 });
+    }
+    for (let layer = 0; layer <= level; layer += 1) this.layers[layer].set(node, []);
+    if (this.entry_point !== null) yield* this.link_into_graph(node, level);
+    if (this.entry_point === null || level > this.levels[this.entry_point]) {
+      this.entry_point = node; // @step:set_entry
+      yield trace_event("set_entry_point", "set_entry", { node, layer: level });
+    }
+    yield trace_event("done", "insert_done", { op: "insert", node, results: [] }); // @step:insert_done
+    return node;
+  }
+
+  *link_into_graph(node, level) {
+    const point = this.points[node];
+    const top_level = this.levels[this.entry_point];
+    let entry_ids = yield* this.greedy_descend(point, [this.entry_point], top_level, level + 1);
+    const ef = Math.max(this.ef_construction, this.M);
+    for (let layer = Math.min(top_level, level); layer >= 0; layer -= 1) {
+      const found = yield* this.search_layer(point, entry_ids, ef, layer);
+      yield* this.connect(node, found, layer);
+      entry_ids = node_ids(found);
+    }
+  }
+
+  // lsh is an optional LshTable. Without it the search starts at the top entry point.
+  *search(query, k, ef, lsh = null) {
+    this.distance_count = 0;
+    this.hop_count = 0;
+    yield trace_event("begin", "begin_search", { op: "search", query, k }); // @step:begin_search
+    let results = [];
+    if (this.entry_point !== null) {
+      const top_level = this.levels[this.entry_point];
+      let start = { node: this.entry_point, layer: top_level }; // @lsh:skip
+      if (lsh) start = (yield* this.lsh_seed(query, top_level, lsh)) ?? start; // @lsh:new
+      const entry_ids = yield* this.greedy_descend(query, [start.node], start.layer, 1);
+      const found = yield* this.search_layer(query, entry_ids, Math.max(ef, k), 0);
+      results = found.slice(0, k);
+    }
+    yield trace_event("done", "search_done", { op: "search", results }); // @step:search_done
+    return results;
+  }
+
+  // Hashes the query into a bucket on a middle layer and seeds the descent // @lsh:new
+  // from its closest member. The scan counts as distance work. Hashing does not. // @lsh:new
+  *lsh_seed(query, top_level, table) { // @lsh:new
+    const layer = seed_layer(top_level); // @lsh:new
+    table.sync(layer, this.layers[layer], this.points); // @lsh:new
+    const key = table.hash_key(query); // @step:lsh_hash @lsh:new
+    const members = table.bucket(key); // @lsh:new
+    const skipped = layer === null ? [] : Array.from({ length: top_level - layer }, (_, i) => top_level - i); // @lsh:new
+    yield trace_event("lsh_hash", "lsh_hash", { layer, key, members: members.slice(), skipped }); // @lsh:new
+    if (layer === null || members.length === 0) { // @lsh:new
+      const reason = layer === null ? "one_layer" : "empty_bucket"; // @lsh:new
+      yield trace_event("lsh_fallback", "lsh_fallback", { layer, key, reason }); // @step:lsh_fallback @lsh:new
+      return null; // @lsh:new
+    } // @lsh:new
+    let seed = null; // @lsh:new
+    for (const node of members) { // @lsh:new
+      const dist = this.count_distance(query, node); // @step:lsh_scan @lsh:new
+      yield trace_event("visit", "lsh_scan", { layer, node, dist }); // @lsh:new
+      if (seed === null || dist < seed.dist) seed = { node, dist }; // @lsh:new
+    } // @lsh:new
+    yield trace_event("lsh_seed", "lsh_seed", { layer, node: seed.node, dist: seed.dist }); // @step:lsh_seed @lsh:new
+    return { node: seed.node, layer }; // @lsh:new
+  } // @lsh:new
+
+  // Walks down the upper layers keeping only the single closest node (ef = 1).
+  *greedy_descend(query, entry_ids, top_level, bottom_level) {
+    for (let layer = top_level; layer >= bottom_level; layer -= 1) {
+      const found = yield* this.search_layer(query, entry_ids, 1, layer);
+      entry_ids = [found[0].node];
+    }
+    return entry_ids;
+  }
+
+  // Best-first search on one layer (algorithm 2). Returns up to ef nearest, closest first.
+  *search_layer(query, entry_ids, ef, layer) {
+    const visited = new Set(entry_ids); // @step:enter_layer
+    yield trace_event("enter_layer", "enter_layer", { layer, entry_ids: [...entry_ids], ef });
+    const candidates = [];
+    const results = [];
+    for (const node of entry_ids) {
+      const dist = this.count_distance(query, node); // @step:visit_entry
+      yield trace_event("visit", "visit_entry", { layer, node, dist });
+      insert_sorted(candidates, { node, dist });
+      insert_sorted(results, { node, dist }); // @step:push_entry
+      yield trace_event("candidate_push", "push_entry", { layer, node, dist });
+      yield trace_event("best_update", "push_entry", { layer, results: results.slice() });
+    }
+    while (candidates.length > 0) {
+      const nearest = candidates.shift(); // @step:pop_nearest
+      yield trace_event("candidate_pop", "pop_nearest", { layer, node: nearest.node, dist: nearest.dist });
+      if (nearest.dist > results.at(-1).dist) break;
+      this.hop_count += 1;
+      for (const neighbour of this.neighbours(nearest.node, layer)) {
+        if (visited.has(neighbour)) continue;
+        visited.add(neighbour);
+        const dist = this.count_distance(query, neighbour); // @step:visit_neighbour
+        yield trace_event("visit", "visit_neighbour", { layer, node: neighbour, dist });
+        if (results.length < ef || dist < results.at(-1).dist) {
+          insert_sorted(candidates, { node: neighbour, dist }); // @step:push_candidate
+          yield trace_event("candidate_push", "push_candidate", { layer, node: neighbour, dist });
+          insert_sorted(results, { node: neighbour, dist });
+          if (results.length > ef) results.pop(); // @step:update_best
+          yield trace_event("best_update", "update_best", { layer, results: results.slice() });
+        }
+      }
+    }
+    yield trace_event("layer_done", "layer_done", { layer, results: results.slice() }); // @step:layer_done
+    return results;
+  }
+
+  // Keeps a candidate only when it is closer to the base node than to every
+  // neighbour already kept, so links spread in different directions (algorithm 4).
+  select_neighbors_heuristic(candidates, count) {
+    const chosen = [];
+    const rejected = [];
+    for (const candidate of candidates) {
+      if (chosen.length < count && !this.is_covered(candidate, chosen)) chosen.push(candidate);
+      else rejected.push(candidate);
+    }
+    // keep_pruned: refill from the closest skipped ones, so every node stays reachable.
+    while (chosen.length < count && rejected.length > 0) chosen.push(rejected.shift());
+    return { chosen, rejected };
+  }
+
+  is_covered(candidate, chosen) {
+    const point = this.points[candidate.node];
+    return chosen.some((kept) => distance(point, this.points[kept.node]) < candidate.dist);
+  }
+
+  // Links the new node to its chosen neighbours both ways, then trims overfull lists.
+  *connect(node, found, layer) {
+    const { chosen, rejected } = this.select_neighbors_heuristic(found, this.M); // @step:select
+    yield trace_event("select_neighbors", "select", { layer, node, chosen: node_ids(chosen), rejected: node_ids(rejected) });
+    for (const neighbour of node_ids(chosen)) {
+      this.neighbours(node, layer).push(neighbour); // @step:link_out
+      yield trace_event("add_edge", "link_out", { layer, from: node, to: neighbour });
+      this.neighbours(neighbour, layer).push(node); // @step:link_back
+      yield trace_event("add_edge", "link_back", { layer, from: neighbour, to: node });
+      yield* this.shrink_connections(neighbour, layer);
+    }
+  }
+
+  // Trims an overfull list with the same heuristic, so out-degree stays capped.
+  *shrink_connections(owner, layer) {
+    const links = this.neighbours(owner, layer);
+    if (links.length <= this.max_degree(layer)) return;
+    const origin = this.points[owner];
+    const scored = links.map((node) => ({ node, dist: distance(origin, this.points[node]) })).sort(by_distance);
+    const kept = node_ids(this.select_neighbors_heuristic(scored, this.max_degree(layer)).chosen);
+    this.layers[layer].set(owner, kept); // @step:shrink
+    for (const dropped of links.filter((node) => !kept.includes(node))) {
+      yield trace_event("prune_edge", "shrink", { layer, from: owner, to: dropped });
+    }
+  }
+}
+
+// The LSH seed enters halfway down the hierarchy. A single layer leaves nothing to skip.
+function seed_layer(top_level) {
+  return top_level >= 1 ? Math.ceil(top_level / 2) : null;
+}
+
+// E2LSH p-stable hashing (Datar et al. 2004). Each of k hashes is floor((a . p + b) / w)
+// with Gaussian a and uniform b, and the k values join into one bucket key.
+class LshTable {
+  constructor({ k, w, seed }) {
+    const rng = make_rng(seed);
+    this.w = w;
+    this.projections = Array.from({ length: k }, () => [gaussian(rng), gaussian(rng), gaussian(rng)]);
+    this.offsets = Array.from({ length: k }, () => rng() * w);
+    this.layer = null;
+    this.layer_map = null;
+    this.size = 0;
+    this.buckets = new Map();
+  }
+
+  hash_key(point) {
+    const values = this.projections.map((a, i) =>
+      Math.floor((a[0] * point[0] + a[1] * point[1] + a[2] * point[2] + this.offsets[i]) / this.w));
+    return `(${values.join(", ")})`;
+  }
+
+  // Inserts and rebuilds never touch the table, so it rebuilds here when its layer has changed.
+  sync(layer, layer_map, points) {
+    const size = layer_map ? layer_map.size : 0;
+    if (layer === this.layer && layer_map === this.layer_map && size === this.size) return;
+    Object.assign(this, { layer, layer_map: layer_map ?? null, size, buckets: new Map() });
+    for (const node of layer_map?.keys() ?? []) {
+      const key = this.hash_key(points[node]);
+      if (!this.buckets.has(key)) this.buckets.set(key, []);
+      this.buckets.get(key).push(node);
+    }
+  }
+
+  bucket(key) {
+    return this.buckets.get(key) ?? [];
+  }
+}
+
+// Runs one search with no viewer and returns its cost, for side by side numbers.
+function search_cost(index, query, k, ef, table) {
+  const results = run_to_end(index.search(query, k, ef, table));
+  return { results, distances: index.distance_count, hops: index.hop_count };
+}
+
+function brute_force_knn(points, query, k) {
+  const scored = points.map((point, node) => ({ node, dist: distance(query, point) }));
+  return scored.sort(by_distance).slice(0, k);
+}
+
+function recall_at_k(found, truth) {
+  if (truth.length === 0) return 1;
+  const truth_ids = new Set(node_ids(truth));
+  return found.filter((result) => truth_ids.has(result.node)).length / truth.length;
+}
+
+globalThis.hnsw = {
+  distance, insert_sorted, random_level, run_to_end, HnswIndex, brute_force_knn, recall_at_k, LshTable, seed_layer, search_cost,
+};
+</script>
+
+<script id="trace-src">
+// Display state rebuilt from trace events, so drawing never reads generator internals.
+// path holds each layer's expanded nodes in order. explored holds [expanded, measured] pairs.
+function create_overlay(flashes = []) {
+  return {
+    op: null, query: null, node: null, k: null, layer: null, current: null, expanding: null,
+    candidates: [], results: [], best_per_layer: new Map(), ef_per_layer: new Map(), path: new Map(), explored: new Map(),
+    chosen: [], rejected: [], flashes, final: [], caption: "", lsh: null,
+  };
+}
+
+const OVERLAY_HANDLERS = {
+  begin(overlay, event) {
+    Object.assign(overlay, create_overlay(overlay.flashes), { op: event.op, query: event.query, node: event.node ?? null, k: event.k ?? null });
+  },
+  new_layer(overlay, event, now) {
+    overlay.flashes.push({ kind: "layer", layer: event.layer, born: now });
+  },
+  enter_layer(overlay, event) {
+    Object.assign(overlay, { layer: event.layer, current: null, expanding: null, candidates: [], results: [], chosen: [], rejected: [] });
+    overlay.ef_per_layer.set(event.layer, event.ef);
+    overlay.path.set(event.layer, []);
+    overlay.explored.set(event.layer, []);
+  },
+  visit(overlay, event) {
+    if (overlay.expanding !== null) overlay.explored.get(event.layer).push([overlay.expanding, event.node]);
+    overlay.current = event.node;
+  },
+  candidate_push(overlay, event) {
+    insert_sorted(overlay.candidates, { node: event.node, dist: event.dist });
+  },
+  // A pop farther than the worst kept result ends the layer, so it is no step.
+  candidate_pop(overlay, event) {
+    overlay.candidates = overlay.candidates.filter((item) => item.node !== event.node);
+    overlay.current = event.node;
+    const worst = overlay.results.at(-1);
+    if (worst && event.dist > worst.dist) return;
+    overlay.path.get(event.layer).push(event.node);
+    overlay.expanding = event.node;
+  },
+  best_update(overlay, event) {
+    overlay.results = event.results;
+  },
+  layer_done(overlay, event) {
+    overlay.results = event.results;
+    overlay.current = null;
+    overlay.best_per_layer.set(event.layer, event.results[0]);
+  },
+  select_neighbors(overlay, event) {
+    Object.assign(overlay, { chosen: event.chosen, rejected: event.rejected });
+  },
+  add_edge(overlay, event, now) {
+    overlay.flashes.push({ kind: "add", layer: event.layer, from: event.from, to: event.to, born: now });
+  },
+  prune_edge(overlay, event, now) {
+    overlay.flashes.push({ kind: "prune", layer: event.layer, from: event.from, to: event.to, born: now });
+  },
+  done(overlay, event) {
+    Object.assign(overlay, { final: event.results, current: null, layer: null, candidates: [] });
+  },
+  // The seed layer becomes active, so the bucket scan rings each measured member there.
+  lsh_hash(overlay, event) {
+    const { layer, key, members, skipped } = event;
+    overlay.lsh = { layer, key, members, skipped, seed: null, fallback: false, reason: null };
+    overlay.layer = layer;
+  },
+  lsh_seed(overlay, event) {
+    overlay.lsh.seed = event.node;
+  },
+  // A fallback walks every layer, so none counts as skipped.
+  lsh_fallback(overlay, event) {
+    Object.assign(overlay.lsh, { fallback: true, reason: event.reason, skipped: [] });
+  },
+};
+
+function apply_event(overlay, event, now) {
+  const handler = OVERLAY_HANDLERS[event.type];
+  if (handler) handler(overlay, event, now);
+  overlay.caption = describe_event(event);
+}
+
+function decay_flashes(overlay, now, duration) {
+  overlay.flashes = overlay.flashes.filter((flash) => now - flash.born < duration);
+}
+
+function format_dist(dist) {
+  return dist.toFixed(2);
+}
+
+function format_point(point) {
+  return `(${point.map((value) => value.toFixed(2)).join(", ")})`;
+}
+
+function count_noun(count, noun) {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+function describe_entries(entry_ids) {
+  return entry_ids.length === 1 ? `node ${entry_ids[0]}` : `${entry_ids.length} entry nodes`;
+}
+
+function describe_begin(event) {
+  if (event.op === "search") return `Searching for the ${event.k} nodes nearest ${format_point(event.query)}.`;
+  const reach = event.level === 0 ? "layer 0 only" : `layers 0 to ${event.level}`;
+  return `Placing node ${event.node} at ${format_point(event.query)}. It drew level ${event.level}, so it joins ${reach}.`;
+}
+
+function describe_selection(event) {
+  const skipped = event.rejected.length;
+  const tail = skipped === 0 ? "." : `. ${count_noun(skipped, "other")} skipped as already covered or over the limit.`;
+  return `Layer ${event.layer}: node ${event.node} links to ${count_noun(event.chosen.length, "neighbour")}${tail}`;
+}
+
+function describe_lsh_hash(event) {
+  if (event.layer === null) return `LSH: the query hashes to bucket ${event.key}. The graph has one layer, so there is no layer to seed.`;
+  const count = count_noun(event.members.length, "node");
+  return `LSH: the query hashes to bucket ${event.key}. On layer ${event.layer} that bucket holds ${count}.`;
+}
+
+const FALLBACK_REASONS = { empty_bucket: "bucket empty", one_layer: "no layer to seed" };
+
+const CAPTIONS = {
+  begin: describe_begin,
+  new_layer: (e) => `Layer ${e.layer} is new. This node is the first to reach it.`,
+  enter_layer: (e) => `Layer ${e.layer}: starting from ${describe_entries(e.entry_ids)}.`,
+  visit: (e) => (e.line === "lsh_scan"
+    ? `LSH: scanning bucket member node ${e.node} on layer ${e.layer}, distance ${format_dist(e.dist)}.`
+    : `Layer ${e.layer}: measuring node ${e.node}, distance ${format_dist(e.dist)}.`),
+  lsh_hash: describe_lsh_hash,
+  lsh_seed: (e) => `LSH: seed is node ${e.node} at ${format_dist(e.dist)}, the closest bucket member. The descent starts on layer ${e.layer}.`,
+  lsh_fallback: (e) => `LSH: ${FALLBACK_REASONS[e.reason]}, starting from the top entry point.`,
+  candidate_push: (e) => `Layer ${e.layer}: node ${e.node} joins the candidates to expand.`,
+  candidate_pop: (e) => `Layer ${e.layer}: expanding node ${e.node}, the closest candidate left.`,
+  best_update: (e) => `Layer ${e.layer}: best so far is node ${e.results[0].node} at ${format_dist(e.results[0].dist)}.`,
+  layer_done: (e) => `Layer ${e.layer} done. Closest found is node ${e.results[0].node} at ${format_dist(e.results[0].dist)}.`,
+  select_neighbors: describe_selection,
+  add_edge: (e) => `Layer ${e.layer}: new link from node ${e.from} to node ${e.to}.`,
+  prune_edge: (e) => `Layer ${e.layer}: node ${e.from} was over its link limit and dropped node ${e.to}.`,
+  set_entry_point: (e) => `Node ${e.node} is now the entry point, on layer ${e.layer}.`,
+  done: (e) => (e.op === "insert" ? `Node ${e.node} is placed.` : `Search done. Found ${count_noun(e.results.length, "node")}.`),
+};
+
+function describe_event(event) {
+  const caption = CAPTIONS[event.type];
+  return caption ? caption(event) : event.type;
+}
+
+// View model for the layer bands. Depth runs from 0 at the top layer to 1 at layer 0.
+function layer_strata(layer_sizes) {
+  const top = layer_sizes.length - 1;
+  const base = layer_sizes[0] || 1;
+  return layer_sizes.map((size, layer) => ({
+    layer,
+    size,
+    share: size / base,
+    depth: top === 0 ? 0 : 1 - layer / top,
+    role: layer === 0 ? "all nodes" : layer === top ? "top layer" : "",
+  }));
+}
+
+// Speed slider stops in steps per second. The slider value is an index into this list.
+const SPEED_STEPS = [1, 2, 4, 8, 15, 30, 60, 120, 240, 600, 1200, 2400, Infinity];
+
+function speed_label(speed) {
+  return speed === Infinity ? "Instant" : String(speed);
+}
+
+// ---- Layer stack geometry: world y points up and each layer is a flat prism ----
+// The point cloud is scaled to fill most of each prism. x and y share one scale so the layout keeps its shape.
+// The height is about a quarter of the footprint depth, so the z spread inside a layer stays readable.
+const FOOTPRINT = 1.1;
+const SLAB_HALF = 0.27;
+const LAYER_GAP = 0.95;
+const DOT_FILL = 0.9;
+const DOT_DEPTH = 0.8;
+// Camera distance in units of the stack radius. FIT_MARGIN is the share of each box side the stack may fill.
+const CAMERA_DISTANCE = 5;
+const FIT_MARGIN = 0.9;
+// Floor on a fitted span, so a stack seen edge-on is not blown up.
+const MIN_SPAN = 0.5;
+
+// Prisms from layer 0 up, centred on the origin, so the top layer sits highest.
+function stack_layout(count) {
+  const step = 2 * SLAB_HALF + LAYER_GAP;
+  return Array.from({ length: count }, (_, layer) => {
+    const centre = (layer - (count - 1) / 2) * step;
+    return { layer, centre, low: centre - SLAB_HALF, high: centre + SLAB_HALF };
+  });
+}
+
+// Centre and half-range of the cloud. A tiny cloud keeps a floor so one point does not blow up.
+function point_frame(points) {
+  const axis = (i) => {
+    const values = points.map((point) => point[i]);
+    const low = Math.min(...values, Infinity);
+    const high = Math.max(...values, -Infinity);
+    return low > high ? { mid: 0, half: 0 } : { mid: (low + high) / 2, half: (high - low) / 2 };
+  };
+  const [x, y, z] = [0, 1, 2].map(axis);
+  return { mid: [x.mid, y.mid, z.mid], half_xy: Math.max(x.half, y.half, 0.05), half_z: Math.max(z.half, 0.05) };
+}
+
+function world_point(point, prism, frame) {
+  const [x, y, z] = point.map((value, i) => value - frame.mid[i]);
+  const across = (FOOTPRINT * DOT_FILL) / frame.half_xy;
+  return [x * across, prism.centre + (z / frame.half_z) * SLAB_HALF * DOT_DEPTH, y * across];
+}
+
+// unit is a corner of the cube from -1 to 1 on each axis.
+function prism_corner(unit, prism) {
+  return [unit[0] * FOOTPRINT, prism.centre + unit[1] * SLAB_HALF, unit[2] * FOOTPRINT];
+}
+
+function stack_radius(layout) {
+  return Math.hypot(FOOTPRINT * Math.SQRT2, layout.at(-1).high);
+}
+
+// Pose holds yaw and pitch. Rotates about the origin and applies perspective.
+function view_coords(world, pose, radius) {
+  const [x, y, z] = world.map((value) => value / radius);
+  const x1 = x * Math.cos(pose.yaw) + z * Math.sin(pose.yaw);
+  const z1 = z * Math.cos(pose.yaw) - x * Math.sin(pose.yaw);
+  const y1 = y * Math.cos(pose.pitch) - z1 * Math.sin(pose.pitch);
+  const depth = y * Math.sin(pose.pitch) + z1 * Math.cos(pose.pitch);
+  const scale = CAMERA_DISTANCE / (CAMERA_DISTANCE - depth);
+  return { u: x1 * scale, v: y1 * scale, depth, scale };
+}
+
+function span(values) {
+  const low = Math.min(...values);
+  const high = Math.max(...values);
+  return { mid: (low + high) / 2, width: Math.max(high - low, MIN_SPAN) };
+}
+
+// A circle around each footprint, so turning the stack never rescales it.
+const FIT_RING = Array.from({ length: 24 }, (_, i) => [Math.cos((i * Math.PI) / 12), Math.sin((i * Math.PI) / 12)]);
+
+// Fits the stack inside box, given as { x, y, width, height } in canvas pixels.
+function fit_stack(layout, pose, box) {
+  const radius = stack_radius(layout);
+  const reach = FOOTPRINT * Math.SQRT2;
+  const rim = layout.flatMap((prism) => [prism.low, prism.high].flatMap((level) =>
+    FIT_RING.map(([a, b]) => view_coords([a * reach, level, b * reach], pose, radius))));
+  const across = span(rim.map((c) => c.u));
+  const up = span(rim.map((c) => c.v));
+  const size = FIT_MARGIN * Math.min(box.width / across.width, box.height / up.width);
+  return { radius, size, mid_u: across.mid, mid_v: up.mid, box };
+}
+
+// Pose also holds zoom. At zoom 1 the whole stack lands inside FIT_MARGIN of the box.
+function project_point(world, pose, fit) {
+  const { u, v, depth, scale } = view_coords(world, pose, fit.radius);
+  const size = fit.size * pose.zoom;
+  const { box } = fit;
+  return { x: box.x + box.width / 2 + (u - fit.mid_u) * size, y: box.y + box.height / 2 - (v - fit.mid_v) * size, depth, scale };
+}
+
+// The line under each layer label: the breadth the trace used there, else the layer size.
+function layer_detail(overlay, layer, size) {
+  if (overlay.lsh?.skipped.includes(layer)) return "skipped by LSH";
+  const ef = overlay.ef_per_layer.get(layer);
+  if (ef === undefined) return count_noun(size, "node");
+  if (ef === 1) return "greedy, ef = 1";
+  return overlay.op === "search" ? `widen: ef = ${ef}, return K = ${overlay.k}` : `widen: ef = ${ef}, then link`;
+}
+</script>
+
+<script id="app-src">
+"use strict";
+
+const SEED = 7;
+const SEED_COUNT = 24;
+const SEARCH_K = 5;
+// Bucket width for the LSH hashes. The cloud spans about 2 per axis, so a few buckets per hash.
+const LSH_WIDTH = 1;
+const FLASH_MS = 1000;
+// Covers the top finite speed down to 15 fps.
+const MAX_STEPS_PER_FRAME = 160;
+const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)");
+const DARK_SCHEME = matchMedia("(prefers-color-scheme: dark)");
+// One trailing tag comment such as // @step:x @lsh:new, with the tags in any order.
+const MARKER_PATTERN = /\s*\/\/((?: @(?:step|lsh):\w+)+)\s*$/;
+const STEP_TAG = /@step:(\w+)/;
+const LSH_TAG = /@lsh:(new|skip)/;
+const LSH_LABELS = { new: "LSH only", skip: "replaced by LSH seed" };
+const TRACE_HOOK = /^\s*yield trace_event\(/;
+const TOKEN_PATTERN = /(\/\/.*$)|("(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)|\b(const|let|function|class|return|yield|for|of|if|else|while|new|this|break|continue|null|get)\b|\b(\d+(?:\.\d+)?)\b/g;
+const TOKEN_CLASSES = ["tok-comment", "tok-string", "tok-keyword", "tok-number"];
+const COORD_IDS = ["coord-x", "coord-y", "coord-z"];
+const HOVER_HINT = "Point at a node to see its details. Drag the layers to rotate them. Click them, then scroll to zoom.";
+const ACTION_IDS = ["add-manual", "add-random", "search-manual", "search-random"];
+const COLOUR_TOKENS = [
+  "text", "muted", "edge", "prune", "focus", "canvas", "slab", "slab-edge", "node", "trace", "found", "connector", "lsh",
+];
+// Below this canvas width the label column narrows and each detail wraps at its commas.
+const LABEL_COLUMN_MIN = 520;
+const LABEL_COLUMN = 150;
+const LABEL_COLUMN_NARROW = 88;
+const SKIPPED_ALPHA = 0.35;
+
+const by_id = (id) => document.getElementById(id);
+const app = {
+  index: null, clusters: [], point_rng: null, overlay: create_overlay(), truth: [], hover: null, colours: {},
+  layout: [], fit: null, frame: null, projected: [], lsh_on: false, lsh: null,
+};
+const player = { gen: null, playing: false, budget: 0, last_tick: null, on_done: null };
+const code_pane = { marker_lines: new Map(), active: null };
+// fade scales every alpha the layer painters set, so a layer the LSH seed skips draws faint.
+// tags holds the boxes of tags drawn this frame. label_left is where the label column starts.
+const stack = { canvas: null, ctx: null, width: 0, height: 0, drag: null, label: "", fade: 1, tags: [], label_left: 0 };
+
+// ---- Camera: one orbit and zoom for the whole stack. The default looks down at an angle. ----
+class Camera {
+  constructor() {
+    this.yaw = -0.55;
+    this.pitch = 0.5;
+    this.zoom = 1;
+  }
+
+  orbit(d_yaw, d_pitch) {
+    this.yaw += d_yaw;
+    this.pitch = clamp(this.pitch + d_pitch, -1.45, 1.45);
+  }
+
+  zoom_by(factor) {
+    this.zoom = clamp(this.zoom * factor, 0.5, 3);
+  }
+
+  project(world) {
+    return project_point(world, this, app.fit);
+  }
+}
+
+const camera = new Camera();
+
+// ---- Colours come from the CSS tokens so both themes stay in one place ----
+function read_colours() {
+  const style = getComputedStyle(document.documentElement);
+  app.colours = Object.fromEntries(COLOUR_TOKENS.map((token) => [token, style.getPropertyValue(`--${token}`).trim()]));
+}
+
+function watch_theme() {
+  const refresh = () => {
+    read_colours();
+    request_draw();
+  };
+  DARK_SCHEME.addEventListener("change", refresh);
+  new MutationObserver(refresh).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+}
+
+// ---- LayerStack: one canvas holds every layer as a prism ----
+const resize_observer = new ResizeObserver(() => {
+  resize_canvas();
+  request_draw();
+});
+
+function init_stack() {
+  stack.canvas = by_id("layer-canvas");
+  stack.ctx = stack.canvas.getContext("2d");
+  bind_pointer(stack.canvas);
+  resize_observer.observe(stack.canvas);
+}
+
+function resize_canvas() {
+  const ratio = window.devicePixelRatio || 1;
+  stack.width = stack.canvas.clientWidth;
+  stack.height = stack.canvas.clientHeight;
+  stack.canvas.width = Math.round(stack.width * ratio);
+  stack.canvas.height = Math.round(stack.height * ratio);
+}
+
+function label_stack(strata) {
+  const total = strata[0].size;
+  const parts = strata.slice().reverse().map((stratum) => {
+    const links = [...app.index.layers[stratum.layer].values()].reduce((sum, list) => sum + list.length, 0);
+    const role = stratum.role ? `, ${stratum.role}` : "";
+    return `Layer ${stratum.layer}, ${stratum.size} of ${count_noun(total, "node")}, ${count_noun(links, "link")}${role}.`;
+  });
+  const label = `Graph layers, top first. ${parts.join(" ")} Drag or use arrow keys to rotate. Press plus or minus to zoom.`;
+  if (label === stack.label) return;
+  stack.label = label;
+  stack.canvas.setAttribute("aria-label", label);
+}
+
+function label_column() {
+  return stack.width >= LABEL_COLUMN_MIN ? LABEL_COLUMN : LABEL_COLUMN_NARROW;
+}
+
+// The canvas area the prisms may fill, left of the label column.
+function stack_box() {
+  const { width, height } = stack;
+  return { x: 8, y: 8, width: width - label_column() - 16, height: height - 16 };
+}
+
+let draw_pending = false;
+
+function request_draw() {
+  if (draw_pending) return;
+  draw_pending = true;
+  requestAnimationFrame(frame);
+}
+
+function frame(now) {
+  draw_pending = false;
+  player_tick(now);
+  if (!player.gen || player.playing) decay_flashes(app.overlay, now, flash_ms());
+  draw_all(now);
+  const fading = app.overlay.flashes.length > 0 && (!player.gen || player.playing);
+  if ((player.gen && player.playing) || fading) request_draw();
+}
+
+function flash_ms() {
+  return REDUCED_MOTION.matches ? 0 : FLASH_MS;
+}
+
+// Far prisms paint first, so a nearer prism covers what sits behind it.
+function draw_all(now) {
+  const { ctx, width, height } = stack;
+  if (width === 0 || app.index.layer_count === 0) return;
+  const strata = layer_strata(app.index.layers.map((layer) => layer.size));
+  label_stack(strata);
+  const ratio = stack.canvas.width / width;
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  app.layout = stack_layout(app.index.layer_count);
+  app.fit = fit_stack(app.layout, camera, stack_box());
+  app.frame = point_frame(app.index.points);
+  app.projected = app.layout.map(project_layer);
+  draw_connectors(ctx);
+  const order = [...app.layout].sort((a, b) => camera.project([0, a.centre, 0]).depth - camera.project([0, b.centre, 0]).depth);
+  for (const prism of order) draw_layer(ctx, prism, now);
+  stack.label_left = label_left();
+  stack.tags = [];
+  draw_trace(ctx);
+  draw_labels(ctx, strata);
+}
+
+// ---- LayerPainter ----
+// Dense layers get smaller dots, so neighbours stay separable.
+function base_radius(layer) {
+  return clamp(5 / Math.sqrt(Math.sqrt(app.index.layers[layer].size)), 2.2, 3.6);
+}
+
+function project_layer(prism) {
+  const base = base_radius(prism.layer) * Math.sqrt(camera.zoom);
+  const projected = new Map();
+  for (const node of app.index.layers[prism.layer].keys()) {
+    const screen = camera.project(world_point(app.index.points[node], prism, app.frame));
+    projected.set(node, { ...screen, radius: base * screen.scale });
+  }
+  return projected;
+}
+
+// The hovered node and its out-links stay bright while the rest of its layer fades.
+function hover_focus(layer) {
+  const links = app.index.layers[layer].get(app.hover);
+  return links ? new Set([app.hover, ...links]) : null;
+}
+
+function draw_layer(ctx, prism, now) {
+  const projected = app.projected[prism.layer];
+  const focus = hover_focus(prism.layer);
+  stack.fade = app.overlay.lsh?.skipped.includes(prism.layer) ? SKIPPED_ALPHA : 1;
+  draw_prism(ctx, prism, now);
+  draw_edges(ctx, prism.layer, projected, focus);
+  draw_flashes(ctx, prism.layer, projected, now);
+  draw_nodes(ctx, projected, focus);
+  stack.fade = 1;
+}
+
+// Each face lists its outward normal and four corners of the unit cube in drawing order.
+const PRISM_FACES = [0, 1, 2].flatMap((axis) => [-1, 1].map((sign) => {
+  const [a, b] = [0, 1, 2].filter((other) => other !== axis);
+  const corner = ([p, q]) => {
+    const unit = [0, 0, 0];
+    unit[axis] = sign;
+    unit[a] = p;
+    unit[b] = q;
+    return unit;
+  };
+  const normal = corner([0, 0]);
+  return { axis, normal, corners: [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(corner) };
+}));
+
+// Paints the faces turned toward the viewer. A new layer's outline glows in the trace colour.
+function draw_prism(ctx, prism, now) {
+  const glow = app.overlay.flashes.find((flash) => flash.kind === "layer" && flash.layer === prism.layer);
+  for (const face of PRISM_FACES) {
+    if (view_coords(face.normal, camera, 1).depth <= 0) continue;
+    const corners = face.corners.map((unit) => camera.project(prism_corner(unit, prism)));
+    ctx.beginPath();
+    corners.forEach((screen, i) => (i === 0 ? ctx.moveTo(screen.x, screen.y) : ctx.lineTo(screen.x, screen.y)));
+    ctx.closePath();
+    ctx.globalAlpha = stack.fade * (face.axis === 1 ? 0.5 : 0.2);
+    ctx.fillStyle = face.axis === 1 ? app.colours.slab : app.colours["slab-edge"];
+    ctx.fill();
+    ctx.globalAlpha = stack.fade * (glow ? flash_strength(glow, now) : 1);
+    ctx.strokeStyle = glow ? app.colours.trace : app.colours["slab-edge"];
+    ctx.lineWidth = glow ? 2 : 1;
+    ctx.setLineDash([]);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// Thin dashed uprights join each node to its copies on the layers above.
+function draw_connectors(ctx) {
+  ctx.strokeStyle = app.colours.connector;
+  ctx.lineWidth = 0.8;
+  ctx.setLineDash([2, 3]);
+  app.index.levels.forEach((level, node) => {
+    const top = app.projected[level]?.get(node);
+    if (level > 0 && top) draw_line(ctx, app.projected[0].get(node), top);
+  });
+  ctx.setLineDash([]);
+}
+
+// The outline takes the canvas ground, so overlapping dots keep a visible gap.
+function draw_nodes(ctx, projected, focus) {
+  const order = [...projected].sort((a, b) => a[1].depth - b[1].depth);
+  ctx.lineWidth = 0.8;
+  ctx.strokeStyle = app.colours.canvas;
+  ctx.fillStyle = app.colours.node;
+  for (const [node, screen] of order) {
+    ctx.globalAlpha = stack.fade * (focus && !focus.has(node) ? 0.3 : 1);
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, screen.radius, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// The x where the label column starts, just right of the widest prism corner.
+function label_left() {
+  const corners = app.layout.flatMap((prism) => PRISM_FACES[0].corners.concat(PRISM_FACES[1].corners)
+    .map((unit) => camera.project(prism_corner(unit, prism)).x));
+  return Math.min(Math.max(...corners) + 14, stack.width - label_column() + 4);
+}
+
+// Labels sit in a column right of the prisms, each level with its prism's centre.
+function draw_labels(ctx, strata) {
+  const wide = label_column() === LABEL_COLUMN;
+  const column = stack.label_left;
+  ctx.textBaseline = "alphabetic";
+  app.layout.forEach((prism, layer) => {
+    const middle = camera.project([0, prism.centre, 0]).y;
+    const detail = layer_detail(app.overlay, layer, strata[layer].size);
+    const lines = wide ? [detail] : detail.split(", ");
+    ctx.fillStyle = app.colours.text;
+    ctx.font = `600 ${wide ? 13 : 12}px system-ui, sans-serif`;
+    ctx.fillText(`Layer ${layer}`, column, middle - 2);
+    ctx.font = `${wide ? 12 : 11}px system-ui, sans-serif`;
+    ctx.fillStyle = app.colours.muted;
+    lines.forEach((line, i) => ctx.fillText(line, column, middle + 13 + i * 13));
+  });
+}
+
+// ---- EdgeGeometry ----
+// Splits a layer's directed links into mutual pairs and one-way links.
+function classify_edges(layer_map) {
+  const two_way = [];
+  const one_way = [];
+  for (const [from, links] of layer_map) {
+    for (const to of links) {
+      const mutual = layer_map.get(to).includes(from);
+      if (!mutual) one_way.push([from, to]);
+      else if (from < to) two_way.push([from, to]);
+    }
+  }
+  return { two_way, one_way };
+}
+
+// The tip stops at the node rim so the arrow stays visible.
+function draw_arrowhead(ctx, from, to, size) {
+  const angle = Math.atan2(to.y - from.y, to.x - from.x);
+  const rim = to.radius + 1;
+  const tip_x = to.x - Math.cos(angle) * rim;
+  const tip_y = to.y - Math.sin(angle) * rim;
+  ctx.beginPath();
+  ctx.moveTo(tip_x, tip_y);
+  ctx.lineTo(tip_x - size * Math.cos(angle - 0.45), tip_y - size * Math.sin(angle - 0.45));
+  ctx.lineTo(tip_x - size * Math.cos(angle + 0.45), tip_y - size * Math.sin(angle + 0.45));
+  ctx.closePath();
+  ctx.fill();
+}
+
+function draw_line(ctx, from, to) {
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(to.x, to.y);
+  ctx.stroke();
+}
+
+// Resting links stay faint and fade further while a trace or result shows, so the trace reads on top.
+function draw_edges(ctx, layer, projected, focus) {
+  const { two_way, one_way } = classify_edges(app.index.layers[layer]);
+  const resting = player.gen || app.overlay.op !== null ? 0.3 : 0.75;
+  const alpha = (lit) => stack.fade * (focus ? (lit ? 1 : resting * 0.4) : resting);
+  ctx.lineWidth = 0.8;
+  ctx.strokeStyle = ctx.fillStyle = app.colours.edge;
+  ctx.setLineDash([]);
+  for (const [a, b] of two_way) {
+    ctx.globalAlpha = alpha(a === app.hover || b === app.hover);
+    draw_line(ctx, projected.get(a), projected.get(b));
+    draw_arrowhead(ctx, projected.get(a), projected.get(b), 3);
+    draw_arrowhead(ctx, projected.get(b), projected.get(a), 3);
+  }
+  for (const [from, to] of one_way) {
+    ctx.globalAlpha = alpha(from === app.hover);
+    ctx.setLineDash([3, 2]);
+    draw_line(ctx, projected.get(from), projected.get(to));
+    ctx.setLineDash([]);
+    draw_arrowhead(ctx, projected.get(from), projected.get(to), 4.5);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ---- OverlayPainter ----
+// Flashes hold still while paused, so each manual step shows its own.
+function flash_strength(flash, now) {
+  const age = player.gen && !player.playing ? 0 : now - flash.born;
+  return clamp(1 - age / FLASH_MS, 0.15, 1);
+}
+
+function draw_flashes(ctx, layer, projected, now) {
+  for (const flash of app.overlay.flashes) {
+    const from = projected.get(flash.from);
+    const to = projected.get(flash.to);
+    if (flash.layer !== layer || !from || !to) continue;
+    ctx.globalAlpha = stack.fade * flash_strength(flash, now);
+    ctx.strokeStyle = flash.kind === "add" ? app.colours.found : app.colours.prune;
+    ctx.lineWidth = flash.kind === "add" ? 1.8 : 1.5;
+    ctx.setLineDash(flash.kind === "add" ? [] : [3, 2]);
+    draw_line(ctx, from, to);
+  }
+  ctx.globalAlpha = 1;
+  ctx.setLineDash([]);
+}
+
+function draw_ring(ctx, screen, extra, colour, width, dash = []) {
+  ctx.beginPath();
+  ctx.arc(screen.x, screen.y, screen.radius + extra, 0, 2 * Math.PI);
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = width;
+  ctx.setLineDash(dash);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function draw_rings(ctx, projected, nodes, extra, colour, width, dash) {
+  for (const node of nodes) {
+    const screen = projected.get(node);
+    if (screen) draw_ring(ctx, screen, extra, colour, width, dash);
+  }
+}
+
+// Line plus head, from rim to rim. Greedy steps are solid and layer drops dashed.
+function draw_arrow(ctx, from, to, width, dash = []) {
+  const angle = Math.atan2(to.y - from.y, to.x - from.x);
+  const start = { x: from.x + Math.cos(angle) * (from.radius + 1), y: from.y + Math.sin(angle) * (from.radius + 1) };
+  ctx.lineWidth = width;
+  ctx.setLineDash(dash);
+  draw_line(ctx, start, to);
+  ctx.setLineDash([]);
+  draw_arrowhead(ctx, start, to, 3 + 2 * width);
+}
+
+function draw_star(ctx, x, y, outer) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i += 1) {
+    const angle = (i * Math.PI) / 5 - Math.PI / 2;
+    const reach = i % 2 === 0 ? outer : outer * 0.4;
+    ctx.lineTo(x + Math.cos(angle) * reach, y + Math.sin(angle) * reach);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+const TAG_HEIGHT = 13;
+
+function boxes_overlap(a, b) {
+  return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+}
+
+// A tag below the node leaves room for another tag above it on the same node.
+// Tags flip left of their node rather than enter the label column, and step away from tags placed this frame.
+function draw_tag(ctx, screen, text, colour, below = false) {
+  ctx.font = "600 11px system-ui, sans-serif";
+  ctx.fillStyle = colour;
+  const width = ctx.measureText(text).width;
+  let x = screen.x + screen.radius + 8;
+  if (x + width > stack.label_left - 6) x = Math.max(2, screen.x - screen.radius - 8 - width);
+  let y = below ? screen.y + screen.radius + 14 : screen.y - screen.radius - 4;
+  const box_at = (base) => ({ left: x, right: x + width, top: base - TAG_HEIGHT + 3, bottom: base + 3 });
+  for (let tries = 0; tries < 6 && stack.tags.some((placed) => boxes_overlap(placed, box_at(y))); tries += 1) {
+    y += below ? TAG_HEIGHT : -TAG_HEIGHT;
+  }
+  stack.tags.push(box_at(y));
+  ctx.fillText(text, x, y);
+}
+
+// The query, or the point being placed, is a star on layer 0.
+function draw_query(ctx) {
+  const { query, op } = app.overlay;
+  if (!query) return;
+  const screen = { ...camera.project(world_point(query, app.layout[0], app.frame)), radius: 4 };
+  ctx.fillStyle = app.colours.found;
+  draw_star(ctx, screen.x, screen.y, 7);
+  draw_tag(ctx, screen, op === "search" ? "Query" : "New point", app.colours.found);
+}
+
+function draw_entry_point(ctx) {
+  const entry = app.index.entry_point;
+  const screen = app.projected[app.index.levels[entry]]?.get(entry);
+  if (!screen) return;
+  draw_ring(ctx, screen, 4, app.colours.trace, 1.6);
+  draw_tag(ctx, screen, "Entry point", app.colours.trace);
+}
+
+// Returned nodes turn green inside a dotted ring. True neighbours the search missed get a red one.
+function draw_final(ctx) {
+  const { final, op } = app.overlay;
+  const projected = app.projected[0];
+  if (op !== "search" || final.length === 0) return;
+  ctx.fillStyle = app.colours.found;
+  for (const { node } of final) {
+    const screen = projected.get(node);
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, screen.radius + 1.5, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+  draw_rings(ctx, projected, node_ids(final), 3, app.colours.found, 1.4, [1.5, 2]);
+  const found = new Set(node_ids(final));
+  const missed = node_ids(app.truth).filter((node) => !found.has(node));
+  draw_rings(ctx, projected, missed, 3, app.colours.prune, 1.4, [1, 2.5]);
+}
+
+// Wide layers show each measured neighbour as a thin line. Greedy layers show their moves as arrows.
+function draw_route(ctx) {
+  const { explored, path, ef_per_layer } = app.overlay;
+  ctx.strokeStyle = ctx.fillStyle = app.colours.trace;
+  for (const [layer, pairs] of explored) {
+    const projected = app.projected[layer];
+    if (ef_per_layer.get(layer) === 1 || !projected) continue;
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.75;
+    for (const [from, to] of pairs) draw_line(ctx, projected.get(from), projected.get(to));
+  }
+  ctx.globalAlpha = 1;
+  for (const [layer, nodes] of path) {
+    const projected = app.projected[layer];
+    if (ef_per_layer.get(layer) !== 1 || !projected) continue;
+    for (let i = 1; i < nodes.length; i += 1) draw_arrow(ctx, projected.get(nodes[i - 1]), projected.get(nodes[i]), 2.2);
+  }
+}
+
+// A dashed arrow drops from each finished layer's best node to the same node one layer down.
+function draw_drops(ctx) {
+  const { best_per_layer, ef_per_layer } = app.overlay;
+  ctx.strokeStyle = ctx.fillStyle = app.colours.trace;
+  for (const [layer, best] of best_per_layer) {
+    if (!ef_per_layer.has(layer - 1)) continue;
+    const from = app.projected[layer]?.get(best.node);
+    const to = app.projected[layer - 1]?.get(best.node);
+    if (from && to) draw_arrow(ctx, from, to, 1.8, [5, 3]);
+  }
+}
+
+// The node being placed shows the links it has gained so far.
+function draw_new_links(ctx) {
+  const { op, node } = app.overlay;
+  if (op !== "insert" || node === null) return;
+  ctx.strokeStyle = app.colours.found;
+  ctx.lineWidth = 1.4;
+  app.projected.forEach((projected, layer) => {
+    for (const to of app.index.layers[layer].get(node) ?? []) draw_line(ctx, projected.get(node), projected.get(to));
+  });
+}
+
+function draw_square(ctx, screen, half) {
+  ctx.strokeRect(screen.x - half, screen.y - half, 2 * half, 2 * half);
+}
+
+function draw_diamond(ctx, screen, reach) {
+  ctx.beginPath();
+  ctx.moveTo(screen.x, screen.y - reach);
+  ctx.lineTo(screen.x + reach, screen.y);
+  ctx.lineTo(screen.x, screen.y + reach);
+  ctx.lineTo(screen.x - reach, screen.y);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+// Squares mark the bucket on the seed layer, a small star marks where the query hashes there,
+// and a diamond marks the seed. A fallback is tagged at the entry point it falls back to.
+function draw_lsh(ctx) {
+  const { lsh, query } = app.overlay;
+  if (!lsh) return;
+  ctx.strokeStyle = ctx.fillStyle = app.colours.lsh;
+  ctx.setLineDash([]);
+  if (lsh.fallback) {
+    const entry = app.index.entry_point;
+    const screen = app.projected[app.index.levels[entry]]?.get(entry);
+    if (screen) draw_tag(ctx, screen, `LSH fallback, ${FALLBACK_REASONS[lsh.reason]}`, app.colours.lsh, true);
+  }
+  const projected = app.projected[lsh.layer];
+  if (!projected) return;
+  ctx.lineWidth = 1.4;
+  for (const node of lsh.members) {
+    const screen = projected.get(node);
+    if (screen) draw_square(ctx, screen, screen.radius + 3.5);
+  }
+  const spot = { ...camera.project(world_point(query, app.layout[lsh.layer], app.frame)), radius: 3 };
+  draw_star(ctx, spot.x, spot.y, 5);
+  const count = lsh.members.length === 0 ? "empty" : count_noun(lsh.members.length, "member");
+  draw_tag(ctx, spot, `Bucket ${lsh.key}, ${count}`, app.colours.lsh);
+  const seed = projected.get(lsh.seed);
+  if (!seed) return;
+  ctx.lineWidth = 2;
+  draw_diamond(ctx, seed, seed.radius + 6);
+  draw_tag(ctx, seed, "LSH seed", app.colours.lsh, true);
+}
+
+// Rings nest by distance from the dot, so markers that share a node stay readable.
+// The hovered node is ringed on every layer that holds it.
+function draw_trace(ctx) {
+  const overlay = app.overlay;
+  draw_route(ctx);
+  draw_drops(ctx);
+  draw_new_links(ctx);
+  const active = app.projected[overlay.layer];
+  if (active) {
+    draw_rings(ctx, active, node_ids(overlay.results), 2.5, app.colours.trace, 1.3, [1.5, 2]);
+    draw_rings(ctx, active, [overlay.current], 4.5, app.colours.trace, 1.8);
+  }
+  draw_final(ctx);
+  draw_lsh(ctx);
+  draw_entry_point(ctx);
+  draw_query(ctx);
+  for (const projected of app.projected) draw_rings(ctx, projected, [app.hover], 6.5, app.colours.focus, 1.5);
+}
+
+// ---- StackPointer ----
+function bind_pointer(canvas) {
+  canvas.addEventListener("pointerdown", (event) => {
+    stack.drag = { x: event.clientX, y: event.clientY };
+    canvas.setPointerCapture(event.pointerId);
+  });
+  canvas.addEventListener("pointermove", on_pointer_move);
+  canvas.addEventListener("pointerup", () => { stack.drag = null; });
+  canvas.addEventListener("pointercancel", () => { stack.drag = null; });
+  canvas.addEventListener("pointerleave", () => set_hover(null));
+  canvas.addEventListener("wheel", on_wheel, { passive: false });
+  canvas.addEventListener("keydown", on_key);
+}
+
+function on_pointer_move(event) {
+  if (stack.drag) {
+    camera.orbit((event.clientX - stack.drag.x) * 0.01, (event.clientY - stack.drag.y) * 0.01);
+    stack.drag = { x: event.clientX, y: event.clientY };
+    request_draw();
+    return;
+  }
+  set_hover(pick_node(event.offsetX, event.offsetY));
+}
+
+// Zoom only when the canvas has focus or Ctrl is held, so plain scrolling still scrolls the page.
+function on_wheel(event) {
+  if (document.activeElement !== stack.canvas && !event.ctrlKey) return;
+  event.preventDefault();
+  camera.zoom_by(event.deltaY < 0 ? 1.1 : 1 / 1.1);
+  request_draw();
+}
+
+const KEY_ACTIONS = {
+  ArrowLeft: () => camera.orbit(-0.1, 0),
+  ArrowRight: () => camera.orbit(0.1, 0),
+  ArrowUp: () => camera.orbit(0, -0.1),
+  ArrowDown: () => camera.orbit(0, 0.1),
+  "+": () => camera.zoom_by(1.1),
+  "=": () => camera.zoom_by(1.1),
+  "-": () => camera.zoom_by(1 / 1.1),
+};
+
+function on_key(event) {
+  const action = KEY_ACTIONS[event.key];
+  if (!action) return;
+  event.preventDefault();
+  action();
+  request_draw();
+}
+
+// Picks the nearest drawn dot on any layer, from the last frame's positions.
+function pick_node(x, y) {
+  let best = null;
+  let best_dist = 10;
+  for (const projected of app.projected) {
+    for (const [node, screen] of projected) {
+      const gap = Math.hypot(screen.x - x, screen.y - y);
+      if (gap < best_dist) [best, best_dist] = [node, gap];
+    }
+  }
+  return best;
+}
+
+function set_hover(node) {
+  if (node === app.hover) return;
+  app.hover = node;
+  by_id("hover-info").textContent = node === null ? HOVER_HINT : describe_node(node);
+  request_draw();
+}
+
+function describe_node(node) {
+  const cluster = app.clusters[node];
+  const origin = cluster >= 0 ? `cluster ${cluster + 1}` : "added by hand";
+  const level = app.index.levels[node];
+  return `Node ${node}, ${origin}, on layers 0 to ${level}, at ${format_point(app.index.points[node])}.`;
+}
+
+// ---- CodePane: shows the real #hnsw-src text with markers stripped ----
+function escape_html(text) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function colour_line(text) {
+  let html = "";
+  let last = 0;
+  for (const match of text.matchAll(TOKEN_PATTERN)) {
+    const group = match.slice(1).findIndex((part) => part !== undefined);
+    html += escape_html(text.slice(last, match.index));
+    html += `<span class="${TOKEN_CLASSES[group]}">${escape_html(match[0])}</span>`;
+    last = match.index + match[0].length;
+  }
+  return html + escape_html(text.slice(last));
+}
+
+function line_tags(line) {
+  const tags = line.match(MARKER_PATTERN)?.[1] ?? "";
+  return { text: line.replace(MARKER_PATTERN, ""), step: tags.match(STEP_TAG)?.[1], lsh: tags.match(LSH_TAG)?.[1] };
+}
+
+function find_marker_lines(tagged) {
+  const marker_lines = new Map();
+  tagged.forEach(({ step }, number) => {
+    if (step) marker_lines.set(step, number);
+  });
+  return marker_lines;
+}
+
+// Only the first line of each run of LSH lines carries the label, so a block reads as one change.
+function render_line({ text, lsh }, i, tagged) {
+  const classes = ["line", TRACE_HOOK.test(text) && "is-hook", lsh && `is-lsh-${lsh}`].filter(Boolean).join(" ");
+  const label = lsh && tagged[i - 1]?.lsh !== lsh ? ` data-lsh="${LSH_LABELS[lsh]}"` : "";
+  return `<span class="${classes}"${label}>${colour_line(text) || " "}</span>`;
+}
+
+function render_source() {
+  const lines = by_id("hnsw-src").textContent.replace(/^\n+|\s+$/g, "").split("\n");
+  const tagged = lines.map(line_tags);
+  code_pane.marker_lines = find_marker_lines(tagged);
+  by_id("code-lines").innerHTML = tagged.map(render_line).join("");
+}
+
+function highlight_marker(marker) {
+  const number = code_pane.marker_lines.get(marker);
+  const line = number === undefined ? null : by_id("code-lines").children[number];
+  if (line === code_pane.active) return;
+  code_pane.active?.classList.remove("is-active");
+  code_pane.active = line;
+  if (line) {
+    line.classList.add("is-active");
+    scroll_line_into_view(line);
+  }
+}
+
+// Scrolls only the code pane, so the page never jumps away from the layer views.
+// Instant, since smooth scrolls at several steps a second overlap and lag behind.
+function scroll_line_into_view(line) {
+  const pane = by_id("code-pane");
+  const margin = line.offsetHeight * 2;
+  const visible = line.offsetTop >= pane.scrollTop + margin && line.offsetTop <= pane.scrollTop + pane.clientHeight - margin;
+  if (!visible) pane.scrollTop = line.offsetTop - pane.clientHeight / 3;
+}
+
+// ---- TracePlayer and PlayerClock ----
+function start_trace(gen, on_done) {
+  Object.assign(player, { gen, on_done, playing: true, budget: 1, last_tick: null });
+  set_busy(true);
+  if (runs_at_once()) finish_trace();
+  else request_draw();
+}
+
+function current_speed() {
+  return SPEED_STEPS[Number(by_id("param-speed").value)];
+}
+
+function runs_at_once() {
+  return REDUCED_MOTION.matches || current_speed() === Infinity;
+}
+
+function step_trace() {
+  if (!player.gen) return false;
+  const next = player.gen.next();
+  if (next.done) {
+    end_trace(next.value);
+    return false;
+  }
+  show_event(next.value);
+  return true;
+}
+
+// A fallback runs the replaced start line after all, so the pane stops striking it through.
+function show_event(event) {
+  apply_event(app.overlay, event, performance.now());
+  if (event.type === "lsh_fallback") by_id("code-pane").classList.add("lsh-fallback");
+  highlight_marker(event.line);
+  by_id("trace-caption").textContent = app.overlay.caption;
+}
+
+function end_trace(value) {
+  const on_done = player.on_done;
+  Object.assign(player, { gen: null, on_done: null, playing: false });
+  set_busy(false);
+  on_done(value);
+  request_draw();
+}
+
+function finish_trace() {
+  while (step_trace());
+}
+
+function toggle_pause() {
+  player.playing = !player.playing;
+  player.last_tick = null;
+  player.budget = 0;
+  update_pause_button();
+  if (!player.playing) announce(`Paused. ${app.overlay.caption}`);
+  request_draw();
+}
+
+// Flashes do not fade while paused, so each step shows only its own.
+function manual_step() {
+  if (player.playing) toggle_pause();
+  app.overlay.flashes = [];
+  step_trace();
+  announce(app.overlay.caption);
+  request_draw();
+}
+
+function player_tick(now) {
+  if (!player.gen || !player.playing) return;
+  const speed = current_speed();
+  if (speed === Infinity) return finish_trace();
+  if (player.last_tick !== null) player.budget += ((now - player.last_tick) / 1000) * speed;
+  player.last_tick = now;
+  player.budget = Math.min(player.budget, MAX_STEPS_PER_FRAME);
+  while (player.budget >= 1 && player.gen) {
+    player.budget -= 1;
+    step_trace();
+  }
+}
+
+// ---- Controls ----
+function bind_sliders() {
+  for (const id of ["param-m", "param-ef-construction", "param-ef", "param-lsh-k"]) {
+    const slider = by_id(id);
+    slider.addEventListener("input", () => {
+      by_id(`${id}-value`).value = slider.value;
+    });
+  }
+  const speed = by_id("param-speed");
+  speed.max = SPEED_STEPS.length - 1;
+  speed.addEventListener("input", show_speed);
+  show_speed();
+  by_id("param-m").addEventListener("input", rebuild_for_params);
+  by_id("param-ef-construction").addEventListener("input", rebuild_for_params);
+  by_id("param-lsh-k").addEventListener("input", rebuild_lsh_table);
+}
+
+function show_speed() {
+  const speed = current_speed();
+  by_id("param-speed-value").value = speed_label(speed);
+  by_id("param-speed").setAttribute("aria-valuetext", speed === Infinity ? "Instant" : `${speed} steps per second`);
+}
+
+function bind_buttons() {
+  by_id("controls").addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!player.gen) add_manual();
+  });
+  by_id("add-random").addEventListener("click", add_random);
+  by_id("search-manual").addEventListener("click", search_manual);
+  by_id("search-random").addEventListener("click", search_random);
+  by_id("play-pause").addEventListener("click", toggle_pause);
+  by_id("step").addEventListener("click", manual_step);
+  by_id("finish").addEventListener("click", () => {
+    finish_trace();
+    request_draw();
+  });
+  by_id("reset").textContent = `Reset to ${SEED_COUNT} seed points`;
+  by_id("reset").addEventListener("click", reset);
+  by_id("lsh-toggle").addEventListener("click", toggle_lsh);
+}
+
+function set_busy(busy) {
+  for (const id of ACTION_IDS) by_id(id).disabled = busy;
+  const can_play = busy && !runs_at_once();
+  for (const id of ["play-pause", "step", "finish"]) by_id(id).disabled = !can_play;
+  update_pause_button();
+}
+
+function update_pause_button() {
+  const button = by_id("play-pause");
+  button.textContent = player.gen && !player.playing ? "Resume" : "Pause";
+}
+
+function is_valid_coord(text) {
+  const value = Number(text);
+  return text.trim() !== "" && Number.isFinite(value) && value >= -1 && value <= 1;
+}
+
+// Returns [x, y, z] or null, so a bad entry never reaches the index.
+function read_xyz() {
+  const inputs = COORD_IDS.map(by_id);
+  const invalid = inputs.filter((input) => !is_valid_coord(input.value));
+  for (const input of inputs) input.setAttribute("aria-invalid", String(invalid.includes(input)));
+  const names = invalid.map((input) => input.id.slice(-1)).join(", ");
+  by_id("coord-error").textContent = invalid.length ? `Enter a number from -1 to 1 for ${names}.` : "";
+  if (invalid.length) {
+    invalid[0].focus();
+    return null;
+  }
+  return inputs.map((input) => Number(input.value));
+}
+
+function announce(text) {
+  by_id("status").textContent = text;
+}
+
+// Switching to reduced motion mid-run drains the run, since playback controls turn off.
+function update_motion_note() {
+  by_id("motion-note").hidden = !REDUCED_MOTION.matches;
+  if (REDUCED_MOTION.matches) finish_trace();
+  set_busy(Boolean(player.gen));
+  request_draw();
+}
+
+// ---- StatsPanel ----
+function fill_stats(id, rows) {
+  const list = by_id(id);
+  list.innerHTML = "";
+  for (const [term, value] of rows) {
+    const row = document.createElement("div");
+    row.append(Object.assign(document.createElement("dt"), { textContent: term }));
+    row.append(Object.assign(document.createElement("dd"), { textContent: value }));
+    list.append(row);
+  }
+}
+
+function show_index_stats() {
+  const index = app.index;
+  const entry = index.entry_point === null ? "none" : `node ${index.entry_point} on layer ${index.levels[index.entry_point]}`;
+  fill_stats("index-stats", [
+    ["Nodes", String(index.points.length)],
+    ["Layers", String(index.layer_count)],
+    ["Entry point", entry],
+    ["Link limit", `${index.M} above layer 0, ${index.m_max0} on layer 0`],
+    ["mL", `${index.mL.toFixed(2)} (1 / ln M)`],
+  ]);
+}
+
+function describe_bucket(lsh) {
+  if (lsh.reason === "one_layer") return "none, the graph has one layer";
+  return lsh.members.length === 0 ? `${lsh.key}, empty` : `${lsh.key}, ${count_noun(lsh.members.length, "member")}`;
+}
+
+// cost holds this run's distances and hops. other is the standard search on the same query, given in LSH mode.
+// Returns a plain sentence for the screen reader announcement.
+function show_search_stats(results, cost, other = null) {
+  if (results === null) {
+    fill_stats("search-stats", [["Last search", "none yet. Run one to compare it with brute force."]]);
+    return "";
+  }
+  const hits = Math.round(recall_at_k(results, app.truth) * app.truth.length);
+  const total = app.index.points.length;
+  const found = `${hits} of ${app.truth.length} true neighbours found`;
+  const recall = [`Recall at ${SEARCH_K}`, found];
+  if (!other) {
+    fill_stats("search-stats", [recall, ["Distance computations", `${cost.distances} of ${total}. Brute force needs all ${total}.`]]);
+    return `${found} with ${cost.distances} of ${total} distance computations.`;
+  }
+  fill_stats("search-stats", [
+    recall,
+    ["Hops", `LSH ${cost.hops}, standard ${other.hops}`],
+    ["Distance computations", `LSH ${cost.distances}, standard ${other.distances}, brute force ${total}`],
+    ["Counted", "The bucket scan counts. Hashing does not. The seed is measured once more when its layer starts."],
+    ["Bucket", app.overlay.lsh ? describe_bucket(app.overlay.lsh) : "none, the graph is empty"],
+  ]);
+  const lsh_cost = `${count_noun(cost.hops, "hop")} and ${count_noun(cost.distances, "distance computation")}`;
+  const standard_cost = `${count_noun(other.hops, "hop")} and ${count_noun(other.distances, "distance computation")}`;
+  return `${found}. LSH used ${lsh_cost}. Standard used ${standard_cost}.`;
+}
+
+// ---- Actions ----
+function current_params() {
+  return { M: Number(by_id("param-m").value), ef_construction: Number(by_id("param-ef-construction").value) };
+}
+
+function clear_trace_view() {
+  app.overlay = create_overlay();
+  app.truth = [];
+  highlight_marker(null);
+  by_id("code-pane").classList.remove("lsh-fallback");
+  show_search_stats(null);
+}
+
+function run_insert(coords, cluster) {
+  app.clusters.push(cluster);
+  clear_trace_view();
+  start_trace(app.index.insert(coords), (node) => {
+    show_index_stats();
+    announce(`${describe_node(node)} The graph now has ${count_noun(app.index.layer_count, "layer")}.`);
+  });
+}
+
+// The counters are read before search_cost reruns the standard search and overwrites them.
+function run_search(query) {
+  clear_trace_view();
+  const ef = Number(by_id("param-ef").value);
+  const lsh = app.lsh_on ? app.lsh : null;
+  start_trace(app.index.search(query, SEARCH_K, ef, lsh), (results) => {
+    const cost = { distances: app.index.distance_count, hops: app.index.hop_count };
+    const other = lsh ? search_cost(app.index, query, SEARCH_K, ef, null) : null;
+    app.truth = brute_force_knn(app.index.points, query, SEARCH_K);
+    announce(`Search done. ${show_search_stats(results, cost, other)}`);
+  });
+}
+
+function add_manual() {
+  const coords = read_xyz();
+  if (coords) run_insert(coords, -1);
+}
+
+function add_random() {
+  const { coords, cluster } = sample_clustered_point(app.point_rng);
+  run_insert(coords, cluster);
+}
+
+function search_manual() {
+  const coords = read_xyz();
+  if (coords) run_search(coords);
+}
+
+function search_random() {
+  run_search(sample_clustered_point(app.point_rng).coords);
+}
+
+function rebuild_for_params() {
+  finish_trace();
+  app.index.rebuild(current_params());
+  clear_trace_view();
+  by_id("trace-caption").textContent = `Rebuilt ${count_noun(app.index.points.length, "node")} with M = ${app.index.M}.`;
+  show_index_stats();
+  request_draw();
+}
+
+function make_lsh_table() {
+  return new LshTable({ k: Number(by_id("param-lsh-k").value), w: LSH_WIDTH, seed: SEED + 2 });
+}
+
+// Like a graph rebuild, so the shown bucket never belongs to an old table.
+function rebuild_lsh_table() {
+  finish_trace();
+  app.lsh = make_lsh_table();
+  clear_trace_view();
+  by_id("trace-caption").textContent = `LSH table rebuilt with k = ${app.lsh.projections.length} hashes. Inserts are unchanged.`;
+  request_draw();
+}
+
+function describe_lsh_mode() {
+  if (!app.lsh_on) return "LSH entry point off. Searches start from the top entry point.";
+  const layer = seed_layer(app.index.layer_count - 1);
+  const start = layer === null ? "use the top entry point while there is one layer" : `start from a bucket on layer ${layer}`;
+  return `LSH entry point on. Searches ${start}.`;
+}
+
+// Finishes any run first, so its stats and highlights belong to the mode it ran in.
+function toggle_lsh() {
+  finish_trace();
+  app.lsh_on = !app.lsh_on;
+  by_id("lsh-toggle").setAttribute("aria-pressed", String(app.lsh_on));
+  by_id("lsh-toggle-hint").textContent = app.lsh_on ? "On. Searches start from a hashed bucket." : "Off. Searches start from the top entry point.";
+  by_id("param-lsh-k").disabled = !app.lsh_on;
+  by_id("code-pane").classList.toggle("lsh-on", app.lsh_on);
+  clear_trace_view();
+  const message = describe_lsh_mode();
+  by_id("trace-caption").textContent = message;
+  announce(message);
+  if (app.lsh_on) scroll_line_into_view(by_id("code-lines").querySelector(".is-lsh-skip"));
+  request_draw();
+}
+
+function reset() {
+  finish_trace();
+  app.index = new HnswIndex({ ...current_params(), seed: SEED });
+  app.clusters = [];
+  app.point_rng = make_rng(SEED + 1);
+  for (const { coords, cluster } of seed_points(SEED_COUNT, SEED)) {
+    app.clusters.push(cluster);
+    run_to_end(app.index.insert(coords));
+  }
+  clear_trace_view();
+  app.hover = null;
+  by_id("trace-caption").textContent = "Add a node or run a search to watch the algorithm work.";
+  show_index_stats();
+  announce(`Built ${count_noun(SEED_COUNT, "node")} across ${count_noun(app.index.layer_count, "layer")}.`);
+  request_draw();
+}
+
+function main() {
+  read_colours();
+  watch_theme();
+  render_source();
+  bind_sliders();
+  bind_buttons();
+  app.lsh = make_lsh_table();
+  REDUCED_MOTION.addEventListener("change", update_motion_note);
+  update_motion_note();
+  init_stack();
+  reset();
+}
+
+main();
+</script>
+</body>
+</html>
