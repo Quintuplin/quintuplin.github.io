@@ -34,7 +34,7 @@ PAGES = {
     },
     "simulations/fridge-event-sim/index.html": {
         "glass": ["text", "muted", "accent"],
-        "card": ["text", "muted"],
+        "card": ["text", "muted", "seen", "unseen"],
         "graphic": ["focus", "event"],
     },
 }

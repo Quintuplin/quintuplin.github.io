@@ -58,6 +58,15 @@ if [ -f "$hnsw" ]; then
 	grep -q '^\.legend {[^}]*font-size: 0\.75rem' "$hnsw" || err "hnsw legend is not at the reduced 0.75rem size"
 fi
 
+# The fridge view fits its canvas, leaves the wheel to the page, opens on a multi-camera config and starts as not started (#26).
+fridge=simulations/fridge-event-sim/index.html
+if command -v node >/dev/null 2>&1; then
+	node scripts/check_fridge.mjs "$site/$fridge" || err "fridge behaviour check failed"
+else
+	err "node is missing: scripts/check_fridge.mjs cannot run"
+fi
+grep -q '^#lay {[^}]*max-width: *100%' "$fridge" || err "fridge #lay select caps the config name below its full width"
+
 grep -q 'href="/projects"' "$site/index.html" 2>/dev/null || err "nav in index.html lacks the Projects link"
 ! grep -Eq 'href="/(simulations|studies)/?"' "$site/index.html" 2>/dev/null || err "nav in index.html still links the old Simulations or Studies index"
 
