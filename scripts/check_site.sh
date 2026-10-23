@@ -6,7 +6,7 @@ err() { echo "FAIL: $*" >&2; fail=1; }
 
 [ -f "$site/projects/index.html" ] || err "missing projects/index.html"
 # The old Simulations index URL stays live as a redirect to Projects.
-grep -q 'http-equiv="refresh" content="0; *url=[^"]*/projects/\{0,1\}"' "$site/simulations/index.html" 2>/dev/null || err "simulations/index.html does not redirect to /projects"
+grep -q 'http-equiv="refresh" content="0; *url=\(https://quintuplin\.github\.io\)\{0,1\}/projects/\{0,1\}"' "$site/simulations/index.html" 2>/dev/null || err "simulations/index.html does not redirect to /projects"
 
 # Standalone pages are served verbatim.
 for page in simulations/*/index.html studies/*/index.html; do
