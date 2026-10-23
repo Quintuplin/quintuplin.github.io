@@ -46,6 +46,10 @@ hnsw="$site/simulations/hnsw/index.html"
 if [ -f "$hnsw" ]; then
 	grep -q '^\.hover-info {.*[{;] *height: 1\.3em;.*overflow: hidden;' "$hnsw" || err "hnsw .hover-info lacks height: 1.3em with overflow: hidden"
 	! grep -q '\.hover-info {[^}]*min-height' "$hnsw" || err "hnsw .hover-info uses min-height"
+	# A wrapping flex row keeps the alpha select at its full option width; a squeezed grid cell cut it to "1, H" (#23).
+	grep -B2 'id="param-alpha"' "$hnsw" | grep -q '<div class="select-row">' || err "hnsw alpha select is not in a select-row"
+	grep -q '^\.select-row {[^}]*display: flex;[^}]*flex-wrap: wrap' "$hnsw" || err "hnsw .select-row does not wrap the select below its label"
+	! grep -q '\.select-row select {[^}]*min-width: *0' "$hnsw" || err "hnsw .select-row select can shrink below its option text"
 fi
 
 grep -q 'href="/projects"' "$site/index.html" 2>/dev/null || err "nav in index.html lacks the Projects link"
