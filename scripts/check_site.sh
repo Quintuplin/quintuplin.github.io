@@ -87,5 +87,15 @@ for index in projects/index.html; do
 	done
 done
 
+# Every post must reach the blog index. Jekyll skips future-dated posts and broken front matter without failing (#29).
+for post in _posts/*.md; do
+	title=$(sed -n '1,/^---$/s/^title: *//p' "$post" | head -1 | sed "s/^\"\(.*\)\"\$/\1/; s/^'\(.*\)'\$/\1/")
+	if [ -z "$title" ]; then
+		err "$post has no title"
+	else
+		grep -qF -e "$title" "$site/blog/index.html" 2>/dev/null || err "$post is missing from blog/index.html"
+	fi
+done
+
 [ "$fail" -eq 0 ] && echo "site check passed"
 exit "$fail"
