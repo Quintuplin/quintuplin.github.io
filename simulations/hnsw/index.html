@@ -7,26 +7,32 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="description" content="Build and search a hierarchical navigable small world graph one step at a time, with the running code beside it.">
 <style>
+/* Glass tokens match css/main.css; scripts/check_contrast.py checks them. --canvas stays opaque because the JS draws with it. */
 :root {
   color-scheme: light;
   --page-max: 1440px;
-  --bg: #eef1f4;
-  --surface: #ffffff;
+  --bg: #2b3a4a;
+  --glass: rgba(252, 251, 247, 0.86);
+  --glass-solid: rgba(252, 251, 247, 0.97);
+  --glass-border: rgba(255, 255, 255, 0.55);
+  --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --surface: rgba(255, 255, 255, 0.78);
   --surface-2: #f5f7f9;
   --border: #cbd3db;
   --text: #19212a;
-  --muted: #56626e;
+  --muted: #4a5560;
   --canvas: #fbf8f1;
   --slab: #f2ede2;
   --slab-edge: #cdc4b2;
   --node: #1f2d52;
-  --edge: #a3a9b0;
-  --connector: #bdb5a6;
+  --edge: #868c94;
+  --connector: #928a7c;
   --trace: #c25418;
   --found: #158a6e;
   --prune: #c42f2a;
   --result: #1d5cbd;
   --focus: #1d5cbd;
+  --accent: #1a56b4;
   --code-bg: #f7f9fb;
   --code-keyword: #6a3fb0;
   --code-string: #1c7a45;
@@ -40,8 +46,12 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #11151a;
-    --surface: #181d23;
+    --bg: #0f1419;
+    --glass: rgba(18, 23, 30, 0.86);
+    --glass-solid: rgba(18, 23, 30, 0.97);
+    --glass-border: rgba(255, 255, 255, 0.10);
+    --glass-shadow: 0 12px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --surface: rgba(24, 29, 35, 0.80);
     --surface-2: #1e242b;
     --border: #313a44;
     --text: #e2e7ec;
@@ -51,12 +61,13 @@
     --slab-edge: #4a463e;
     --node: #b9c8ee;
     --edge: #6a7079;
-    --connector: #5b564c;
+    --connector: #746d61;
     --trace: #f08c4e;
     --found: #46c9a5;
     --prune: #ff6d64;
     --result: #6ea8ff;
     --focus: #6ea8ff;
+    --accent: #6ea8ff;
     --code-bg: #14191e;
     --code-keyword: #c3a6ff;
     --code-string: #7fd3a0;
@@ -70,8 +81,12 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #11151a;
-  --surface: #181d23;
+  --bg: #0f1419;
+  --glass: rgba(18, 23, 30, 0.86);
+  --glass-solid: rgba(18, 23, 30, 0.97);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-shadow: 0 12px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --surface: rgba(24, 29, 35, 0.80);
   --surface-2: #1e242b;
   --border: #313a44;
   --text: #e2e7ec;
@@ -81,12 +96,13 @@
   --slab-edge: #4a463e;
   --node: #b9c8ee;
   --edge: #6a7079;
-  --connector: #5b564c;
+  --connector: #746d61;
   --trace: #f08c4e;
   --found: #46c9a5;
   --prune: #ff6d64;
   --result: #6ea8ff;
   --focus: #6ea8ff;
+  --accent: #6ea8ff;
   --code-bg: #14191e;
   --code-keyword: #c3a6ff;
   --code-string: #7fd3a0;
@@ -98,20 +114,32 @@
   --disk: #5fcfe0;
 }
 
+html { background: var(--bg); }
 html, body { height: 100%; }
+/* The body padding is the photo gutter around the glass sheet. */
 body {
   margin: 0;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 10px;
   padding-block: 12px;
   /* The third term centres the page once the viewport passes --page-max. */
-  padding-left: max(16px, env(safe-area-inset-left, 0px), calc((100% - var(--page-max)) / 2));
-  padding-right: max(16px, env(safe-area-inset-right, 0px), calc((100% - var(--page-max)) / 2));
-  background: var(--bg);
+  padding-left: max(24px, env(safe-area-inset-left, 0px), calc((100% - var(--page-max)) / 2));
+  padding-right: max(24px, env(safe-area-inset-right, 0px), calc((100% - var(--page-max)) / 2));
   color: var(--text);
   font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+/* Fixed photo backdrop, as on the main site; dimmed in dark mode. */
+.backdrop { position: fixed; inset: 0; z-index: -1; background: url("/assets/bg.jpg") center / cover no-repeat; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .backdrop { filter: brightness(0.6) saturate(0.9); } }
+:root[data-theme="dark"] .backdrop { filter: brightness(0.6) saturate(0.9); }
+.sheet {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px;
+  background: var(--glass); -webkit-backdrop-filter: blur(10px) saturate(120%); backdrop-filter: blur(10px) saturate(120%);
+  border: 1px solid var(--glass-border); border-radius: 14px; box-shadow: var(--glass-shadow);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .sheet { background: var(--glass-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 *, *::before, *::after { box-sizing: inherit; }
 h1, h2, p { margin: 0; }
@@ -149,8 +177,11 @@ legend { padding: 0 4px; font-weight: 600; font-size: 0.85rem; }
 #playback-settings .slider-row { --output-width: 3.5rem; }
 .slider-row label { font-size: 0.85rem; }
 .slider-row input { width: 100%; min-width: 0; accent-color: var(--result); }
-.slider-row select { font: inherit; min-width: 0; }
 .slider-row output { font-variant-numeric: tabular-nums; text-align: right; }
+/* The select keeps its full option text; it drops below the label only when the box is too narrow for both. */
+.select-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin-bottom: 2px; }
+.select-row label { font-size: 0.85rem; }
+.select-row select { font: inherit; max-width: 100%; }
 .button-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .hint { color: var(--muted); font-size: 0.8rem; margin-top: 4px; }
 .coords { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -165,7 +196,7 @@ button {
   border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px; cursor: pointer;
 }
 button:hover:not(:disabled) { border-color: var(--muted); }
-button.primary { background: var(--text); color: var(--surface); border-color: var(--text); }
+button.primary { background: var(--text); color: var(--surface-2); border-color: var(--text); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* Text rows never shrink in the column, so wrapped text pushes the canvas down instead of overlapping.
@@ -213,8 +244,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .code-pane:not(.lsh-on) .is-lsh-new, .code-pane:not(.disk-on) .is-disk-new { opacity: 0.55; }
 .lsh-on .is-lsh-skip, .disk-on .is-disk-skip { text-decoration: line-through; opacity: 0.6; }
 .lsh-on.lsh-fallback .is-lsh-skip { text-decoration: none; opacity: 1; }
-#lsh-toggle[aria-pressed="true"] { background: var(--lsh); color: var(--surface); border-color: var(--lsh); }
-#disk-toggle[aria-pressed="true"] { background: var(--disk); color: var(--surface); border-color: var(--disk); }
+#lsh-toggle[aria-pressed="true"] { background: var(--lsh); color: var(--surface-2); border-color: var(--lsh); }
+#disk-toggle[aria-pressed="true"] { background: var(--disk); color: var(--surface-2); border-color: var(--disk); }
 .tok-keyword { color: var(--code-keyword); }
 .tok-string { color: var(--code-string); }
 .tok-number { color: var(--code-number); }
@@ -226,9 +257,9 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .stats div { display: flex; gap: 5px; min-width: 0; }
 .stats dt { color: var(--muted); }
 .stats dd { margin: 0; font-variant-numeric: tabular-nums; }
-.legend { list-style: none; margin: 2px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 2px 10px; font-size: 0.8rem; }
-.legend li { display: flex; align-items: center; gap: 6px; }
-.legend svg { flex: none; width: 34px; height: 14px; overflow: visible; }
+.legend { list-style: none; margin: 2px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); gap: 1px 10px; font-size: 0.75rem; }
+.legend li { display: flex; align-items: center; gap: 5px; }
+.legend svg { flex: none; width: 28px; height: 12px; overflow: visible; }
 .sw-edge { stroke: var(--edge); fill: none; }
 .sw-trace { stroke: var(--trace); fill: none; }
 .sw-found { stroke: var(--found); fill: none; }
@@ -239,10 +270,16 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .sw-fill-found { fill: var(--found); }
 .sw-fill-node { fill: var(--node); }
 .sw-lsh { stroke: var(--lsh); fill: none; }
-.sw-slab { fill: var(--slab); stroke: var(--slab-edge); }
+/* The slab side colour is too faint for a 3:1 swatch outline, so the swatch borrows the link grey. */
+.sw-slab { fill: var(--slab); fill-opacity: 0.35; stroke: var(--edge); }
 
-/* Desktop fits one screen: long hints stay for screen readers only and controls pack tighter. */
+/* Desktop: the site bar and header scroll off and the workspace fills one screen below them.
+   Long hints stay for screen readers only and controls pack tighter. */
 @media not all and (max-width: 860px) {
+  html, body { height: auto; }
+  body { min-height: 100vh; }
+  /* 32px leaves the sheet and photo edge in view under the workspace; the floor keeps a short window usable. */
+  .layout { flex: none; height: max(32rem, calc(100vh - 32px)); height: max(32rem, calc(100dvh - 32px)); }
   .hint.desktop-sr {
     position: absolute; width: 1px; height: 1px; overflow: hidden;
     clip-path: inset(50%); white-space: nowrap; margin: 0;
@@ -250,7 +287,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   .controls button { padding: 2px 10px; line-height: 1.3; }
   .controls .button-row { margin-top: 4px; gap: 4px 6px; }
   .coords input { padding: 1px 5px; }
-  body { padding-block: 8px; gap: 8px; }
+  .sheet { padding-block: 10px; gap: 8px; }
   .layout { row-gap: 8px; }
   .column { gap: 6px; }
   .caption-bar { padding-block: 4px; min-height: calc(2.9em + 8px); }
@@ -261,9 +298,11 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   html, body { height: auto; }
   body {
     min-height: 100%;
-    padding-left: max(16px, env(safe-area-inset-left, 0px));
-    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 8px;
+    padding-left: max(8px, env(safe-area-inset-left, 0px));
+    padding-right: max(8px, env(safe-area-inset-right, 0px));
   }
+  .sheet { padding: 10px; }
   .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
   .slider-row { grid-template-columns: minmax(0, 1fr) var(--output-width); }
   .slider-row label { grid-column: 1 / -1; }
@@ -271,28 +310,32 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   .code-pane { flex: none; height: 28rem; }
   .hover-info { height: 3.9em; }
 }
+@media (max-width: 600px) { .sheet { border-radius: 10px; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 </style>
 </head>
 <body>
+<div class="backdrop" aria-hidden="true"></div>
+<div class="sheet">
 <nav class="site-bar" aria-label="Site">
   <a href="/">Home</a>
   <a href="/about">About</a>
   <a href="/cv">Resume</a>
   <a href="/projects" aria-current="page">Projects</a>
-  <a class="ext" href="https://github.com/quintuplin">GitHub</a>
-  <a href="https://www.linkedin.com/in/jack-fraser-3a137ba3/">LinkedIn</a>
+  <a class="ext" href="https://www.linkedin.com/in/jack-fraser-3a137ba3/">LinkedIn</a>
+  <a href="https://github.com/quintuplin">GitHub</a>
 </nav>
 <style>
-/* Static link bar back to the main site. */
-.site-bar { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding-bottom: 8px; margin-bottom: 8px;
-  border-bottom: 1px solid var(--border, var(--line)); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-.site-bar a { color: var(--muted); text-decoration: none; }
-.site-bar a:hover, .site-bar a:focus-visible, .site-bar a[aria-current] { color: var(--text, var(--ink)); }
-.site-bar a[aria-current] { font-weight: 600; }
+/* Static link bar back to the main site, styled like its nav. */
+.site-bar { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 22px; padding-bottom: 8px; margin-bottom: 8px;
+  border-bottom: 1px solid var(--rule, var(--border, var(--line))); font: 600 16px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+.site-bar a { padding-block: 2px; color: var(--muted); text-decoration: none; }
+.site-bar a:hover, .site-bar a:focus-visible { color: var(--text, var(--ink)); text-decoration: underline; }
+.site-bar a[aria-current] { color: var(--accent, var(--focus)); }
 .site-bar .ext { margin-left: auto; }
+@media (max-width: 600px) { .site-bar .ext { margin-left: 0; } }
 </style>
 <header class="site-header">
   <h1>HNSW Explorer</h1>
@@ -317,7 +360,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
           <input id="param-ef-construction" type="range" min="4" max="64" step="1" value="24" aria-describedby="param-m-hint">
           <output id="param-ef-construction-value" for="param-ef-construction">24</output>
         </div>
-        <div class="slider-row">
+        <div class="select-row">
           <label for="param-alpha">Prune slack (alpha)</label>
           <select id="param-alpha" aria-describedby="param-m-hint">
             <option value="1" selected>1, HNSW</option>
@@ -393,7 +436,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   </section>
 
   <section class="column" aria-labelledby="code-title">
-    <h2 id="code-title">The code running now</h2>
+    <h2 id="code-title">The code</h2>
     <pre id="code-pane" class="code-pane" tabindex="0" aria-label="HNSW source code. The highlighted line is the step shown in the layer views."><code id="code-lines"></code></pre>
     <div class="card">
         <h2 id="legend-title">Legend</h2>
@@ -415,11 +458,12 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
           <li><svg viewBox="0 0 34 14" aria-hidden="true"><line class="sw-prune" x1="2" y1="7" x2="32" y2="7" stroke-width="1.5" stroke-dasharray="3 2"/></svg>Link just pruned</li>
           <li><svg viewBox="0 0 34 14" aria-hidden="true"><circle class="sw-fill-node" cx="17" cy="7" r="3"/><rect class="sw-lsh" x="11" y="1" width="12" height="12" stroke-width="1.4"/></svg>LSH bucket member</li>
           <li><svg viewBox="0 0 34 14" aria-hidden="true"><circle class="sw-fill-node" cx="17" cy="7" r="3"/><path class="sw-lsh" d="M17 0 L24 7 L17 14 L10 7 Z" stroke-width="1.8"/></svg>LSH seed</li>
-          <li><svg viewBox="0 0 34 14" aria-hidden="true"><rect class="sw-slab" x="3" y="3" width="28" height="8" opacity="0.35"/></svg>Skipped by LSH</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><rect class="sw-slab" x="3" y="3" width="28" height="8"/></svg>Skipped by LSH</li>
         </ul>
     </div>
   </section>
 </main>
+</div>
 <p id="status" class="visually-hidden" role="status" aria-live="polite"></p>
 
 <script id="data-src">

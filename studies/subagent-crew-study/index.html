@@ -8,25 +8,31 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: sticky contents rail beside one reading column; rail folds into a top strip below 900px. */
+/* Layout: one wide glass sheet over the site photo holds a sticky contents rail beside one reading column;
+   the rail folds into a top strip below 900px. Glass tokens match css/main.css; scripts/check_contrast.py checks them. */
 :root{
-  --bg:#F4F6F8; --surface:#FFFFFF; --ink:#15202B; --muted:#586676; --line:#D8DEE5;
-  --accent:#1F6E8C; --accent-soft:#E3F0F5;
+  color-scheme:light;
+  --bg:#2B3A4A; --surface:rgba(255,255,255,.78); --ink:#15202B; --muted:#4A5866; --line:#D8DEE5;
+  --accent:#185E78; --accent-soft:#E3F0F5;
   --crew:#9A6200; --crew-soft:#F7EDD9;
   --ultra:#A23B72; --ultra-soft:#F7E6EF;
   --opus:#6B4FBB; --opus-soft:#EEE9FA;
   --sonnet:#1F6E8C; --sonnet-soft:#E3F0F5;
   --haiku:#3F7D4E; --haiku-soft:#E6F2E8;
-  --main:#B5582A; --main-soft:#F8EAE2;
+  --main:#B0552A; --main-soft:#F8EAE2;
   --fail:#B8403A;
   --ok:#2F6B3E; --ok-soft:#E3F1E6; --mix:#8A5A00; --mix-soft:#F6ECD6; --open:#4A5866; --open-soft:#E8ECF0;
   --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --serif:"IBM Plex Serif",Georgia,"Times New Roman",serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --glass:rgba(252,251,247,.86); --glass-solid:rgba(252,251,247,.97); --glass-border:rgba(255,255,255,.55);
+  --glass-shadow:0 10px 40px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.6);
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#10161C; --surface:#18212A; --ink:#E4EAF0; --muted:#97A5B4; --line:#2A3743;
+    --glass:rgba(18,23,30,.86); --glass-solid:rgba(18,23,30,.97); --glass-border:rgba(255,255,255,.10);
+    --glass-shadow:0 12px 48px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
+    --bg:#0F1419; --surface:rgba(24,33,42,.80); --ink:#E4EAF0; --muted:#97A5B4; --line:#2A3743;
     --accent:#6BB8D6; --accent-soft:#1A2F3A;
     --crew:#E9B85C; --crew-soft:#3A2E16;
     --ultra:#E58BBB; --ultra-soft:#3A1F2E;
@@ -40,7 +46,9 @@
   }
 }
 :root[data-theme="dark"]{
-  --bg:#10161C; --surface:#18212A; --ink:#E4EAF0; --muted:#97A5B4; --line:#2A3743;
+  --glass:rgba(18,23,30,.86); --glass-solid:rgba(18,23,30,.97); --glass-border:rgba(255,255,255,.10);
+  --glass-shadow:0 12px 48px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
+  --bg:#0F1419; --surface:rgba(24,33,42,.80); --ink:#E4EAF0; --muted:#97A5B4; --line:#2A3743;
   --accent:#6BB8D6; --accent-soft:#1A2F3A;
   --crew:#E9B85C; --crew-soft:#3A2E16;
   --ultra:#E58BBB; --ultra-soft:#3A1F2E;
@@ -53,11 +61,21 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
-html{scroll-behavior:smooth}
+html{scroll-behavior:smooth;background:var(--bg)}
 @media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;
-  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:32px 64px}
-.page{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:200px minmax(0,1fr);gap:48px}
+body{margin:0;color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;
+  padding-left:max(20px, env(safe-area-inset-left, 0px));padding-right:max(20px, env(safe-area-inset-right, 0px));padding-block:48px}
+/* Fixed photo backdrop, as on the main site; dimmed in dark mode. */
+.backdrop{position:fixed;inset:0;z-index:-1;background:url("/assets/bg.jpg") center / cover no-repeat}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .backdrop{filter:brightness(.6) saturate(.9)}}
+:root[data-theme="dark"] .backdrop{filter:brightness(.6) saturate(.9)}
+/* Wide enough for rail, gap and the 760px column, so the column ends at the site bar's right edge.
+   No overflow clipping here, so the contents rail stays sticky. */
+.sheet{max-width:1090px;margin:0 auto;padding:28px 40px 40px;background:var(--glass);
+  -webkit-backdrop-filter:blur(10px) saturate(120%);backdrop-filter:blur(10px) saturate(120%);
+  border:1px solid var(--glass-border);border-radius:14px;box-shadow:var(--glass-shadow)}
+@media (prefers-reduced-transparency: reduce){.sheet{background:var(--glass-solid);-webkit-backdrop-filter:none;backdrop-filter:none}}
+.page{display:grid;grid-template-columns:200px minmax(0,1fr);gap:48px}
 nav.toc{position:sticky;top:calc(env(safe-area-inset-top, 0px) + 24px);align-self:start;font-size:14px}
 nav.toc p{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
 nav.toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;border-left:2px solid var(--line)}
@@ -135,25 +153,34 @@ footer{margin-top:48px;font-size:.84rem;color:var(--muted)}
   nav.toc a{padding:0}
   main{max-width:none}
 }
+@media (max-width:600px){
+  body{padding:16px 10px}
+  .sheet{padding:20px 16px;border-radius:10px}
+}
+/* The site bar sits where the main site nav does. */
+.sheet > .site-bar{padding-bottom:12px;margin-bottom:36px}
 </style>
 </head>
 <body>
+<div class="backdrop" aria-hidden="true"></div>
+<div class="sheet">
 <nav class="site-bar" aria-label="Site">
   <a href="/">Home</a>
   <a href="/about">About</a>
   <a href="/cv">Resume</a>
   <a href="/projects" aria-current="page">Projects</a>
-  <a class="ext" href="https://github.com/quintuplin">GitHub</a>
-  <a href="https://www.linkedin.com/in/jack-fraser-3a137ba3/">LinkedIn</a>
+  <a class="ext" href="https://www.linkedin.com/in/jack-fraser-3a137ba3/">LinkedIn</a>
+  <a href="https://github.com/quintuplin">GitHub</a>
 </nav>
 <style>
-/* Static link bar back to the main site. */
-.site-bar { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding-bottom: 8px; margin-bottom: 8px;
-  border-bottom: 1px solid var(--border, var(--line)); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-.site-bar a { color: var(--muted); text-decoration: none; }
-.site-bar a:hover, .site-bar a:focus-visible, .site-bar a[aria-current] { color: var(--text, var(--ink)); }
-.site-bar a[aria-current] { font-weight: 600; }
+/* Static link bar back to the main site, styled like its nav. */
+.site-bar { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 22px; padding-bottom: 8px; margin-bottom: 8px;
+  border-bottom: 1px solid var(--rule, var(--border, var(--line))); font: 600 16px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+.site-bar a { padding-block: 2px; color: var(--muted); text-decoration: none; }
+.site-bar a:hover, .site-bar a:focus-visible { color: var(--text, var(--ink)); text-decoration: underline; }
+.site-bar a[aria-current] { color: var(--accent, var(--focus)); }
 .site-bar .ext { margin-left: auto; }
+@media (max-width: 600px) { .site-bar .ext { margin-left: 0; } }
 </style>
 
 <div class="page">
@@ -495,6 +522,7 @@ footer{margin-top:48px;font-size:.84rem;color:var(--muted)}
 
 <footer>Costs use API-equivalent pricing. Crew explorer and verifier ran on Sonnet 5.5 and every other agent on Opus 5.5.</footer>
 </main>
+</div>
 </div>
 </body>
 </html>

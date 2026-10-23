@@ -1,11 +1,31 @@
+/* Glass tokens match the inline copies in the standalone pages; scripts/check_contrast.py checks them. */
 :root {
+    color-scheme: light;
     --ink: #222;
-    --muted: #666;
-    --line: #e2e2e2;
+    --muted: #555;
     --accent: #1f3864;
+    --rule: rgba(0, 0, 0, 0.12);
+    --glass: rgba(252, 251, 247, 0.86);
+    --glass-solid: rgba(252, 251, 247, 0.97);
+    --glass-border: rgba(255, 255, 255, 0.55);
+    --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 * { box-sizing: border-box; }
 html { background: #2b3a4a; }
+@media (prefers-color-scheme: dark) {
+    :root {
+        color-scheme: dark;
+        --ink: #E6EAEE;
+        --muted: #A9B4BF;
+        --accent: #8DB8F0;
+        --rule: rgba(255, 255, 255, 0.14);
+        --glass: rgba(18, 23, 30, 0.86);
+        --glass-solid: rgba(18, 23, 30, 0.97);
+        --glass-border: rgba(255, 255, 255, 0.10);
+        --glass-shadow: 0 12px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+    html { background: #0f1419; }
+}
 body {
     margin: 0;
     padding: 48px 20px;
@@ -26,12 +46,18 @@ body {
     max-width: 860px;
     margin: 0 auto;
     padding: 28px 40px 22px;
-    background: rgba(252, 251, 247, 0.86);
+    background: var(--glass);
     -webkit-backdrop-filter: blur(10px) saturate(120%);
     backdrop-filter: blur(10px) saturate(120%);
     border-radius: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.55);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.28), 0 1px 0 rgba(255,255,255,0.6) inset;
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+}
+@media (prefers-color-scheme: dark) {
+    .backdrop { filter: brightness(0.6) saturate(0.9); }
+}
+@media (prefers-reduced-transparency: reduce) {
+    .sheet { background: var(--glass-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 nav ul, footer ul {
     padding: 0;
@@ -44,7 +70,7 @@ nav ul li, footer ul li {
     margin-right: 22px;
 }
 nav {
-    border-bottom: 1px solid rgba(0,0,0,0.12);
+    border-bottom: 1px solid var(--rule);
     padding-bottom: 12px;
     margin-bottom: 36px;
 }
@@ -71,7 +97,7 @@ p {
     margin: 0 0 1em;
 }
 footer {
-    border-top: 1px solid rgba(0,0,0,0.12);
+    border-top: 1px solid var(--rule);
     margin-top: 48px;
     padding-top: 14px;
     font-size: .85em;
@@ -103,7 +129,7 @@ ul.list-unstyled img.comic { width: 340px; max-width: 100%; height: auto; margin
     display: block;
     width: 100%;
     margin: 0 0 18px;
-    border: 1px solid rgba(0,0,0,0.08);
+    border: 1px solid var(--rule);
     box-shadow: 0 2px 10px rgba(0,0,0,0.08);
     background: #fff;
 }
@@ -112,6 +138,9 @@ ul.list-unstyled img.comic { width: 340px; max-width: 100%; height: auto; margin
 ul.posts { margin: 20px auto 40px; font-size: 1.2em; padding: 0; }
 ul.posts li { list-style: none; margin-bottom: 8px; }
 ul.posts li span { color: var(--muted); font-size: .85em; margin-right: 6px; }
+/* Post figures are wider than a phone sheet; they are opaque white, so they read as paper in dark mode too. */
+.post img { max-width: 100%; height: auto; border-radius: 4px; }
+.post pre { overflow-x: auto; }
 
 @media (max-width: 600px) {
     body { padding: 16px 10px; }
