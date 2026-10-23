@@ -17,6 +17,7 @@
   --canvas: #fbfcfd; --floor: #e3e7eb; --wall: #f1f3f6; --seam: #b8c0c8; --shadow: #1a2530; --shadow-alpha: 0.07;
   --cabinet: #55606c; --shelf: #a9b0bb; --shelf-on: #0b6e8f; --door: #4fb3d4;
   --stock: #d9dbe6; --stock-on: #94a2a8; --event: #c0561c; --hand: #e8875a; --cam: #878b9b;
+  --seen: #13704e; --unseen: #b42828;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -28,6 +29,7 @@
     --canvas: #161b20; --floor: #20262d; --wall: #1a1f25; --seam: #3b454f; --shadow: #000000; --shadow-alpha: 0.18;
     --cabinet: #9ca8b4; --shelf: #5d6771; --shelf-on: #4cb4d8; --door: #5cc0e0;
     --stock: #3a434c; --stock-on: #7d8a95; --event: #f08c4e; --hand: #f0a070; --cam: #8994a0;
+    --seen: #4fd19c; --unseen: #ff8080;
   }
 }
 :root[data-theme="dark"] {
@@ -39,6 +41,7 @@
   --canvas: #161b20; --floor: #20262d; --wall: #1a1f25; --seam: #3b454f; --shadow: #000000; --shadow-alpha: 0.18;
   --cabinet: #9ca8b4; --shelf: #5d6771; --shelf-on: #4cb4d8; --door: #5cc0e0;
   --stock: #3a434c; --stock-on: #7d8a95; --event: #f08c4e; --hand: #f0a070; --cam: #8994a0;
+  --seen: #4fd19c; --unseen: #ff8080;
 }
 html { background: var(--bg); }
 html, body { height: 100%; }
@@ -366,16 +369,19 @@ function drawCam(c,cv,cyls,base,hd,d,near,sh){cv.width=440;cv.height=330;const W
  cv.className=near?'near':'';}
 function cylv(g,P0,base,col,w=1){g.strokeStyle=col;g.lineWidth=w;for(const pl of outline(base)){g.beginPath();let started=false;
  for(const p of pl){const q=P0(p);if(!q[2]){started=false;continue}started?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1]);started=true}g.stroke()}}
-const gcol=(q,w)=>(q.v>=.5?'rgba(27,175,122,':'rgba(208,59,59,')+(q.t<=t+1e-9?.9:.35)+')';
+const reached=q=>q.t<=t+1e-9;
+const gcol=(q,w)=>(q.v>=.5?'rgba(27,175,122,':'rgba(208,59,59,')+(reached(q)?.9:.35)+')';
+// ghost readout text: seen or unseen once the slider reaches it, muted while it is still a prediction
+const gtext=q=>reached(q)?(q.v>=.5?'var(--seen)':'var(--unseen)'):'var(--muted)';
 // ---- frame ----
 function draw(){const {L,sh,col,row,rem}=sel(),lay=S.layouts[L],d=doorAngle(t),base=bottlePath(sh,col,row,rem,t),cyls=stock(sh,col,row),hd=hand(base,t);
  const cams=lay.cams.map(c=>doorCam(c,d)),rep=cams.map((c,i)=>{const [b,r]=bearingRange(c,base);return {i,name:lay.cams[i].name,b,r,v:visRay(c,base,cyls,hd)}});
  const near=rep.reduce((m,x)=>x.r<m.r?x:m).i;if(playing)rep.forEach(x=>{if(x.v>=.5)seen[x.i]+=(t-drawn_t)});drawn_t=t;
- const phase=t<S.t_open?'door opening':t<S.t_open+S.t_move?(rem?'removing':'inserting'):'door closing';
+ const phase=t===0&&!playing?'not started':t<S.t_open?'door opening':t<S.t_open+S.t_move?(rem?'removing':'inserting'):'door closing';
  $('tl').textContent=`${t.toFixed(2)} / ${T.toFixed(1)} s`;
  $('kv').innerHTML=`<b>phase</b><span>${phase}</span><b>door</b><span>${d.toFixed(0)} deg</span><b>bottle</b><span>x ${base[0].toFixed(0)} y ${base[1].toFixed(0)} z ${base[2].toFixed(0)}</span>
   <b>any cam &ge;50%</b><span>${rep.some(x=>x.v>=.5)?'yes':'no'}</span><b>nearest</b><span>${rep[near].name}</span>
-  <b>ghosts</b><span>${G.map(q=>`<span style="color:${q.v>=.5?'#1baf7a':'#d03b3b'};font-weight:600">${(100*q.v).toFixed(0)}%</span>`).join(' ')} <small>(${G.filter(q=>q.v>=.5).length}/${S.ghosts} seen)</small></span>`;
+  <b>ghosts (predicted)</b><span>${G.map(q=>`<span style="color:${gtext(q)};font-weight:600">${(100*q.v).toFixed(0)}%</span>`).join(' ')} <small>(${G.filter(q=>q.v>=.5).length}/${S.ghosts} seen)</small></span>`;
  $('tbl').innerHTML='<tr><th>camera</th><th>bearing</th><th>range mm</th><th>visible</th><th>seen s</th></tr>'+rep.map(x=>`<tr${x.i===near?' style="font-weight:600"':''}><td>${x.name}</td><td>${x.b.toFixed(0)}&deg;</td><td>${x.r.toFixed(0)}</td><td style="background:rgba(27,175,122,${x.v*.6})">${(100*x.v).toFixed(0)}%</td><td>${seen[x.i].toFixed(2)}</td></tr>`).join('');
  // world
  wv.width=wv.clientWidth;wv.height=wv.clientHeight;zoom=fitZoom(wv.width,wv.height)*zoomMul;wg.clearRect(0,0,wv.width,wv.height);room(wg,proj);
