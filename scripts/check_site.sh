@@ -1,11 +1,12 @@
 #!/bin/sh
-# Check a built Jekyll site for the Simulations and Studies sections. Usage: check_site.sh <site dir>
+# Check a built Jekyll site for the Projects section. Usage: check_site.sh <site dir>
 site=${1:?usage: check_site.sh <site dir>}
 fail=0
 err() { echo "FAIL: $*" >&2; fail=1; }
 
-[ -f "$site/simulations/index.html" ] || err "missing simulations/index.html"
-[ -f "$site/studies/index.html" ] || err "missing studies/index.html"
+[ -f "$site/projects/index.html" ] || err "missing projects/index.html"
+# The old Simulations index URL stays live as a redirect to Projects.
+grep -q 'http-equiv="refresh" content="0; *url=[^"]*/projects/\{0,1\}"' "$site/simulations/index.html" 2>/dev/null || err "simulations/index.html does not redirect to /projects"
 
 # Standalone pages are served verbatim.
 for page in simulations/*/index.html studies/*/index.html; do
@@ -34,15 +35,15 @@ if [ -f "$hnsw" ]; then
 	! grep -q '\.hover-info {[^}]*min-height' "$hnsw" || err "hnsw .hover-info uses min-height"
 fi
 
-grep -q 'href="/simulations"' "$site/index.html" 2>/dev/null || err "nav in index.html lacks the Simulations link"
-grep -q 'href="/studies"' "$site/index.html" 2>/dev/null || err "nav in index.html lacks the Studies link"
+grep -q 'href="/projects"' "$site/index.html" 2>/dev/null || err "nav in index.html lacks the Projects link"
+! grep -Eq 'href="/(simulations|studies)/?"' "$site/index.html" 2>/dev/null || err "nav in index.html still links the old Simulations or Studies index"
 
 # The about page shows the I Made This comic credited to Nedroid (#17).
 [ -f "$site/assets/i-made-this-ai.webp" ] || err "missing assets/i-made-this-ai.webp"
 grep -q 'src="/assets/i-made-this-ai.webp"' "$site/about/index.html" 2>/dev/null || err "about/index.html lacks the I Made This comic"
 grep -q 'href="https://nedroidcomics.tumblr.com/post/41879001445/the-internet"' "$site/about/index.html" 2>/dev/null || err "about/index.html lacks the Nedroid credit link"
 
-for index in simulations/index.html studies/index.html; do
+for index in projects/index.html; do
 	[ -f "$site/$index" ] || continue
 	for href in $(grep -o 'href="/\([^/"][^"]*\)\{0,1\}"' "$site/$index" | sed 's/^href="//; s/"$//; s/[?#].*//'); do
 		target="$site$href"
