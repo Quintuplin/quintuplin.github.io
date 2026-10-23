@@ -30,6 +30,8 @@ for page in simulations/*/index.html studies/*/index.html; do
 	grep -q 'class="backdrop"' "$page" || err "$page lacks the photo backdrop"
 	grep -qF 'url("/assets/bg.jpg")' "$page" || err "$page does not load the backdrop photo"
 	grep -q 'backdrop-filter' "$page" || err "$page lacks the glass backdrop-filter"
+	# The bar lists LinkedIn before GitHub, as the main nav does.
+	[ "$(sed -n '/class="site-bar"/,/<\/nav>/p' "$page" | grep -o 'LinkedIn\|GitHub' | head -1)" = LinkedIn ] || err "$page site bar does not list LinkedIn before GitHub"
 done
 
 # The main site follows the browser dark mode setting (#23).
@@ -50,6 +52,10 @@ if [ -f "$hnsw" ]; then
 	grep -B2 'id="param-alpha"' "$hnsw" | grep -q '<div class="select-row">' || err "hnsw alpha select is not in a select-row"
 	grep -q '^\.select-row {[^}]*display: flex;[^}]*flex-wrap: wrap' "$hnsw" || err "hnsw .select-row does not wrap the select below its label"
 	! grep -q '\.select-row select {[^}]*min-width: *0' "$hnsw" || err "hnsw .select-row select can shrink below its option text"
+	grep -q 'id="code-title">The code<' "$hnsw" || err "hnsw code heading is not \"The code\""
+	# Above 860 px the header scrolls off and the workspace fills a screen, so the graph is not squashed (#23).
+	sed -n '/^@media not all and (max-width: 860px) {/,/^}/p' "$hnsw" | grep -q '^ *\.layout {[^}]*height: max([^;]*100dvh' || err "hnsw desktop .layout is not one screen tall"
+	grep -q '^\.legend {[^}]*font-size: 0\.75rem' "$hnsw" || err "hnsw legend is not at the reduced 0.75rem size"
 fi
 
 grep -q 'href="/projects"' "$site/index.html" 2>/dev/null || err "nav in index.html lacks the Projects link"
