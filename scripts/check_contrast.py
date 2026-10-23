@@ -43,15 +43,19 @@ PROP = re.compile(r"--([\w-]+)\s*:\s*([^;}]+)")
 
 
 def block(text, pattern):
-    """Return the custom properties of the first block that pattern opens."""
-    m = pattern.search(text)
-    if not m:
-        return None
-    depth, i = 1, m.end()
-    while depth:
-        depth += {"{": 1, "}": -1}.get(text[i], 0)
-        i += 1
-    return {k: v.strip() for k, v in PROP.findall(text[m.end():i])}
+    """Return the custom properties of the first block pattern opens that defines --glass.
+
+    Pages also open token-free blocks with the same selector, such as a dark .backdrop filter,
+    so the first match is not always the token block. Falls back to the first block, or None.
+    """
+    found = []
+    for m in pattern.finditer(text):
+        depth, i = 1, m.end()
+        while depth:
+            depth += {"{": 1, "}": -1}.get(text[i], 0)
+            i += 1
+        found.append({k: v.strip() for k, v in PROP.findall(text[m.end():i])})
+    return next((b for b in found if "glass" in b), found[0] if found else None)
 
 
 def colour(value):
@@ -61,6 +65,8 @@ def colour(value):
         h = value[1:]
         if len(h) == 3:
             h = "".join(c * 2 for c in h)
+        if len(h) != 6:
+            raise ValueError(f"unsupported colour {value}: use #rrggbb or rgba() so alpha is checked")
         return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4)), 1.0
     m = re.fullmatch(r"rgba?\(([^)]*)\)", value)
     if not m:
@@ -118,8 +124,15 @@ def main():
         forced = block(text, FORCED_DARK)
         if forced is not None and forced != dark:
             errors.append(f"{page}: [data-theme=\"dark\"] tokens differ from the dark media block")
-        errors += check_mode(page, "light", light, roles)
-        errors += check_mode(page, "dark", {**light, **dark}, roles)
+        try:
+            errors += check_mode(page, "light", light, roles)
+            # Merged with light tokens, a dark block without --glass would be checked on light glass.
+            if "glass" not in dark:
+                errors.append(f"{page}: no dark media block defines --glass")
+            else:
+                errors += check_mode(page, "dark", {**light, **dark}, roles)
+        except ValueError as e:
+            errors.append(f"{page}: {e}")
     for e in errors:
         print("FAIL:", e, file=sys.stderr)
     if not errors:
