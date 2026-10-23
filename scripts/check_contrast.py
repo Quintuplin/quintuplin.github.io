@@ -26,12 +26,12 @@ PAGES = {
         "graphic": ["crew", "ultra", "fail"],
     },
     "simulations/hnsw/index.html": {
-        "glass": ["text", "muted"],
+        "glass": ["text", "muted", "accent"],
         "card": ["text", "muted", "prune"],
         "graphic": ["focus", "lsh", "disk"],
     },
     "simulations/fridge-event-sim/index.html": {
-        "glass": ["text", "muted"],
+        "glass": ["text", "muted", "accent"],
         "card": ["text", "muted"],
         "graphic": ["focus", "event"],
     },
