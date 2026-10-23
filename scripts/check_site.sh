@@ -43,6 +43,10 @@ grep -q 'href="/projects"' "$site/index.html" 2>/dev/null || err "nav in index.h
 grep -q 'src="/assets/i-made-this-ai.webp"' "$site/about/index.html" 2>/dev/null || err "about/index.html lacks the I Made This comic"
 grep -q 'href="https://nedroidcomics.tumblr.com/post/41879001445/the-internet"' "$site/about/index.html" 2>/dev/null || err "about/index.html lacks the Nedroid credit link"
 
+# The sitemap is generated with real URLs and no raw Liquid (#25).
+grep -q '<loc>' "$site/sitemap.xml" 2>/dev/null || err "sitemap.xml missing or lists no <loc>"
+! grep -Eq '\{%|\{\{' "$site/sitemap.xml" 2>/dev/null || err "sitemap.xml contains raw Liquid"
+
 for index in projects/index.html; do
 	[ -f "$site/$index" ] || continue
 	for href in $(grep -o 'href="/\([^/"][^"]*\)\{0,1\}"' "$site/$index" | sed 's/^href="//; s/"$//; s/[?#].*//'); do
