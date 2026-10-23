@@ -18,7 +18,7 @@ for page in simulations/*/index.html studies/*/index.html; do
 	fi
 done
 
-# Standalone pages carry a site bar with every main nav link (#21).
+# Standalone pages carry a site bar with every main nav link (#21) and the glass theme in both modes (#23).
 navHrefs=$(sed -n '/<nav>/,/<\/nav>/p' _layouts/default.html | grep -o 'href="/[^"]*"')
 for page in simulations/*/index.html studies/*/index.html; do
 	[ -f "$page" ] || continue
@@ -26,7 +26,18 @@ for page in simulations/*/index.html studies/*/index.html; do
 	for href in $navHrefs; do
 		grep -qF "$href" "$page" || err "$page site bar lacks $href"
 	done
+	grep -q 'prefers-color-scheme: *dark' "$page" || err "$page lacks a dark mode block"
+	grep -q 'class="backdrop"' "$page" || err "$page lacks the photo backdrop"
+	grep -qF 'url("/assets/bg.jpg")' "$page" || err "$page does not load the backdrop photo"
+	grep -q 'backdrop-filter' "$page" || err "$page lacks the glass backdrop-filter"
 done
+
+# The main site follows the browser dark mode setting (#23).
+checkMainDark() {
+	grep -q 'prefers-color-scheme: *dark' "$site/css/main.css" 2>/dev/null || err "css/main.css lacks a prefers-color-scheme: dark block"
+}
+checkMainDark
+python3 scripts/check_contrast.py . || err "glass contrast check failed"
 
 # A fixed-height hover box keeps hovering from shifting the HNSW page (#13).
 hnsw="$site/simulations/hnsw/index.html"
