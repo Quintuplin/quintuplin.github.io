@@ -6,11 +6,14 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <title>SKOPE door-event simulator</title>
 <style>
+/* Glass tokens match css/main.css; scripts/check_contrast.py checks them. Scene tokens stay opaque because the JS draws with them. */
 :root {
   color-scheme: light;
   --page-max: 1440px;
-  --bg: #eef1f4; --surface: #ffffff; --surface-2: #f5f7f9; --border: #cbd3db;
-  --text: #19212a; --muted: #56626e; --focus: #1d5cbd;
+  --bg: #2b3a4a; --surface: rgba(255, 255, 255, 0.78); --surface-2: #f5f7f9; --border: #cbd3db;
+  --glass: rgba(252, 251, 247, 0.86); --glass-solid: rgba(252, 251, 247, 0.97); --glass-border: rgba(255, 255, 255, 0.55);
+  --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --text: #19212a; --muted: #4a5560; --focus: #1d5cbd;
   --canvas: #fbfcfd; --floor: #e3e7eb; --wall: #f1f3f6; --seam: #b8c0c8; --shadow: #1a2530; --shadow-alpha: 0.07;
   --cabinet: #55606c; --shelf: #a9b0bb; --shelf-on: #0b6e8f; --door: #4fb3d4;
   --stock: #d9dbe6; --stock-on: #94a2a8; --event: #c0561c; --hand: #e8875a; --cam: #878b9b;
@@ -18,7 +21,9 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #11151a; --surface: #181d23; --surface-2: #1e242b; --border: #313a44;
+    --bg: #0f1419; --surface: rgba(24, 29, 35, 0.80); --surface-2: #1e242b; --border: #313a44;
+    --glass: rgba(18, 23, 30, 0.86); --glass-solid: rgba(18, 23, 30, 0.97); --glass-border: rgba(255, 255, 255, 0.10);
+    --glass-shadow: 0 12px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
     --text: #e2e7ec; --muted: #9ca8b4; --focus: #6ea8ff;
     --canvas: #161b20; --floor: #20262d; --wall: #1a1f25; --seam: #3b454f; --shadow: #000000; --shadow-alpha: 0.18;
     --cabinet: #9ca8b4; --shelf: #5d6771; --shelf-on: #4cb4d8; --door: #5cc0e0;
@@ -27,20 +32,36 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #11151a; --surface: #181d23; --surface-2: #1e242b; --border: #313a44;
+  --bg: #0f1419; --surface: rgba(24, 29, 35, 0.80); --surface-2: #1e242b; --border: #313a44;
+  --glass: rgba(18, 23, 30, 0.86); --glass-solid: rgba(18, 23, 30, 0.97); --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-shadow: 0 12px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   --text: #e2e7ec; --muted: #9ca8b4; --focus: #6ea8ff;
   --canvas: #161b20; --floor: #20262d; --wall: #1a1f25; --seam: #3b454f; --shadow: #000000; --shadow-alpha: 0.18;
   --cabinet: #9ca8b4; --shelf: #5d6771; --shelf-on: #4cb4d8; --door: #5cc0e0;
   --stock: #3a434c; --stock-on: #7d8a95; --event: #f08c4e; --hand: #f0a070; --cam: #8994a0;
 }
+html { background: var(--bg); }
 html, body { height: 100%; }
+/* The body padding is the photo gutter around the glass sheet. */
 body {
-  margin: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; padding-block: 12px;
+  margin: 0; box-sizing: border-box; display: flex; flex-direction: column; padding-block: 12px;
   /* The third term centres the page once the viewport passes --page-max. */
-  padding-left: max(16px, env(safe-area-inset-left, 0px), calc((100% - var(--page-max)) / 2));
-  padding-right: max(16px, env(safe-area-inset-right, 0px), calc((100% - var(--page-max)) / 2));
-  background: var(--bg); color: var(--text);
+  padding-left: max(24px, env(safe-area-inset-left, 0px), calc((100% - var(--page-max)) / 2));
+  padding-right: max(24px, env(safe-area-inset-right, 0px), calc((100% - var(--page-max)) / 2));
+  color: var(--text);
   font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+/* Fixed photo backdrop, as on the main site; dimmed in dark mode. */
+.backdrop { position: fixed; inset: 0; z-index: -1; background: url("/assets/bg.jpg") center / cover no-repeat; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .backdrop { filter: brightness(0.6) saturate(0.9); } }
+:root[data-theme="dark"] .backdrop { filter: brightness(0.6) saturate(0.9); }
+.sheet {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px;
+  background: var(--glass); -webkit-backdrop-filter: blur(10px) saturate(120%); backdrop-filter: blur(10px) saturate(120%);
+  border: 1px solid var(--glass-border); border-radius: 14px; box-shadow: var(--glass-shadow);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .sheet { background: var(--glass-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 *, *::before, *::after { box-sizing: inherit; }
 h1, p { margin: 0; }
@@ -97,7 +118,7 @@ details .hint { margin-top: 4px; }
   /* The readout drops under the slider so the narrow Playback box keeps a usable slider. */
   .fs-play .slider-row { grid-template-columns: auto minmax(0, 1fr); row-gap: 4px; }
   .fs-play output { grid-column: 1 / -1; text-align: left; font-size: 0.85rem; }
-  body { padding-block: 8px; gap: 8px; }
+  .sheet { padding-block: 10px; gap: 8px; }
   .layout { row-gap: 8px; }
   .column { gap: 6px; }
 }
@@ -105,33 +126,39 @@ details .hint { margin-top: 4px; }
   html, body { height: auto; }
   body {
     min-height: 100%;
-    padding-left: max(16px, env(safe-area-inset-left, 0px));
-    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 8px;
+    padding-left: max(8px, env(safe-area-inset-left, 0px));
+    padding-right: max(8px, env(safe-area-inset-right, 0px));
   }
+  .sheet { padding: 10px; }
   .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
   .side { overflow: visible; }
   .world-card { flex: none; }
   #world { flex: none; aspect-ratio: 4/3; }
 }
+@media (max-width: 600px) { .sheet { border-radius: 10px; } }
 </style>
 </head>
 <body>
+<div class="backdrop" aria-hidden="true"></div>
+<div class="sheet">
 <nav class="site-bar" aria-label="Site">
   <a href="/">Home</a>
   <a href="/about">About</a>
   <a href="/cv">Resume</a>
   <a href="/projects" aria-current="page">Projects</a>
-  <a class="ext" href="https://github.com/quintuplin">GitHub</a>
-  <a href="https://www.linkedin.com/in/jack-fraser-3a137ba3/">LinkedIn</a>
+  <a class="ext" href="https://www.linkedin.com/in/jack-fraser-3a137ba3/">LinkedIn</a>
+  <a href="https://github.com/quintuplin">GitHub</a>
 </nav>
 <style>
-/* Static link bar back to the main site. */
-.site-bar { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding-bottom: 8px; margin-bottom: 8px;
-  border-bottom: 1px solid var(--border, var(--line)); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-.site-bar a { color: var(--muted); text-decoration: none; }
-.site-bar a:hover, .site-bar a:focus-visible, .site-bar a[aria-current] { color: var(--text, var(--ink)); }
-.site-bar a[aria-current] { font-weight: 600; }
+/* Static link bar back to the main site, styled like its nav. */
+.site-bar { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 22px; padding-bottom: 8px; margin-bottom: 8px;
+  border-bottom: 1px solid var(--rule, var(--border, var(--line))); font: 600 16px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+.site-bar a { padding-block: 2px; color: var(--muted); text-decoration: none; }
+.site-bar a:hover, .site-bar a:focus-visible { color: var(--text, var(--ink)); text-decoration: underline; }
+.site-bar a[aria-current] { color: var(--accent, var(--focus)); }
 .site-bar .ext { margin-left: auto; }
+@media (max-width: 600px) { .site-bar .ext { margin-left: 0; } }
 </style>
 <header class=site-header>
 <h1>SKOPE door-event simulator</h1>
@@ -165,6 +192,7 @@ details .hint { margin-top: 4px; }
 Door camera (config A) swings with the door. Lane is emptied in front of the event row. Random stock keeps each slot with the given probability (seeded; re-roll for a new layout): gaps on flat shelves, front-packed random counts on tilted gravity-feed shelves. Ghost bottles mark 7 instants of the move: green = best camera &ge; 50% at that instant, red = not; ghosts still ahead of the slider are faded.</p></details>
 </section>
 </main>
+</div>
 <script>
 const S={"W": 470, "D": 555, "H": 1570, "shelf_w": 445, "shelf_d": 475, "shelf_y0": 70, "shelves": [100, 390, 680, 970, 1260], "tilt_deg": 7, "r": 32, "h": 250, "rows": [100, 170, 240, 310, 380, 450, 520], "cols": [50, 124, 198, 272, 346, 420], "shapes": {"model bottle": [["cyl", 32, 0, 250]], "PET 600 ml": [["cyl", 32, 0, 160], ["cone", 32, 160, 205, 14], ["cyl", 14, 205, 240]], "can 330 ml": [["cyl", 33, 0, 115]], "tall can 500 ml": [["cyl", 33, 0, 168]], "slim can 250 ml": [["cyl", 27, 0, 134]], "flavoured milk 300 ml": [["cyl", 30, 0, 145], ["cone", 30, 145, 170, 19], ["cyl", 19, 170, 180]], "milk 1 L": [["box", 36, 0, 195], ["cone", 36, 195, 220, 20], ["cyl", 20, 220, 235]], "juice carton 1 L": [["box", 35, 0, 245]]}, "pack_h": {"model bottle": 250, "PET 600 ml": 240, "can 330 ml": 115, "tall can 500 ml": 168, "slim can 250 ml": 134, "flavoured milk 300 ml": 180, "milk 1 L": 235, "juice carton 1 L": 245}, "pack_r": {"model bottle": 32, "PET 600 ml": 32, "can 330 ml": 33, "tall can 500 ml": 33, "slim can 250 ml": 27, "flavoured milk 300 ml": 30, "milk 1 L": 36, "juice carton 1 L": 35}, "lane_rows": {"model bottle": [100, 170, 240, 310, 380, 450, 520], "PET 600 ml": [100, 170, 240, 310, 380, 450, 520], "can 330 ml": [101, 173, 245, 317, 389, 461], "tall can 500 ml": [101, 173, 245, 317, 389, 461], "slim can 250 ml": [95, 155, 215, 275, 335, 395, 455, 515], "flavoured milk 300 ml": [98, 164, 230, 296, 362, 428, 494], "milk 1 L": [104, 182, 260, 338, 416, 494], "juice carton 1 L": [103, 179, 255, 331, 407, 483]}, "mixes": [{"name": "600 ml bottle in every lane", "lanes": null}, {"name": "dairy mix, as stocked", "lanes": [["milk 1 L", "milk 1 L", "milk 1 L", "juice carton 1 L", "juice carton 1 L", "flavoured milk 300 ml"], ["flavoured milk 300 ml", "flavoured milk 300 ml", "PET 600 ml", "PET 600 ml", "juice carton 1 L", "milk 1 L"], ["PET 600 ml", "PET 600 ml", "PET 600 ml", "tall can 500 ml", "PET 600 ml", "PET 600 ml"], ["tall can 500 ml", "tall can 500 ml", "PET 600 ml", "slim can 250 ml", "slim can 250 ml", "PET 600 ml"], ["can 330 ml", "can 330 ml", "slim can 250 ml", "can 330 ml", "tall can 500 ml", "can 330 ml"]]}, {"name": "dairy mix, shortest lanes on the left", "lanes": [["flavoured milk 300 ml", "milk 1 L", "milk 1 L", "milk 1 L", "juice carton 1 L", "juice carton 1 L"], ["flavoured milk 300 ml", "flavoured milk 300 ml", "milk 1 L", "PET 600 ml", "PET 600 ml", "juice carton 1 L"], ["tall can 500 ml", "PET 600 ml", "PET 600 ml", "PET 600 ml", "PET 600 ml", "PET 600 ml"], ["slim can 250 ml", "slim can 250 ml", "tall can 500 ml", "tall can 500 ml", "PET 600 ml", "PET 600 ml"], ["can 330 ml", "can 330 ml", "can 330 ml", "can 330 ml", "slim can 250 ml", "tall can 500 ml"]]}], "layouts": [{"name": "A  AoFrio-class (1 cam, door glass)", "cams": [{"name": "A door-top", "pos": [235, 8, 1470], "yaw": 0, "pitch": -38, "fov": [150, 150], "fisheye": true, "note": "predicted: OV5640-class 5 MP, 150-210 deg, adhesive on inner door glass, 5 V from SCS 800", "frustum": [[862.8517870878944, 140.56892400635618, 1366.4258051523725], [778.7355974295751, 333.8410027685482, 1613.802785100602], [548.9258935439473, 475.32598410692657, 1794.8953030456532], [235.00000000000003, 527.1130815307404, 1861.1797650488313], [-78.92589354394704, 475.3259841069266, 1794.8953030456532], [-308.73559742957514, 333.8410027685482, 1613.802785100602], [-392.8517870878944, 140.56892400635624, 1366.4258051523727], [-308.73559742957525, -52.7031547558358, 1119.0488252041434], [-78.9258935439475, -194.18813609421423, 937.956307259092], [234.9999999999999, -245.97523351802798, 871.6718452559138], [548.9258935439473, -194.18813609421423, 937.956307259092], [778.7355974295749, -52.70315475583609, 1119.048825204143]]}]}, {"name": "A2 AoFrio-class on the frame (1 cam, static, top centre)", "cams": [{"name": "A2 frame-top", "pos": [235, 20, 1550], "yaw": 0, "pitch": -45, "fov": [150, 150], "fisheye": true, "note": "same module as A but on the cabinet top-front frame: wired to the SCS 800 door switch, so no IMU and no need to ride the door", "frustum": [[862.8517870878944, 138.95825622994255, 1431.0417437700573], [778.7355974295751, 360.9373843449139, 1653.0208718850288], [548.9258935439473, 523.4373843449139, 1815.5208718850288], [235.00000000000003, 582.9165124598852, 1875.0], [-78.92589354394704, 523.4373843449139, 1815.5208718850288], [-308.73559742957514, 360.9373843449139, 1653.0208718850288], [-392.8517870878944, 138.9582562299426, 1431.0417437700576], [-308.73559742957525, -83.0208718850286, 1209.0626156550863], [-78.9258935439475, -245.52087188502867, 1046.5626156550861], [234.9999999999999, -305.00000000000006, 987.0834875401148], [548.9258935439473, -245.52087188502878, 1046.5626156550861], [778.7355974295749, -83.02087188502892, 1209.062615655086]]}]}, {"name": "B  Two corner fisheyes (custom)", "cams": [{"name": "B left", "pos": [20, 20, 1550], "yaw": 28, "pitch": -48, "fov": [200, 200], "fisheye": true, "note": "IMX219-200 module, 200 deg, ~NZ$45", "frustum": [[609.5283051060385, -250.52534362337286, 1507.8999294981852], [645.8870079095017, 2.64214748789918, 1724.5398472735083], [519.3082947687565, 269.42890978501447, 1883.1312740325889], [263.70882964883623, 478.34964575914705, 1941.1797650488313], [-52.423717185549364, 573.4242129239123, 1883.1312740325889], [-344.38188510893303, 529.1774577867728, 1724.5398472735083], [-533.9357188025735, 357.4652626544228, 1507.8999294981854], [-570.2944216060367, 104.29777154315083, 1291.2600117228624], [-443.71570846529175, -162.48899075396446, 1132.668584963782], [-188.11624334537143, -371.40972672809716, 1074.6200939475393], [128.01630348901443, -466.4842938928625, 1132.6685849637818], [419.97447141239763, -422.23753875572305, 1291.2600117228621]]}, {"name": "B right", "pos": [450, 20, 1550], "yaw": -28, "pitch": -48, "fov": [200, 200], "fisheye": true, "note": "IMX219-200 module, 200 deg, ~NZ$45", "frustum": [[1003.9357188025735, 357.4652626544227, 1507.8999294981852], [814.381885108933, 529.1774577867728, 1724.5398472735083], [522.4237171855495, 573.4242129239124, 1883.1312740325889], [206.29117035116383, 478.3496457591471, 1941.1797650488313], [-49.3082947687563, 269.42890978501464, 1883.1312740325889], [-175.88700790950168, 2.64214748789918, 1724.5398472735083], [-139.5283051060385, -250.5253436233728, 1507.8999294981854], [50.025528587601855, -422.2375387557229, 1291.2600117228624], [341.9836965109853, -466.4842938928625, 1132.668584963782], [658.1162433453712, -371.40972672809727, 1074.6200939475393], [913.7157084652915, -162.48899075396466, 1132.6685849637818], [1040.2944216060366, 104.29777154315039, 1291.2600117228621]]}]}, {"name": "C  Three Pi Cam 3 Wide (any subset)", "cams": [{"name": "C left", "pos": [70, 20, 1550], "yaw": 16, "pitch": -52, "fov": [67, 102], "fisheye": false, "note": "Pi Camera Module 3 Wide, portrait 67x102 deg, 25x24x12 mm, ~NZ$43", "frustum": [[-407.6018132545929, -84.75617185319852, 543.611916731541], [419.51699493908035, -321.9286735770588, 543.611916731541], [768.2109047328972, 894.1115039172573, 1531.9741035797203], [-58.90790346077608, 1131.2840056411176, 1531.9741035797203]]}, {"name": "C centre", "pos": [235, 20, 1550], "yaw": 0, "pitch": -52, "fov": [67, 102], "fisheye": false, "note": "Pi Camera Module 3 Wide", "frustum": [[-195.2256147771995, -212.34299635451174, 543.611916731541], [665.2256147771996, -212.34299635451174, 543.611916731541], [665.2256147771996, 1052.7029142778674, 1531.9741035797203], [-195.2256147771995, 1052.7029142778674, 1531.9741035797203]]}, {"name": "C right", "pos": [400, 20, 1550], "yaw": -16, "pitch": -52, "fov": [67, 102], "fisheye": false, "note": "Pi Camera Module 3 Wide", "frustum": [[50.48300506091965, -321.9286735770588, 543.611916731541], [877.6018132545929, -84.75617185319852, 543.611916731541], [528.9079034607761, 1131.2840056411176, 1531.9741035797203], [-298.21090473289723, 894.1115039172573, 1531.9741035797203]]}]}, {"name": "D  One cam per shelf, under the shelf above (custom)", "cams": [{"name": "D shelf 1", "pos": [235, 55, 375], "yaw": 0, "pitch": -35, "fov": [160, 160], "fisheye": true, "note": "160 deg fisheye (IMX219-160 class, ~NZ$40), centre front edge of the shelf above, looks back along the cap tops; a 102 deg Pi Cam 3 Wide here misses the outer columns of rows 1-2", "frustum": [[875.1250394579353, 147.45876881990065, 310.2596730987167], [789.3645457690882, 331.03908829557827, 572.4395404349863], [555.0625197289677, 465.4292094215005, 764.3685240468035], [235.00000000000003, 514.6194077712559, 834.6194077712559], [-85.06251972896746, 465.4292094215006, 764.3685240468035], [-319.3645457690882, 331.03908829557827, 572.4395404349863], [-405.12503945793526, 147.45876881990068, 310.25967309871675], [-319.3645457690882, -36.12155065577686, 48.07980576244722], [-85.06251972896791, -170.51167178169916, -143.8491778493701], [234.9999999999999, -219.70187013145454, -214.1000615738226], [555.0625197289677, -170.51167178169925, -143.84917784937022], [789.364545769088, -36.12155065577711, 48.079805762446824]]}, {"name": "D shelf 2", "pos": [235, 55, 665], "yaw": 0, "pitch": -35, "fov": [160, 160], "fisheye": true, "note": "as shelf 1", "frustum": [[875.1250394579353, 147.45876881990065, 600.2596730987167], [789.3645457690882, 331.03908829557827, 862.4395404349863], [555.0625197289677, 465.4292094215005, 1054.3685240468035], [235.00000000000003, 514.6194077712559, 1124.6194077712557], [-85.06251972896746, 465.4292094215006, 1054.3685240468035], [-319.3645457690882, 331.03908829557827, 862.4395404349863], [-405.12503945793526, 147.45876881990068, 600.2596730987168], [-319.3645457690882, -36.12155065577686, 338.0798057624472], [-85.06251972896791, -170.51167178169916, 146.1508221506299], [234.9999999999999, -219.70187013145454, 75.89993842617741], [555.0625197289677, -170.51167178169925, 146.15082215062978], [789.364545769088, -36.12155065577711, 338.0798057624468]]}, {"name": "D shelf 3", "pos": [235, 55, 955], "yaw": 0, "pitch": -35, "fov": [160, 160], "fisheye": true, "note": "as shelf 1", "frustum": [[875.1250394579353, 147.45876881990065, 890.2596730987167], [789.3645457690882, 331.03908829557827, 1152.4395404349862], [555.0625197289677, 465.4292094215005, 1344.3685240468035], [235.00000000000003, 514.6194077712559, 1414.6194077712557], [-85.06251972896746, 465.4292094215006, 1344.3685240468035], [-319.3645457690882, 331.03908829557827, 1152.4395404349862], [-405.12503945793526, 147.45876881990068, 890.2596730987168], [-319.3645457690882, -36.12155065577686, 628.0798057624472], [-85.06251972896791, -170.51167178169916, 436.1508221506299], [234.9999999999999, -219.70187013145454, 365.8999384261774], [555.0625197289677, -170.51167178169925, 436.1508221506298], [789.364545769088, -36.12155065577711, 628.0798057624468]]}, {"name": "D shelf 4", "pos": [235, 55, 1245], "yaw": 0, "pitch": -35, "fov": [160, 160], "fisheye": true, "note": "as shelf 1", "frustum": [[875.1250394579353, 147.45876881990065, 1180.2596730987166], [789.3645457690882, 331.03908829557827, 1442.4395404349862], [555.0625197289677, 465.4292094215005, 1634.3685240468035], [235.00000000000003, 514.6194077712559, 1704.6194077712557], [-85.06251972896746, 465.4292094215006, 1634.3685240468035], [-319.3645457690882, 331.03908829557827, 1442.4395404349862], [-405.12503945793526, 147.45876881990068, 1180.2596730987168], [-319.3645457690882, -36.12155065577686, 918.0798057624472], [-85.06251972896791, -170.51167178169916, 726.1508221506299], [234.9999999999999, -219.70187013145454, 655.8999384261774], [555.0625197289677, -170.51167178169925, 726.1508221506298], [789.364545769088, -36.12155065577711, 918.0798057624468]]}, {"name": "D shelf 5", "pos": [235, 55, 1555], "yaw": 0, "pitch": -35, "fov": [160, 160], "fisheye": true, "note": "as shelf 1", "frustum": [[875.1250394579353, 147.45876881990065, 1490.2596730987166], [789.3645457690882, 331.03908829557827, 1752.4395404349862], [555.0625197289677, 465.4292094215005, 1944.3685240468035], [235.00000000000003, 514.6194077712559, 2014.6194077712557], [-85.06251972896746, 465.4292094215006, 1944.3685240468035], [-319.3645457690882, 331.03908829557827, 1752.4395404349862], [-405.12503945793526, 147.45876881990068, 1490.2596730987168], [-319.3645457690882, -36.12155065577686, 1228.0798057624472], [-85.06251972896791, -170.51167178169916, 1036.15082215063], [234.9999999999999, -219.70187013145454, 965.8999384261774], [555.0625197289677, -170.51167178169925, 1036.1508221506297], [789.364545769088, -36.12155065577711, 1228.0798057624468]]}]}, {"name": "E  Side band: one front-corner cam per shelf (custom)", "cams": [{"name": "E shelf 1", "pos": [15, 60, 375], "yaw": 45, "pitch": -30, "fov": [102, 67], "fisheye": false, "note": "Pi Camera Module 3 Wide, landscape, left front corner under the shelf above, 45 deg across the shelf; all five on one vertical band so one cable run", "frustum": [[-306.64834136733634, 873.5170581227602, -322.5863117558325], [828.5170581227602, -261.64834136733634, -322.5863117558325], [1132.7325077718695, 42.56710828177273, 422.58631175583264], [-2.432891718227271, 1177.7325077718695, 422.58631175583264]]}, {"name": "E shelf 2", "pos": [15, 60, 665], "yaw": 45, "pitch": -30, "fov": [102, 67], "fisheye": false, "note": "as shelf 1", "frustum": [[-306.64834136733634, 873.5170581227602, -32.586311755832526], [828.5170581227602, -261.64834136733634, -32.586311755832526], [1132.7325077718695, 42.56710828177273, 712.5863117558326], [-2.432891718227271, 1177.7325077718695, 712.5863117558326]]}, {"name": "E shelf 3", "pos": [15, 60, 955], "yaw": 45, "pitch": -30, "fov": [102, 67], "fisheye": false, "note": "as shelf 1", "frustum": [[-306.64834136733634, 873.5170581227602, 257.4136882441675], [828.5170581227602, -261.64834136733634, 257.4136882441675], [1132.7325077718695, 42.56710828177273, 1002.5863117558326], [-2.432891718227271, 1177.7325077718695, 1002.5863117558326]]}, {"name": "E shelf 4", "pos": [15, 60, 1245], "yaw": 45, "pitch": -30, "fov": [102, 67], "fisheye": false, "note": "as shelf 1", "frustum": [[-306.64834136733634, 873.5170581227602, 547.4136882441675], [828.5170581227602, -261.64834136733634, 547.4136882441675], [1132.7325077718695, 42.56710828177273, 1292.5863117558326], [-2.432891718227271, 1177.7325077718695, 1292.5863117558326]]}, {"name": "E shelf 5", "pos": [15, 60, 1555], "yaw": 45, "pitch": -30, "fov": [102, 67], "fisheye": false, "note": "as shelf 1", "frustum": [[-306.64834136733634, 873.5170581227602, 857.4136882441675], [828.5170581227602, -261.64834136733634, 857.4136882441675], [1132.7325077718695, 42.56710828177273, 1602.5863117558326], [-2.432891718227271, 1177.7325077718695, 1602.5863117558326]]}]}], "hinge": [470, 0], "door_max": 100, "t_open": 1.0, "t_move": 1.6, "t_close": 1.0, "fps": 20, "hand_r": 40, "hand_len": 350, "ghosts": 7, "img_w": 88, "img_h": 66, "hand_spheres": 9},T=S.t_open+S.t_move+S.t_close;let OPT={op:false,tilt:0};
 
