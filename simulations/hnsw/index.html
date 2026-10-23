@@ -174,8 +174,11 @@ legend { padding: 0 4px; font-weight: 600; font-size: 0.85rem; }
 #playback-settings .slider-row { --output-width: 3.5rem; }
 .slider-row label { font-size: 0.85rem; }
 .slider-row input { width: 100%; min-width: 0; accent-color: var(--result); }
-.slider-row select { font: inherit; min-width: 0; }
 .slider-row output { font-variant-numeric: tabular-nums; text-align: right; }
+/* The select keeps its full option text; it drops below the label only when the box is too narrow for both. */
+.select-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin-bottom: 2px; }
+.select-row label { font-size: 0.85rem; }
+.select-row select { font: inherit; max-width: 100%; }
 .button-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .hint { color: var(--muted); font-size: 0.8rem; margin-top: 4px; }
 .coords { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -251,9 +254,9 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .stats div { display: flex; gap: 5px; min-width: 0; }
 .stats dt { color: var(--muted); }
 .stats dd { margin: 0; font-variant-numeric: tabular-nums; }
-.legend { list-style: none; margin: 2px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 2px 10px; font-size: 0.8rem; }
-.legend li { display: flex; align-items: center; gap: 6px; }
-.legend svg { flex: none; width: 34px; height: 14px; overflow: visible; }
+.legend { list-style: none; margin: 2px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr)); gap: 1px 10px; font-size: 0.75rem; }
+.legend li { display: flex; align-items: center; gap: 5px; }
+.legend svg { flex: none; width: 28px; height: 12px; overflow: visible; }
 .sw-edge { stroke: var(--edge); fill: none; }
 .sw-trace { stroke: var(--trace); fill: none; }
 .sw-found { stroke: var(--found); fill: none; }
@@ -266,8 +269,13 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .sw-lsh { stroke: var(--lsh); fill: none; }
 .sw-slab { fill: var(--slab); stroke: var(--slab-edge); }
 
-/* Desktop fits one screen: long hints stay for screen readers only and controls pack tighter. */
+/* Desktop: the site bar and header scroll off and the workspace fills one screen below them.
+   Long hints stay for screen readers only and controls pack tighter. */
 @media not all and (max-width: 860px) {
+  html, body { height: auto; }
+  body { min-height: 100vh; }
+  /* 32px leaves the sheet and photo edge in view under the workspace; the floor keeps a short window usable. */
+  .layout { flex: none; height: max(32rem, calc(100vh - 32px)); height: max(32rem, calc(100dvh - 32px)); }
   .hint.desktop-sr {
     position: absolute; width: 1px; height: 1px; overflow: hidden;
     clip-path: inset(50%); white-space: nowrap; margin: 0;
@@ -348,7 +356,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
           <input id="param-ef-construction" type="range" min="4" max="64" step="1" value="24" aria-describedby="param-m-hint">
           <output id="param-ef-construction-value" for="param-ef-construction">24</output>
         </div>
-        <div class="slider-row">
+        <div class="select-row">
           <label for="param-alpha">Prune slack (alpha)</label>
           <select id="param-alpha" aria-describedby="param-m-hint">
             <option value="1" selected>1, HNSW</option>
@@ -424,7 +432,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   </section>
 
   <section class="column" aria-labelledby="code-title">
-    <h2 id="code-title">The code running now</h2>
+    <h2 id="code-title">The code</h2>
     <pre id="code-pane" class="code-pane" tabindex="0" aria-label="HNSW source code. The highlighted line is the step shown in the layer views."><code id="code-lines"></code></pre>
     <div class="card">
         <h2 id="legend-title">Legend</h2>
