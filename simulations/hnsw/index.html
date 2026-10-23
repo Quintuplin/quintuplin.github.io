@@ -25,8 +25,8 @@
   --slab: #f2ede2;
   --slab-edge: #cdc4b2;
   --node: #1f2d52;
-  --edge: #a3a9b0;
-  --connector: #bdb5a6;
+  --edge: #868c94;
+  --connector: #928a7c;
   --trace: #c25418;
   --found: #158a6e;
   --prune: #c42f2a;
@@ -61,7 +61,7 @@
     --slab-edge: #4a463e;
     --node: #b9c8ee;
     --edge: #6a7079;
-    --connector: #5b564c;
+    --connector: #746d61;
     --trace: #f08c4e;
     --found: #46c9a5;
     --prune: #ff6d64;
@@ -96,7 +96,7 @@
   --slab-edge: #4a463e;
   --node: #b9c8ee;
   --edge: #6a7079;
-  --connector: #5b564c;
+  --connector: #746d61;
   --trace: #f08c4e;
   --found: #46c9a5;
   --prune: #ff6d64;
@@ -270,7 +270,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .sw-fill-found { fill: var(--found); }
 .sw-fill-node { fill: var(--node); }
 .sw-lsh { stroke: var(--lsh); fill: none; }
-.sw-slab { fill: var(--slab); stroke: var(--slab-edge); }
+/* The slab side colour is too faint for a 3:1 swatch outline, so the swatch borrows the link grey. */
+.sw-slab { fill: var(--slab); fill-opacity: 0.35; stroke: var(--edge); }
 
 /* Desktop: the site bar and header scroll off and the workspace fills one screen below them.
    Long hints stay for screen readers only and controls pack tighter. */
@@ -457,7 +458,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
           <li><svg viewBox="0 0 34 14" aria-hidden="true"><line class="sw-prune" x1="2" y1="7" x2="32" y2="7" stroke-width="1.5" stroke-dasharray="3 2"/></svg>Link just pruned</li>
           <li><svg viewBox="0 0 34 14" aria-hidden="true"><circle class="sw-fill-node" cx="17" cy="7" r="3"/><rect class="sw-lsh" x="11" y="1" width="12" height="12" stroke-width="1.4"/></svg>LSH bucket member</li>
           <li><svg viewBox="0 0 34 14" aria-hidden="true"><circle class="sw-fill-node" cx="17" cy="7" r="3"/><path class="sw-lsh" d="M17 0 L24 7 L17 14 L10 7 Z" stroke-width="1.8"/></svg>LSH seed</li>
-          <li><svg viewBox="0 0 34 14" aria-hidden="true"><rect class="sw-slab" x="3" y="3" width="28" height="8" opacity="0.35"/></svg>Skipped by LSH</li>
+          <li><svg viewBox="0 0 34 14" aria-hidden="true"><rect class="sw-slab" x="3" y="3" width="28" height="8"/></svg>Skipped by LSH</li>
         </ul>
     </div>
   </section>

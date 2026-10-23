@@ -17,7 +17,8 @@ WORST_PIXELS = ((9, 10, 11), (250, 244, 194))
 TEXT, GRAPHIC = 4.5, 3.0
 
 # Tokens drawn on the bare sheet (glass) and on inner cards (card). Graphics cover
-# strokes, focus rings and large text, and are checked on both.
+# strokes, focus rings and large text, and are checked on both. Card graphics, such as
+# legend swatches, appear only on cards.
 PAGES = {
     "css/main.css": {"glass": ["ink", "muted", "accent"]},
     "studies/subagent-crew-study/index.html": {
@@ -29,6 +30,7 @@ PAGES = {
         "glass": ["text", "muted", "accent"],
         "card": ["text", "muted", "prune"],
         "graphic": ["focus", "lsh", "disk"],
+        "card-graphic": ["node", "edge", "connector", "trace", "found", "prune", "lsh"],
     },
     "simulations/fridge-event-sim/index.html": {
         "glass": ["text", "muted", "accent"],
@@ -100,6 +102,7 @@ def check_mode(page, mode, tokens, roles):
             layers["card"] = over(colour(tokens["surface"]), layers["glass"])
         checks = [(role, name, TEXT) for role in ("glass", "card") for name in roles.get(role, [])]
         checks += [(role, name, GRAPHIC) for role in layers for name in roles.get("graphic", [])]
+        checks += [("card", name, GRAPHIC) for name in roles.get("card-graphic", [])]
         for role, name, need in checks:
             if role not in layers:
                 errors.append(f"{page} {mode}: no --surface for card tokens")
