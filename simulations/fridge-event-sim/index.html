@@ -116,6 +116,23 @@ details .hint { margin-top: 4px; }
 </style>
 </head>
 <body>
+<nav class="site-bar" aria-label="Site">
+  <a href="/">Home</a>
+  <a href="/about">About</a>
+  <a href="/cv">Resume</a>
+  <a href="/projects" aria-current="page">Projects</a>
+  <a class="ext" href="https://github.com/quintuplin">GitHub</a>
+  <a href="https://www.linkedin.com/in/jack-fraser-3a137ba3/">LinkedIn</a>
+</nav>
+<style>
+/* Static link bar back to the main site. */
+.site-bar { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding-bottom: 8px; margin-bottom: 8px;
+  border-bottom: 1px solid var(--border, var(--line)); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.site-bar a { color: var(--muted); text-decoration: none; }
+.site-bar a:hover, .site-bar a:focus-visible, .site-bar a[aria-current] { color: var(--text, var(--ink)); }
+.site-bar a[aria-current] { font-weight: 600; }
+.site-bar .ext { margin-left: auto; }
+</style>
 <header class=site-header>
 <h1>SKOPE door-event simulator</h1>
 <p class=subtitle>One pack removed or inserted through the open door, watched by each camera layout.</p>
