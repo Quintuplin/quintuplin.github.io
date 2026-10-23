@@ -182,7 +182,7 @@ details .hint { margin-top: 4px; }
 </fieldset>
 </div>
 <section class=column>
-<div class="card world-card"><canvas id=world></canvas><p class=hint>drag to orbit, wheel to zoom</p></div>
+<div class="card world-card"><canvas id=world tabindex=0 role=img aria-label="Orbit view of the cabinet, door, packs and cameras"></canvas><p class=hint>drag to orbit, click or hold Ctrl to zoom with the wheel</p></div>
 </section>
 <section class="column side">
 <div id=views></div>
@@ -283,11 +283,14 @@ function tick(now){if(!playing)return;t=Math.min(T,t+(now-last)/1000);last=now;$
 // world colours come from the CSS tokens so both themes stay in one place; C.shelfOn reads --shelf-on
 const TOKENS=['floor','wall','seam','shadow','shadow-alpha','cabinet','shelf','shelf-on','door','stock','stock-on','event','hand','cam'],C={};
 function readCols(){const s=getComputedStyle(document.documentElement);TOKENS.forEach(k=>C[k.replace(/-(\w)/g,(_,c)=>c.toUpperCase())]=s.getPropertyValue('--'+k).trim())}
-let rx=-1.0,rz=0.6,zoom=0.38;const wv=$('world'),wg=wv.getContext('2d');
-function proj(p){const x=p[0]-S.W/2,y=p[1]-S.D/2+150,z=p[2]-S.H/2;const x1=x*Math.cos(rz)-y*Math.sin(rz),y1=x*Math.sin(rz)+y*Math.cos(rz);
- const y2=y1*Math.cos(rx)-z*Math.sin(rx),z2=y1*Math.sin(rx)+z*Math.cos(rx);const f=1800/(1800-y2);return [wv.width/2+x1*f*zoom,wv.height/2-z2*f*zoom];}
+const ORBIT=[-1.0,0.6];let [rx,rz]=ORBIT,zoom=1,zoomMul=1;const wv=$('world'),wg=wv.getContext('2d');
+// unit-scale orbit view; proj scales it by zoom about the canvas centre
+function view(p,ax=rx,az=rz){const x=p[0]-S.W/2,y=p[1]-S.D/2+150,z=p[2]-S.H/2;const x1=x*Math.cos(az)-y*Math.sin(az),y1=x*Math.sin(az)+y*Math.cos(az);
+ const y2=y1*Math.cos(ax)-z*Math.sin(ax),z2=y1*Math.sin(ax)+z*Math.cos(ax);const f=1800/(1800-y2);return [x1*f,z2*f];}
+function proj(p){const [x,y]=view(p);return [wv.width/2+x*zoom,wv.height/2-y*zoom];}
 function line(g,P,a,b,col,w=1){g.strokeStyle=col;g.lineWidth=w;g.beginPath();g.moveTo(...P(a));g.lineTo(...P(b));g.stroke();}
-function boxw(g,P,a,b,col){const Q=[[a[0],a[1],a[2]],[b[0],a[1],a[2]],[b[0],b[1],a[2]],[a[0],b[1],a[2]],[a[0],a[1],b[2]],[b[0],a[1],b[2]],[b[0],b[1],b[2]],[a[0],b[1],b[2]]];
+const corners=(a,b)=>[[a[0],a[1],a[2]],[b[0],a[1],a[2]],[b[0],b[1],a[2]],[a[0],b[1],a[2]],[a[0],a[1],b[2]],[b[0],a[1],b[2]],[b[0],b[1],b[2]],[a[0],b[1],b[2]]];
+function boxw(g,P,a,b,col){const Q=corners(a,b);
  [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]].forEach(([i,j])=>line(g,P,Q[i],Q[j],col));}
 // outline of a pack: a ring (circle, or square for a box) at the bottom and top of every part, joined by 4 side lines
 function outline(b){const [x,y,z0]=b,o=[];for(const [k,r,p0,p1,top] of S.shapes[shp(b)]){const r1=k==='cone'?top:r,n=k==='box'?4:12,off=k==='box'?Math.PI/4:0,rr=k==='box'?Math.SQRT2:1;
@@ -295,6 +298,9 @@ function outline(b){const [x,y,z0]=b,o=[];for(const [k,r,p0,p1,top] of S.shapes[
   o.push(ring(p0,r),ring(p1,r1));for(let i=0;i<4;i++){const a=off+Math.PI*i/2;o.push([[x+r*rr*Math.cos(a),y+r*rr*Math.sin(a),z0+p0],[x+r1*rr*Math.cos(a),y+r1*rr*Math.sin(a),z0+p1]])}}return o;}
 function cyl(g,P,base,col,w=1){g.strokeStyle=col;g.lineWidth=w;for(const pl of outline(base)){g.beginPath();pl.forEach((p,i)=>i?g.lineTo(...P(p)):g.moveTo(...P(p)));g.stroke()}}
 function doorCorners(d){return [[0,0,0],[S.W,0,0],[S.W,0,S.H],[0,0,S.H]].map(p=>rotZ(p,d,S.hinge));}
+// the base zoom fits the cabinet and the fully open door at the starting orbit, so dragging never rescales
+const fitPoints=()=>corners([0,0,0],[S.W,S.D,S.H]).concat(doorCorners(S.door_max));
+const fitZoom=(W,H)=>0.92*Math.min(...fitPoints().map(p=>{const [x,y]=view(p,...ORBIT);return Math.min(W/2/Math.abs(x),H/2/Math.abs(y))}));
 function poly(g,P,pts,fill){g.fillStyle=fill;g.beginPath();pts.forEach((p,i)=>i?g.lineTo(...P(p)):g.moveTo(...P(p)));g.closePath();g.fill();}
 // room backdrop: floor, back wall and a baked contact shadow under the cabinet so up and down read at any orbit
 function room(g,P){const yw=S.D+40,x0=-600,x1=S.W+600,wall=[[x0,yw,0],[x1,yw,0],[x1,yw,S.H+400],[x0,yw,S.H+400]],[a,b,c]=wall.map(P);
@@ -370,7 +376,7 @@ function draw(){const {L,sh,col,row,rem}=sel(),lay=S.layouts[L],d=doorAngle(t),b
   <b>ghosts</b><span>${G.map(q=>`<span style="color:${q.v>=.5?'#1baf7a':'#d03b3b'};font-weight:600">${(100*q.v).toFixed(0)}%</span>`).join(' ')} <small>(${G.filter(q=>q.v>=.5).length}/${S.ghosts} seen)</small></span>`;
  $('tbl').innerHTML='<tr><th>camera</th><th>bearing</th><th>range mm</th><th>visible</th><th>seen s</th></tr>'+rep.map(x=>`<tr${x.i===near?' style="font-weight:600"':''}><td>${x.name}</td><td>${x.b.toFixed(0)}&deg;</td><td>${x.r.toFixed(0)}</td><td style="background:rgba(27,175,122,${x.v*.6})">${(100*x.v).toFixed(0)}%</td><td>${seen[x.i].toFixed(2)}</td></tr>`).join('');
  // world
- wv.width=wv.clientWidth;wv.height=wv.clientHeight;wg.clearRect(0,0,wv.width,wv.height);room(wg,proj);
+ wv.width=wv.clientWidth;wv.height=wv.clientHeight;zoom=fitZoom(wv.width,wv.height)*zoomMul;wg.clearRect(0,0,wv.width,wv.height);room(wg,proj);
  boxw(wg,proj,[0,0,0],[S.W,S.D,S.H],C.cabinet);S.shelves.forEach((z,i)=>{const q=shelfQuad(z);q.forEach((a,k)=>line(wg,proj,a,q[(k+1)%4],i===sh?C.shelfOn:C.shelf,i===sh?2:1))});
  const dc=doorCorners(d);dc.forEach((a,i)=>line(wg,proj,a,dc[(i+1)%4],C.door,2));
  cyls.forEach(b=>cyl(wg,proj,b,(b[2]>=S.shelves[sh]&&b[2]<S.shelves[sh]+100)?C.stockOn:C.stock));G.forEach(q=>cyl(wg,proj,q.base,gcol(q),1.5));cyl(wg,proj,base,C.event,2);if(hd)line(wg,proj,hd[0],hd[1],C.hand,5);
@@ -378,7 +384,8 @@ function draw(){const {L,sh,col,row,rem}=sel(),lay=S.layouts[L],d=doorAngle(t),b
  cams.forEach((c,i)=>drawCam(c,vcs[i],cyls,base,hd,d,i===near,sh));}
 let drawn_t=0,drag=null;wv.onmousedown=e=>drag=[e.clientX,e.clientY];window.onmouseup=()=>drag=null;
 window.onmousemove=e=>{if(!drag)return;rz+=(e.clientX-drag[0])*.01;rx+=(e.clientY-drag[1])*.01;drag=[e.clientX,e.clientY];draw()};
-wv.onwheel=e=>{zoom*=e.deltaY<0?1.1:.9;draw();e.preventDefault()};window.onresize=draw;
+// zoom only when the canvas has focus or Ctrl is held, so plain scrolling still scrolls the page
+wv.onwheel=e=>{if(document.activeElement!==wv&&!e.ctrlKey)return;e.preventDefault();zoomMul*=e.deltaY<0?1.1:.9;draw()};window.onresize=draw;
 const watchTheme=()=>{readCols();draw()};matchMedia('(prefers-color-scheme: dark)').addEventListener('change',watchTheme);
 new MutationObserver(watchTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 readCols();reset();
