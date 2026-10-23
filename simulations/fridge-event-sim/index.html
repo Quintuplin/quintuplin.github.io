@@ -87,6 +87,8 @@ fieldset {
 legend { padding: 0 4px; font-weight: 600; font-size: 0.85rem; }
 .controls label { display: inline-flex; gap: 4px; align-items: center; font-size: 0.85rem; max-width: 100%; }
 .controls select { min-width: 0; max-width: 14rem; }
+/* The config names are long, so this select alone may use the full row. */
+#lay { max-width: 100%; }
 .slider-row { --output-width: 5.5rem; flex: 1 1 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) var(--output-width); align-items: center; gap: 0 8px; }
 .slider-row input { width: 100%; min-width: 0; accent-color: var(--focus); }
 .slider-row output { font-variant-numeric: tabular-nums; text-align: right; }
@@ -230,7 +232,7 @@ function shelfQuad(zs){const y0=S.shelf_y0,y1=y0+S.shelf_d;return [[12,y0,shelfZ
 
 const $=id=>document.getElementById(id),opt=(el,arr,f)=>{el.innerHTML='';arr.forEach((v,i)=>el.add(new Option(f?f(v,i):v,i)))};
 opt($('lay'),S.layouts.map(l=>l.name));opt($('mix'),S.mixes.map(m=>m.name));opt($('sh'),S.shelves,(z,i)=>`${i+1} (z=${z})`);opt($('col'),S.cols,(x,i)=>i+1);opt($('row'),S.rows,(y,i)=>i+1);
-$('sh').value=2;$('col').value=2;
+$('lay').value=2;$('sh').value=2;$('col').value=2;
 // ---- event geometry (shared geometry is spliced in above from fridge_layouts) ----
 function capsuleBlocks(a,b,c0,c1,r){const n=24,d=sub(c1,c0),L=dot(d,d)||1;for(let i=1;i<n;i++){const p=[0,1,2].map(k=>a[k]+(b[k]-a[k])*i/n);
  const s=Math.max(0,Math.min(1,dot(sub(p,c0),d)/L)),q=[0,1,2].map(k=>c0[k]+d[k]*s);if(norm(sub(p,q))<r)return true}return false;}
