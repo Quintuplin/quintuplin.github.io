@@ -96,6 +96,8 @@ def check_mode(page, mode, tokens, roles):
     errors = []
     if "glass" not in tokens:
         return [f"{page} {mode}: no --glass token"]
+    missing = sorted({name for names in roles.values() for name in names} - tokens.keys())
+    errors += [f"{page} {mode}: token --{name} missing" for name in missing]
     for px in WORST_PIXELS:
         layers = {"glass": over(colour(tokens["glass"]), px)}
         if "surface" in tokens:
@@ -106,6 +108,8 @@ def check_mode(page, mode, tokens, roles):
         for role, name, need in checks:
             if role not in layers:
                 errors.append(f"{page} {mode}: no --surface for card tokens")
+                continue
+            if name in missing:
                 continue
             got = ratio(over(colour(tokens[name]), layers[role]), layers[role])
             if got < need:
