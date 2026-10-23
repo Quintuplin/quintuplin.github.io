@@ -1,4 +1,6 @@
 name: Jack Fraser
+url: https://quintuplin.github.io
+baseurl: ""
 markdown: kramdown
 permalink: /blog/:year/:month/:day/:title
 paginate: 5
@@ -6,3 +8,4 @@ comments: true
 paginate_path: "/blog/page:num/"
 plugins:
   - jekyll-sitemap
+  - jekyll-redirect-from
