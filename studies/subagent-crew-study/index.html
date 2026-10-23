@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Subagent Crew Study</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky contents rail beside one reading column; rail folds into a top strip below 900px. */
+:root{
+  --bg:#F4F6F8; --surface:#FFFFFF; --ink:#15202B; --muted:#586676; --line:#D8DEE5;
+  --accent:#1F6E8C; --accent-soft:#E3F0F5;
+  --crew:#9A6200; --crew-soft:#F7EDD9;
+  --ultra:#A23B72; --ultra-soft:#F7E6EF;
+  --opus:#6B4FBB; --opus-soft:#EEE9FA;
+  --sonnet:#1F6E8C; --sonnet-soft:#E3F0F5;
+  --haiku:#3F7D4E; --haiku-soft:#E6F2E8;
+  --main:#B5582A; --main-soft:#F8EAE2;
+  --fail:#B8403A;
+  --ok:#2F6B3E; --ok-soft:#E3F1E6; --mix:#8A5A00; --mix-soft:#F6ECD6; --open:#4A5866; --open-soft:#E8ECF0;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --serif:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#10161C; --surface:#18212A; --ink:#E4EAF0; --muted:#97A5B4; --line:#2A3743;
+    --accent:#6BB8D6; --accent-soft:#1A2F3A;
+    --crew:#E9B85C; --crew-soft:#3A2E16;
+    --ultra:#E58BBB; --ultra-soft:#3A1F2E;
+    --opus:#B9A4F2; --opus-soft:#2A2341;
+    --sonnet:#6BB8D6; --sonnet-soft:#1A2F3A;
+    --haiku:#8CCB9A; --haiku-soft:#1D3024;
+    --main:#E9976B; --main-soft:#3A2519;
+    --fail:#EE8A84;
+    --ok:#9FD9AE; --ok-soft:#1C3324; --mix:#EBC57A; --mix-soft:#3A2F16; --open:#B3C0CC; --open-soft:#25303A;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10161C; --surface:#18212A; --ink:#E4EAF0; --muted:#97A5B4; --line:#2A3743;
+  --accent:#6BB8D6; --accent-soft:#1A2F3A;
+  --crew:#E9B85C; --crew-soft:#3A2E16;
+  --ultra:#E58BBB; --ultra-soft:#3A1F2E;
+  --opus:#B9A4F2; --opus-soft:#2A2341;
+  --sonnet:#6BB8D6; --sonnet-soft:#1A2F3A;
+  --haiku:#8CCB9A; --haiku-soft:#1D3024;
+  --main:#E9976B; --main-soft:#3A2519;
+  --fail:#EE8A84;
+  --ok:#9FD9AE; --ok-soft:#1C3324; --mix:#EBC57A; --mix-soft:#3A2F16; --open:#B3C0CC; --open-soft:#25303A;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:32px 64px}
+.page{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:200px minmax(0,1fr);gap:48px}
+nav.toc{position:sticky;top:calc(env(safe-area-inset-top, 0px) + 24px);align-self:start;font-size:14px}
+nav.toc p{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+nav.toc ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;border-left:2px solid var(--line)}
+nav.toc a{display:block;padding:2px 0 2px 12px;color:var(--muted);text-decoration:none}
+nav.toc a:hover,nav.toc a:focus-visible{color:var(--accent)}
+main{min-width:0;max-width:760px}
+header{display:flex;flex-direction:column;gap:8px;margin-bottom:8px}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
+h1,h2,h3{font-family:var(--serif);text-wrap:balance;line-height:1.25;margin:0}
+h1{font-size:2rem;font-weight:600}
+h2{font-size:1.4rem;font-weight:600;padding-top:20px;border-top:1px solid var(--line)}
+h3{font-size:1.08rem;font-weight:600;margin-top:8px}
+section{display:flex;flex-direction:column;gap:14px;margin-top:44px;scroll-margin-top:24px}
+p,ul,ol{margin:0}
+ul{padding-left:1.2em;display:flex;flex-direction:column;gap:6px}
+.lede{font-size:1.08rem;color:var(--ink)}
+.dek{color:var(--muted)}
+a{color:var(--accent)}
+code{font-family:var(--mono);font-size:.86em;background:var(--accent-soft);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+.t{font-family:var(--mono);font-size:.68rem;padding:1px 5px;border-radius:3px;background:var(--open-soft);color:var(--open);white-space:nowrap;vertical-align:1px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.kpi b{font-family:var(--mono);font-size:1.5rem;font-weight:500;font-variant-numeric:tabular-nums}
+.kpi span{font-size:13.5px;color:var(--muted);line-height:1.45}
+.kpi.c b{color:var(--crew)} .kpi.u b{color:var(--ultra)} .kpi.s b{color:var(--accent)}
+.charts{display:grid;grid-template-columns:1fr;gap:16px}
+figure{margin:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;min-width:0;display:flex;flex-direction:column;gap:8px}
+figure h3{margin:0;font-size:1rem}
+figcaption{font-size:.86rem;color:var(--muted)}
+.scroll{overflow-x:auto}
+svg{width:100%;height:auto;display:block;font-family:var(--sans)}
+svg.chart{min-width:480px}
+svg.flow{min-width:720px}
+svg .ax{stroke:var(--muted);stroke-width:1}
+svg .gr{stroke:var(--line);stroke-width:1}
+svg .tk{fill:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+svg .fl{stroke:var(--ink);stroke-width:2;fill:none}
+svg .ps{fill:var(--accent)} svg .pc{fill:var(--crew)} svg .pu{fill:var(--ultra)}
+svg .lb{fill:var(--ink);font-size:13px}
+svg .hl{fill:none;stroke:var(--crew);stroke-width:2}
+.legend{font-size:.84rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 16px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{padding:8px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+tr:last-child td{border-bottom:0}
+th{font-family:var(--mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500;white-space:nowrap}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:.86rem;white-space:nowrap;text-align:right}
+th.n{text-align:right}
+tr.crew td:first-child{border-left:3px solid var(--crew)}
+.map td:first-child{font-weight:500;white-space:nowrap}
+.funnel{display:flex;flex-direction:column;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px}
+.fr{display:grid;grid-template-columns:minmax(0,1fr) 3.5em;gap:10px;align-items:center;font-size:.88rem}
+.fr .bar{position:relative;height:26px;background:var(--accent-soft);border-radius:4px;overflow:hidden}
+.fr .bar i{position:absolute;inset:0 auto 0 0;background:var(--accent);opacity:.85;border-radius:4px}
+.fr .bar span{position:relative;padding-left:8px;line-height:26px;color:var(--ink);white-space:nowrap}
+.fr b{font-family:var(--mono);font-weight:500;text-align:right;font-variant-numeric:tabular-nums}
+.fr.e .bar{background:var(--crew-soft)} .fr.e .bar i{background:var(--crew)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card h3{margin:0}
+.card ul{font-size:.92rem}
+.q{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:6px}
+.q .head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.q h3{margin:0;font-size:1rem}
+.st{font-family:var(--mono);font-size:.72rem;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.st.ok{color:var(--ok);background:var(--ok-soft)} .st.mix{color:var(--mix);background:var(--mix-soft)} .st.open{color:var(--open);background:var(--open-soft)}
+.q p{font-size:.94rem}
+.note{font-size:.86rem;color:var(--muted)}
+footer{margin-top:48px;font-size:.84rem;color:var(--muted)}
+@media (max-width:900px){
+  .page{grid-template-columns:minmax(0,1fr);gap:20px}
+  nav.toc{position:static}
+  nav.toc ol{flex-direction:row;flex-wrap:wrap;gap:4px 14px;border-left:0}
+  nav.toc a{padding:0}
+  main{max-width:none}
+}
+</style>
+</head>
+<body>
+<nav class="site-bar" aria-label="Site">
+  <a href="/">Home</a>
+  <a href="/about">About</a>
+  <a href="/cv">Resume</a>
+  <a href="/simulations">Simulations</a>
+  <a href="/studies" aria-current="page">Studies</a>
+  <a class="ext" href="https://github.com/quintuplin">GitHub</a>
+  <a href="https://www.linkedin.com/in/jack-fraser-3a137ba3/">LinkedIn</a>
+</nav>
+<style>
+/* Static link bar back to the main site. */
+.site-bar { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding-bottom: 8px; margin-bottom: 8px;
+  border-bottom: 1px solid var(--border, var(--line)); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.site-bar a { color: var(--muted); text-decoration: none; }
+.site-bar a:hover, .site-bar a:focus-visible, .site-bar a[aria-current] { color: var(--text, var(--ink)); }
+.site-bar a[aria-current] { font-weight: 600; }
+.site-bar .ext { margin-left: auto; }
+</style>
+
+<div class="page">
+<nav class="toc" aria-label="Contents">
+  <p>Contents</p>
+  <ol>
+    <li><a href="#summary">Summary</a></li>
+    <li><a href="#results">Frontier graphs</a></li>
+    <li><a href="#crew">The crew</a></li>
+    <li><a href="#framing">Agent design framing</a></li>
+    <li><a href="#design">Study design</a></li>
+    <li><a href="#field">Field evidence</a></li>
+    <li><a href="#questions">Critical questions</a></li>
+    <li><a href="#limits">Limits</a></li>
+    <li><a href="#data">Data</a></li>
+    <li><a href="#sources">Sources</a></li>
+  </ol>
+</nav>
+
+<main>
+<header>
+  <p class="eyebrow">Agentic software engineering · October 2026</p>
+  <h1>A subagent crew for coding agents</h1>
+  <p class="dek">Development and evaluation of a five-role delegation pipeline for Claude Code. The primary evidence is a controlled effort comparison study on tasks drawn from the history of a real team-built mobile app.</p>
+</header>
+
+<section id="summary" style="margin-top:28px">
+  <h2>Summary</h2>
+  <p class="lede">The crew at high effort shipped the fewest defective changes of six setups and sits on the correctness frontier. It costs less than max effort solo and less than ultracode. It costs about three times a solo agent at the same effort, so on cost alone a solo agent at high effort is the better buy.</p>
+  <div class="kpis">
+    <div class="kpi c"><b>0 of 18</b><span>shipped diffs with a leftover defect for high crew, the lowest of six setups <span class="t">recomputed</span></span></div>
+    <div class="kpi c"><b>0.10</b><span>failure or error rate per run for high crew. High solo 0.18, max solo 0.24 <span class="t">recomputed</span></span></div>
+    <div class="kpi u"><b>$10.94 vs $15.88</b><span>mean API cost per task, high crew against high ultracode solo <span class="t">recomputed</span></span></div>
+    <div class="kpi s"><b>3.34×</b><span>cost of high crew over high solo, 11 tasks, Holm p 0.003 <span class="t">recomputed</span></span></div>
+  </div>
+  <p>The correctness edge is a direction. It is not yet a significant result. The smallest pairwise Fisher exact p on defect counts is 0.105 and the grading rule was set after the results were seen. <span class="t">recomputed</span></p>
+</section>
+
+<section id="results">
+  <h2>Frontier graphs</h2>
+  <p>Each point is one setup on the 11 tasks complete in every setup. A frontier line joins the setups that no other setup beats on both axes at once. A point off the line is dominated.</p>
+  <div class="charts">
+  <figure>
+    <h3>Correctness against cost</h3>
+    <div class="scroll">
+    <svg class="chart" viewBox="0 0 600 370" role="img" aria-labelledby="c2t">
+    <title id="c2t">Failure or error rate against API cost per task with the frontier line</title>
+    <line class="gr" x1="60" y1="63" x2="580" y2="63"/><line class="gr" x1="60" y1="149" x2="580" y2="149"/><line class="gr" x1="60" y1="234" x2="580" y2="234"/>
+    <line class="gr" x1="190" y1="20" x2="190" y2="320"/><line class="gr" x1="320" y1="20" x2="320" y2="320"/><line class="gr" x1="450" y1="20" x2="450" y2="320"/><line class="gr" x1="580" y1="20" x2="580" y2="320"/>
+    <line class="ax" x1="60" y1="320" x2="580" y2="320"/><line class="ax" x1="60" y1="20" x2="60" y2="320"/>
+    <text class="tk" x="60" y="338" text-anchor="middle">0</text><text class="tk" x="190" y="338" text-anchor="middle">4</text><text class="tk" x="320" y="338" text-anchor="middle">8</text><text class="tk" x="450" y="338" text-anchor="middle">12</text><text class="tk" x="580" y="338" text-anchor="middle">16</text>
+    <text class="tk" x="52" y="324" text-anchor="end">0.00</text><text class="tk" x="52" y="238" text-anchor="end">0.10</text><text class="tk" x="52" y="153" text-anchor="end">0.20</text><text class="tk" x="52" y="67" text-anchor="end">0.30</text>
+    <text class="tk" x="320" y="362" text-anchor="middle">Mean API cost per task, USD</text>
+    <text class="tk" x="14" y="170" text-anchor="middle" transform="rotate(-90 14 170)">Failure or error rate, lower is better</text>
+    <polyline class="fl" points="160.2,47 183.8,164 415.5,234 580,234"/>
+    <circle class="hl" cx="415.5" cy="234" r="11"/>
+    <circle class="ps" cx="183.8" cy="164" r="6"/><text class="lb" x="194" y="156">high, solo</text>
+    <circle class="ps" cx="526.1" cy="116" r="6"/><text class="lb" x="520" y="138" text-anchor="end">max, solo</text>
+    <circle class="pc" cx="415.5" cy="234" r="6"/><text class="lb" x="416" y="214" text-anchor="middle" font-weight="600">high, crew</text>
+    <circle class="ps" cx="160.2" cy="47" r="6"/><text class="lb" x="172" y="51">medium, solo</text>
+    <circle class="pc" cx="350.4" cy="34" r="6"/><text class="lb" x="362" y="38">medium, crew</text>
+    <circle class="pu" cx="576.1" cy="164" r="6"/><text class="lb" x="566" y="184" text-anchor="end">high, ultracode solo</text>
+    </svg>
+    </div>
+    <figcaption>Failure or error rate counts runs not resolved plus resolved runs whose shipped diff has a leftover defect, divided by all runs. The line runs through medium solo, high solo and high crew. High crew holds the lowest rate on offer at 0.10. No setup with a lower rate exists at any cost. <span class="t">recomputed</span></figcaption>
+  </figure>
+  <figure>
+    <h3>Quality-weighted effect against cost</h3>
+    <div class="scroll">
+    <svg class="chart" viewBox="0 0 600 370" role="img" aria-labelledby="c1t">
+    <title id="c1t">Quality-weighted resolve rate against API cost per task with the frontier line</title>
+    <line class="gr" x1="60" y1="20" x2="580" y2="20"/><line class="gr" x1="60" y1="120" x2="580" y2="120"/><line class="gr" x1="60" y1="220" x2="580" y2="220"/>
+    <line class="gr" x1="190" y1="20" x2="190" y2="320"/><line class="gr" x1="320" y1="20" x2="320" y2="320"/><line class="gr" x1="450" y1="20" x2="450" y2="320"/><line class="gr" x1="580" y1="20" x2="580" y2="320"/>
+    <line class="ax" x1="60" y1="320" x2="580" y2="320"/><line class="ax" x1="60" y1="20" x2="60" y2="320"/>
+    <text class="tk" x="60" y="338" text-anchor="middle">0</text><text class="tk" x="190" y="338" text-anchor="middle">4</text><text class="tk" x="320" y="338" text-anchor="middle">8</text><text class="tk" x="450" y="338" text-anchor="middle">12</text><text class="tk" x="580" y="338" text-anchor="middle">16</text>
+    <text class="tk" x="52" y="324" text-anchor="end">0.70</text><text class="tk" x="52" y="224" text-anchor="end">0.80</text><text class="tk" x="52" y="124" text-anchor="end">0.90</text><text class="tk" x="52" y="24" text-anchor="end">1.00</text>
+    <text class="tk" x="320" y="362" text-anchor="middle">Mean API cost per task, USD</text>
+    <text class="tk" x="14" y="170" text-anchor="middle" transform="rotate(-90 14 170)">Effect, higher is better</text>
+    <polyline class="fl" points="141.3,320 160.2,157 183.8,66 580,66"/>
+    <circle class="ps" cx="183.8" cy="66" r="6"/><text class="lb" x="194" y="58">high, solo</text>
+    <circle class="ps" cx="526.1" cy="203" r="6"/><text class="lb" x="520" y="225" text-anchor="end">max, solo</text>
+    <circle class="pc" cx="415.5" cy="110" r="6"/><text class="lb" x="416" y="96" text-anchor="middle" font-weight="600">high, crew</text>
+    <circle class="ps" cx="160.2" cy="157" r="6"/><text class="lb" x="172" y="161">medium, solo</text>
+    <circle class="pc" cx="350.4" cy="245" r="6"/><text class="lb" x="362" y="249">medium, crew</text>
+    <circle class="pu" cx="576.1" cy="110" r="6"/><text class="lb" x="566" y="130" text-anchor="end">high, ultracode solo</text>
+    </svg>
+    </div>
+    <figcaption>Effect is the resolve rate weighted by review quality at weight 0.30. The line runs from the origin through medium solo and high solo. High crew matches ultracode on effect at $4.94 less per task. Both sit below and right of high solo. <span class="t">recomputed</span></figcaption>
+  </figure>
+  </div>
+  <div class="legend">
+    <span><span class="sw" style="background:var(--accent)"></span>solo agent</span>
+    <span><span class="sw" style="background:var(--crew)"></span>crew</span>
+    <span><span class="sw" style="background:var(--ultra)"></span>ultracode</span>
+    <span>Ring: high crew</span>
+  </div>
+  <p>Read together the graphs show a trade. High solo buys the most effect per dollar. High crew buys the lowest failure or error rate and pays about $7 more per task for it. Ultracode costs 1.3 times high crew with no gain on either axis. That last gap is not significant at Holm p 0.107. <span class="t">recomputed</span></p>
+</section>
+
+<section id="crew">
+  <h2>The crew</h2>
+  <p>A main session talks to the developer and delegates each code change to five subagents in a fixed order. Each subagent runs in its own context with its own model and tool permissions. Only the implementer may write files. The reviewer reads the diff and cannot edit it. The main session keeps every outward step such as pushing, opening the pull request and deploy decisions. Merging stays with the developer.</p>
+  <div class="diagram card" style="padding:16px">
+  <div class="scroll">
+  <svg class="flow" viewBox="0 0 960 330" role="img" aria-label="Pipeline: main session delegates to explorer, architect, implementer, reviewer and verifier, then pushes and opens a PR. Crew work ends once CI starts. Failures loop back to implementer.">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--muted)"/></marker>
+      <marker id="arrf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--fail)"/></marker>
+    </defs>
+    <rect x="20" y="16" width="920" height="58" rx="8" style="fill:var(--main-soft);stroke:var(--main)"/>
+    <text x="40" y="42" font-size="15" font-weight="700" style="fill:var(--main)">Main session</text>
+    <text x="40" y="62" font-size="12.5" style="fill:var(--ink)">Requirements · approves plans · delegates · pushes · rebases · opens PR · review comment · issue, branch, deploy and cleanup decisions</text>
+    <g font-size="14">
+      <rect x="20" y="140" width="130" height="70" rx="8" style="fill:var(--sonnet-soft);stroke:var(--sonnet)"/>
+      <text x="85" y="170" text-anchor="middle" font-weight="500" style="font-family:var(--mono);fill:var(--sonnet)">explorer</text>
+      <text x="85" y="192" text-anchor="middle" font-size="11" style="fill:var(--muted)">search · sonnet</text>
+      <rect x="178" y="140" width="130" height="70" rx="8" style="fill:var(--opus-soft);stroke:var(--opus)"/>
+      <text x="243" y="170" text-anchor="middle" font-weight="500" style="font-family:var(--mono);fill:var(--opus)">architect</text>
+      <text x="243" y="192" text-anchor="middle" font-size="11" style="fill:var(--muted)">noun-verb plan · opus</text>
+      <rect x="336" y="140" width="130" height="70" rx="8" stroke-width="2" style="fill:var(--opus-soft);stroke:var(--opus)"/>
+      <text x="401" y="170" text-anchor="middle" font-weight="500" style="font-family:var(--mono);fill:var(--opus)">implementer</text>
+      <text x="401" y="192" text-anchor="middle" font-size="11" style="fill:var(--muted)">writes · commits · opus</text>
+      <rect x="494" y="140" width="130" height="70" rx="8" style="fill:var(--opus-soft);stroke:var(--opus)"/>
+      <text x="559" y="170" text-anchor="middle" font-weight="500" style="font-family:var(--mono);fill:var(--opus)">reviewer</text>
+      <text x="559" y="192" text-anchor="middle" font-size="11" style="fill:var(--muted)">diff review · opus</text>
+      <rect x="652" y="140" width="130" height="70" rx="8" style="fill:var(--sonnet-soft);stroke:var(--sonnet)"/>
+      <text x="717" y="170" text-anchor="middle" font-weight="500" style="font-family:var(--mono);fill:var(--sonnet)">verifier</text>
+      <text x="717" y="192" text-anchor="middle" font-size="11" style="fill:var(--muted)">CI pins · checks · sonnet</text>
+      <rect x="810" y="140" width="130" height="70" rx="8" stroke-dasharray="5 4" style="fill:var(--main-soft);stroke:var(--main)"/>
+      <text x="875" y="170" text-anchor="middle" font-weight="600" style="fill:var(--main)">PR · CI started</text>
+      <text x="875" y="192" text-anchor="middle" font-size="11" style="fill:var(--muted)">crew work ends</text>
+    </g>
+    <g stroke-width="1.6" fill="none" marker-end="url(#arr)" style="stroke:var(--muted)">
+      <line x1="150" y1="175" x2="176" y2="175"/>
+      <line x1="308" y1="175" x2="334" y2="175"/>
+      <line x1="466" y1="175" x2="492" y2="175"/>
+      <line x1="624" y1="175" x2="650" y2="175"/>
+    </g>
+    <path d="M782,160 C800,160 800,95 800,78" stroke-width="1.6" fill="none" marker-end="url(#arr)" style="stroke:var(--muted)"/>
+    <path d="M840,78 C845,95 865,110 875,138" stroke-width="1.6" fill="none" marker-end="url(#arr)" style="stroke:var(--main)"/>
+    <text x="852" y="104" font-size="11.5" style="fill:var(--main)">push · open PR</text>
+    <path d="M466,160 C500,112 620,112 652,158" stroke-width="1.4" fill="none" stroke-dasharray="4 4" marker-end="url(#arr)" style="stroke:var(--haiku)"/>
+    <text x="559" y="110" text-anchor="middle" font-size="11.5" style="fill:var(--haiku)">light tier skips review</text>
+    <g stroke-width="1.2" stroke-dasharray="3 4" style="stroke:var(--line)">
+      <line x1="85" y1="74" x2="85" y2="138"/>
+      <line x1="243" y1="74" x2="243" y2="138"/>
+      <line x1="401" y1="74" x2="401" y2="96"/>
+      <line x1="717" y1="74" x2="717" y2="96"/>
+    </g>
+    <path d="M875,212 C875,300 401,300 401,214" stroke-width="1.8" fill="none" stroke-dasharray="6 4" marker-end="url(#arrf)" style="stroke:var(--fail)"/>
+    <text x="638" y="292" text-anchor="middle" font-size="12.5" style="fill:var(--fail)">CI fails → implementer with the failure log → verify → push</text>
+    <path d="M559,212 C559,250 421,250 411,216" stroke-width="1.2" fill="none" stroke-dasharray="3 3" marker-end="url(#arrf)" opacity=".75" style="stroke:var(--fail)"/>
+    <path d="M717,212 C717,262 431,262 421,216" stroke-width="1.2" fill="none" stroke-dasharray="3 3" marker-end="url(#arrf)" opacity=".75" style="stroke:var(--fail)"/>
+    <text x="940" y="322" text-anchor="end" font-size="12" style="fill:var(--muted)">The turn ends with the PR link, head sha, CI started and the verifier mode run</text>
+  </svg>
+  </div>
+  <div class="legend">
+    <span><span class="sw" style="background:var(--opus)"></span>Opus model</span>
+    <span><span class="sw" style="background:var(--sonnet)"></span>Sonnet model</span>
+    <span><span class="sw" style="background:var(--main)"></span>main session</span>
+    <span><span class="sw" style="background:var(--haiku)"></span>light tier path</span>
+    <span><span class="sw" style="background:var(--fail)"></span>failure path</span>
+  </div>
+  </div>
+  <p>The workflow is called RPD for Requirements, Plan and Deliver. Small diffs in one package take a light tier that skips the reviewer. Review fix rounds are capped at three before the developer decides. Every bug fix must ship with a regression test that CI runs.</p>
+</section>
+
+<section id="framing">
+  <h2>Agent design framing</h2>
+  <p>A common way to classify model use separates a one-shot prompt, a fixed workflow and an agent. The crew is a hybrid. Its stage order is a fixed workflow written in rules. Each stage is a full agent that runs the perceive, reason, act and observe loop with tools. Current agentic coding tools share the same building blocks this crew uses.</p>
+  <div class="tbl"><table class="map">
+    <thead><tr><th>Agent concept</th><th>In the crew</th></tr></thead>
+    <tbody>
+      <tr><td>Plan-then-execute</td><td>The architect writes a noun-verb plan. The implementer executes it in numbered groups.</td></tr>
+      <tr><td>Reflection</td><td>The reviewer critiques each diff. Must-fix findings go back to the implementer for at most three rounds.</td></tr>
+      <tr><td>Subagents</td><td>Five roles, each with its own context and model. The parent keeps control of every outward action.</td></tr>
+      <tr><td>Permissions</td><td>Allow, ask and deny per role. The reviewer and explorer cannot edit. A push that deploys needs explicit approval.</td></tr>
+      <tr><td>Instruction file</td><td>A shared rules file such as AGENTS.md or CLAUDE.md read at every session start. Instructions, not memory.</td></tr>
+      <tr><td>Tests as ground truth</td><td>The verifier runs local checks pinned to the CI toolchain. CI must start before the turn ends.</td></tr>
+      <tr><td>Delegation has a budget</td><td>Each subagent re-reads context and tokens multiply. The study below measures that cost directly.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Ultracode is the comparison setup. It lets a single agent write an orchestration script at run time that fans work out to many subagents. In these terms the agent builds its own fixed workflow per task. The crew fixes the workflow once in advance.</p>
+  <p>A common rule of thumb says an agent earns its cost when the steps are unknown in advance. The study asks the same question one level up. Does a pipeline of agents earn its cost over one agent?</p>
+</section>
+
+<section id="design">
+  <h2>Study design</h2>
+  <p>The effort comparison study is a controlled benchmark with a pre-registered analysis plan. Every setup used the same model, Claude Opus 5.5, on the same tasks in a sandbox with no network access. Setups differ only in reasoning effort and in whether the crew or ultracode is switched on.</p>
+
+  <h3>Six setups</h3>
+  <div class="tbl"><table>
+    <thead><tr><th>Arm</th><th>Setup</th><th>Role in the study</th></tr></thead>
+    <tbody>
+      <tr><td>A</td><td>high effort, solo</td><td>Registered family. Same effort as the crew</td></tr>
+      <tr><td>B</td><td>max effort, solo</td><td>Registered family. Primary comparison with C</td></tr>
+      <tr class="crew"><td>C</td><td>high effort, crew</td><td>Registered family. The crew under test</td></tr>
+      <tr><td>D</td><td>medium effort, solo</td><td>Secondary family</td></tr>
+      <tr class="crew"><td>E</td><td>medium effort, crew</td><td>Secondary family</td></tr>
+      <tr><td>F</td><td>high effort, ultracode solo</td><td>Extension stage, one repetition per task</td></tr>
+    </tbody>
+  </table></div>
+  <p>Each crew comparison pairs the crew with the solo setup one effort level up. The crew spends more compute per task, so the fair question is whether the same money spent on more solo effort does better. The crew configuration is a snapshot pinned to one commit. The solo setups run the same rules with the crew sections removed. <span class="t">verified</span></p>
+
+  <h3>Tasks from a real project history</h3>
+  <p>The source project is a location-based mobile app. It is a Flutter app in the MVVM pattern with a Node back end on PostgreSQL and PostGIS, built by a five-member student team. Its git history supplied realistic tasks. The study read it through a one-time static import and never touched the live repository.</p>
+  <div class="two">
+    <div class="card">
+      <h3>Legacy stratum</h3>
+      <p class="note">Merged pull requests replayed from their base commit</p>
+      <div class="funnel" style="border:0;padding:0">
+        <div class="fr"><div class="bar"><i style="width:100%"></i><span>Merged PRs in the import</span></div><b>214</b></div>
+        <div class="fr"><div class="bar"><i style="width:28%"></i><span>Closing issue, 50 to 400 lines, tests</span></div><b>60</b></div>
+        <div class="fr"><div class="bar"><i style="width:10.7%"></i><span>Flutter candidates</span></div><b>23</b></div>
+        <div class="fr"><div class="bar"><i style="width:7.9%"></i><span>Extracted</span></div><b>17</b></div>
+        <div class="fr"><div class="bar"><i style="width:1.4%"></i><span>Compile at base</span></div><b>3</b></div>
+        <div class="fr"><div class="bar"><i style="width:0.9%"></i><span>Used after leak check</span></div><b>2</b></div>
+      </div>
+      <p class="note">14 of 17 extracted tests call API names the issue text cannot reveal. A solver could not pass them without seeing the answer. <span class="t">verified</span></p>
+    </div>
+    <div class="card">
+      <h3>Entry stratum</h3>
+      <p class="note">Fresh tasks written from real issues</p>
+      <div class="funnel" style="border:0;padding:0">
+        <div class="fr e"><div class="bar"><i style="width:100%"></i><span>Pre-registered tasks</span></div><b>13</b></div>
+        <div class="fr e"><div class="bar"><i style="width:92.3%"></i><span>Kept after calibration</span></div><b>12</b></div>
+        <div class="fr e"><div class="bar"><i style="width:84.6%"></i><span>Complete in every setup</span></div><b>11</b></div>
+      </div>
+      <ul>
+        <li>Each task has a sanitized issue text and stubs at the entry points it names.</li>
+        <li>Hidden fail-to-pass tests decide resolution. Each task has 1 to 14.</li>
+        <li>Six come from the author's own issues, four from teammates' issues and three span the full stack.</li>
+      </ul>
+      <p class="note">The entry stratum carries the analysis. The legacy stratum is too small to test and is only described. <span class="t">verified</span></p>
+    </div>
+  </div>
+
+  <h3>Controls and measures</h3>
+  <ul>
+    <li>Each run starts in a fresh sandbox with no network egress. Runs that broke the sandbox are left out. <span class="t">verified</span></li>
+    <li>Resolution is the hidden tests passing on the agent's committed diff. Unresolved runs count as failures. <span class="t">verified</span></li>
+    <li>Defects come from a blinded review of each shipped diff after the runs ended. <span class="t">verified</span></li>
+    <li>Cost is API-equivalent USD per task. Time is wall minutes per task without API retry waits. <span class="t">verified</span></li>
+    <li>A budget guard started no new run while either usage window stood at or above 60%. <span class="t">verified</span></li>
+  </ul>
+
+  <h3>Analysis plan</h3>
+  <ul>
+    <li>Friedman test across the registered family, then paired Wilcoxon tests with Holm correction. <span class="t">verified</span></li>
+    <li>Hodges-Lehmann shifts with a bootstrap over tasks for confidence intervals. Cochran's Q for resolution. <span class="t">verified</span></li>
+    <li>Cost ratios are geometric means of per-task ratios. <span class="t">verified</span></li>
+    <li>Sample size was fixed in advance with no interim look. With 12 tasks the paired design detects an effect of about dz 0.81. <span class="t">verified</span></li>
+  </ul>
+  <p>Stage full ran 84 runs across A, B and C. Stage full-med ran 56 runs across D and E. Stage full-ultra ran 14 runs of F. API-equivalent spend was about $1,170 in total. <span class="t">verified</span></p>
+</section>
+
+<section id="field">
+  <h2>Field evidence</h2>
+  <p>Before the controlled study the crew ran on real work. Logs from those sessions give two observational windows. They show cost and process trends and cannot isolate the crew's effect.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Measure</th><th class="n">Window 1</th><th class="n">Window 2</th></tr></thead>
+    <tbody>
+      <tr><td>Scope</td><td class="n">one app project</td><td class="n">six project groups</td></tr>
+      <tr><td>Agent runs</td><td class="n">737</td><td class="n">1,575</td></tr>
+      <tr><td>Total cost, USD</td><td class="n">≈ 745</td><td class="n">≈ 2,140</td></tr>
+      <tr><td>Must-fix defects caught by the reviewer</td><td class="n">40 at $2.61 each</td><td class="n">not recomputed</td></tr>
+      <tr><td>Median cost per product issue</td><td class="n">$12.42 → $3.96</td><td class="n">no significant change</td></tr>
+      <tr><td>Median time to pull request</td><td class="n">43 → 15 min</td><td class="n">no significant change</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Window 1 gains came alongside a shift to smaller issues, so they mix the crew's tuning with task size. A shorter architect plan is the one change with a clean measured effect. Cost per 100 lines of code rose. Source is the crew architecture report built from session logs. <span class="t">unchecked</span></p>
+</section>
+
+<section id="questions">
+  <h2>Critical questions</h2>
+  <div class="q">
+    <div class="head"><h3>Does the crew raise correctness?</h3><span class="st mix">direction only</span></div>
+    <p>High crew shipped 0 defective diffs of 18 and had the lowest failure or error rate. No pairwise difference reaches significance. One extra defect could reorder the setups. <span class="t">recomputed</span></p>
+  </div>
+  <div class="q">
+    <div class="head"><h3>Is the crew cheaper than raising solo effort?</h3><span class="st ok">supported</span></div>
+    <p>This is the pre-registered primary comparison. High crew costs 0.77 times max solo at Holm p 0.003 and resolves 18 of 20 runs against 17 of 21. <span class="t">recomputed</span></p>
+  </div>
+  <div class="q">
+    <div class="head"><h3>Does the crew pay for itself against a solo agent at the same effort?</h3><span class="st ok">answered no on cost</span></div>
+    <p>High crew costs 3.34 times high solo and takes about 3.6 times as long. High solo resolves a larger share and has the best effect per dollar. The crew buys fewer leftover defects for that price. <span class="t">recomputed</span></p>
+  </div>
+  <div class="q">
+    <div class="head"><h3>Is the crew better value than ultracode?</h3><span class="st open">open</span></div>
+    <p>High crew costs $4.94 less per task at equal effect and a lower failure or error rate. The cost ratio is not significant at Holm p 0.107 with one ultracode repetition per task. <span class="t">recomputed</span></p>
+  </div>
+  <div class="q">
+    <div class="head"><h3>Does the crew help at medium effort?</h3><span class="st ok">answered no</span></div>
+    <p>Medium crew costs more than high solo and resolves a smaller share of runs. Its failure or error rate is the highest of six setups. <span class="t">recomputed</span></p>
+  </div>
+  <div class="q">
+    <div class="head"><h3>Do the results generalise beyond this benchmark?</h3><span class="st open">open</span></div>
+    <p>The tasks are small entry tasks from one project. The rule of thumb predicts agents earn their cost when steps are unknown in advance. Larger tasks with unclear steps may favour the crew more. This study does not test that. <span class="t">unchecked</span></p>
+  </div>
+</section>
+
+<section id="limits">
+  <h2>Limits</h2>
+  <ul>
+    <li>Every figure on this page uses one basis. That is gate-passing runs on the 11 tasks complete in every setup. Task 356 leaves because one setup has no valid run there. One max solo run fails the reconcile gate. Three runs with a sandbox violation are left out. <span class="t">recomputed</span></li>
+    <li>The error rate grade and the ultracode pairing rule were set after results were seen. Treat both as exploratory. <span class="t">verified</span></li>
+    <li>Ultracode ran one repetition per task due to cost. The other setups ran two. <span class="t">verified</span></li>
+    <li>A defect count of 0 is a lower bound. The rule of three puts the upper 95% bound for high crew near 0.17. <span class="t">recomputed</span></li>
+    <li>One model, one project and 11 analysed tasks. The same person designed the crew and the benchmark. Hidden tests and blinded defect review reduce that bias but do not remove it. <span class="t">verified</span></li>
+  </ul>
+</section>
+
+<section id="data">
+  <h2>Data</h2>
+  <p>Entry stratum, 11 tasks, gate-passing runs. Lower is better for every column except resolved.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Setup</th><th class="n">Runs</th><th class="n">Resolved</th><th class="n">Defective diffs</th><th class="n">Failure or error</th><th class="n">Effect</th><th class="n">USD per task</th><th class="n">Min per task</th></tr></thead>
+    <tbody>
+      <tr><td>medium solo (D)</td><td class="n">22</td><td class="n">19</td><td class="n">4 of 19</td><td class="n">0.32</td><td class="n">0.86</td><td class="n">3.08</td><td class="n">9.1</td></tr>
+      <tr><td>high solo (A)</td><td class="n">22</td><td class="n">21</td><td class="n">3 of 21</td><td class="n">0.18</td><td class="n">0.95</td><td class="n">3.81</td><td class="n">10.9</td></tr>
+      <tr class="crew"><td>medium crew (E)</td><td class="n">21</td><td class="n">16</td><td class="n">2 of 16</td><td class="n">0.33</td><td class="n">0.77</td><td class="n">8.93</td><td class="n">29.7</td></tr>
+      <tr class="crew"><td>high crew (C)</td><td class="n">20</td><td class="n">18</td><td class="n">0 of 18</td><td class="n">0.10</td><td class="n">0.91</td><td class="n">10.94</td><td class="n">38.9</td></tr>
+      <tr><td>max solo (B)</td><td class="n">21</td><td class="n">17</td><td class="n">1 of 17</td><td class="n">0.24</td><td class="n">0.82</td><td class="n">14.34</td><td class="n">47.6</td></tr>
+      <tr><td>high ultracode solo (F)</td><td class="n">11</td><td class="n">10</td><td class="n">1 of 10</td><td class="n">0.18</td><td class="n">0.91</td><td class="n">15.88</td><td class="n">36.2</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Rows sorted by cost. Effect is the quality-weighted resolve rate at weight 0.30. Paired cost ratios use exact Wilcoxon tests with Holm correction within each family of three pairs. Ultracode pairs use repetition 0 of each arm. <span class="t">recomputed</span></p>
+</section>
+
+<section id="sources">
+  <h2>Sources</h2>
+  <ul>
+    <li>Effort study repository at commit <code>1ef5534</code>. Files <code>results/full/dashboard/grades.csv</code>, <code>frontier.csv</code> and <code>ratios.csv</code>, plus <code>docs/plan.md</code> and <code>docs/handoff.md</code>.</li>
+    <li>Crew architecture report, built from Claude Code session logs for the two field windows.</li>
+    <li>Agent design concepts follow standard material on agentic AI and agentic coding tools.</li>
+    <li>Tags. <span class="t">recomputed</span> redone from the study data. <span class="t">verified</span> read in a primary study file. <span class="t">unchecked</span> taken from a secondary report.</li>
+  </ul>
+</section>
+
+<footer>Costs use API-equivalent pricing. Crew explorer and verifier ran on Sonnet 5.5 and every other agent on Opus 5.5.</footer>
+</main>
+</div>
+</body>
+</html>
