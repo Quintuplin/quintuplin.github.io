@@ -15,11 +15,10 @@ const PageScripts = {
     if (!m) throw new Error(`${PAGE} has no script with id ${id}`);
     return m[1];
   },
-  // Every id in the markup, with script bodies removed so ids named in code do not count.
-  markupIds() {
-    const markup = this.html.replace(/(<script[^>]*>)[\s\S]*?<\/script>/g, "$1");
-    return new Set([...markup.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
-  },
+  // The page with script bodies removed, so ids and classes named in code do not count.
+  markup() { return this.html.replace(/(<script[^>]*>)[\s\S]*?<\/script>/g, "$1"); },
+  markupIds() { return new Set([...this.markup().matchAll(/\bid="([^"]+)"/g)].map((m) => m[1])); },
+  hasClass(c) { return [...this.markup().matchAll(/\bclass="([^"]+)"/g)].some((m) => m[1].split(/\s+/).includes(c)); },
 };
 
 vm.runInThisContext(PageScripts.read("cascade-src"), { filename: "cascade-src" });
@@ -337,7 +336,8 @@ function boot() {
   const body = new Element("body"), frames = new Map(), looked = new Set();
   let nextFrame = 1;
   const add = (tag, cls) => { const e = body.appendChild(new Element(tag)); if (cls) e.className = cls; return e; };
-  add("div", "ex-tree");
+  // The explorer finds its tree panel by class, so the fake page has it only when the real markup does.
+  if (PageScripts.hasClass("ex-tree")) add("div", "ex-tree");
   const store = new Map();
   const document = {
     activeElement: null,
