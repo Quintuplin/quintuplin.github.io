@@ -157,7 +157,8 @@ output { font-family: var(--mono); color: var(--ink); font-size: 13.5px; min-wid
 .stem i { grid-column: 3; display: block; height: 10px; margin-left: 16px; border-left: 2px solid var(--axis); transition: border-color 200ms ease; }
 .stem.flow i { border-left-color: var(--on); }
 @media (prefers-reduced-motion: reduce) { .tile, .stem i, .gauge i { transition: none; } .tile.pop { animation: none; } }
-.outcome { display: inline-flex; align-items: center; gap: 6px; font: 600 12px/1 var(--mono); padding: 6px 9px; border-radius: 999px; margin-left: 8px; white-space: nowrap; }
+/* min-width 0 lets the chip wrap its words in the narrow root rung on phones. */
+.outcome { display: inline-flex; align-items: center; gap: 6px; font: 600 12px/1.2 var(--mono); padding: 6px 9px; border-radius: 999px; margin-left: 8px; min-width: 0; }
 .outcome[data-k="TP"] { background: var(--ok-bg); color: var(--ok); }
 .outcome[data-k="TN"] { background: var(--wash); color: var(--ink2); }
 .outcome[data-k="FP"] { background: var(--fp-fill); color: var(--fp); }
