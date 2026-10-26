@@ -746,7 +746,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     rng = C.mulberry32(state.seed);
     resetTiles();
     say("");
-    dirty.add("curve");
+    // Controls redraw so a tree over the row cap says again why trials are off.
+    ["curve", "controls"].forEach((p) => dirty.add(p));
   }
   function schedule() { if (!frame) frame = requestAnimationFrame(draw); }
   function draw(now) {

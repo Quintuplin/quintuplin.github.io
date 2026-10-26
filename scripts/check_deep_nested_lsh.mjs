@@ -436,3 +436,14 @@ test("seedInputShowsEffectiveSeed", () => {
   flush();
   assert.equal(String($("ex-seed").value), "13", "an invalid seed is refused and the box shows the current seed");
 });
+
+test("seedChangeKeepsRowCapMessage", () => {
+  const { $, flush } = boot({ dims: [400, 400], T: 0.5, s: 0.5, seed: 753 });
+  flush();
+  const why = /Trials run on trees of at most/;
+  assert.match($("ex-msg").textContent, why, "a tree over the row cap says why trials are off");
+  enterSeed($, 754);
+  flush();
+  assert.ok($("ex-one").disabled, "trials stay off");
+  assert.match($("ex-msg").textContent, why, "a seed change keeps the reason trials are off");
+});
