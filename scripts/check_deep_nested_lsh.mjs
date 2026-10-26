@@ -136,6 +136,28 @@ test("solverMatchesTables", () => {
   assert.equal(d2, 12);
 });
 
+test("solveD1PicksSharpestMatch", () => {
+  const near = (d, t) => Math.abs(C.threshold(d) - t) <= C.TOLERANCE;
+  let both = 0;
+  for (const t of Object.values(study.tables)) {
+    if (!["cascade", "equal_rows", "high_cap_family"].includes(t.kind)) continue;
+    for (const row of t.rows) {
+      if (row.dims.length < 2) continue;
+      const solved = C.bandsForThreshold(t.target, row.dims);
+      const [lo, hi] = [Math.floor(solved), Math.ceil(solved)].map((b) => { const d = row.dims.slice(); d[1] = Math.max(2, b); return d; });
+      if (lo[1] === hi[1] || !near(lo, t.target) || !near(hi, t.target)) continue;
+      const want = C.width(hi) < C.width(lo) ? hi : lo;
+      assert.deepEqual(C.solveD1(row.dims, t.target), { dims: want, matched: true }, `${row.config} t ${t.target}`);
+      both += 1;
+    }
+  }
+  assert.ok(both > 0, "some rows match at both floor and ceil");
+  // Depth 1 solves d0. 0.5^(1/3) lies within the tolerance of 0.8.
+  assert.deepEqual(C.solveD1([5], 0.8), { dims: [3], matched: true });
+  // No single band reaches below 0.5, so the closest is d0 1 and unmatched.
+  assert.deepEqual(C.solveD1([5], 0.3), { dims: [1], matched: false });
+});
+
 test("evalTreeMatchesCurve", () => {
   for (const dims of [[2], [2, 3], [2, 3, 2], [1, 2, 2, 2]]) {
     const n = C.rows(dims);
