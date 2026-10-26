@@ -295,7 +295,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>Target t</dt><dd>The Jaccard value meant to split pairs. Pairs at or above t should become candidates.</dd>
       <dt>Ideal step</dt><dd>The perfect filter at t. It is 0 below t and 1 at or above t.</dd>
       <dt>Threshold t̂</dt><dd>The s where the candidate probability P(s) crosses one half. The study solves d1 so t̂ lies within 0.01 of t.</dd>
-      <dt>Solve d1 for t</dt><dd>Solves one arity for the target t. At depth 1 it sets d0 to the value with the closest t̂. At depth 2 or more it sets d1 to the sharpest value whose t̂ lies within 0.01 of t, or to the closest t̂ when none does. A tree whose t̂ lands more than 0.01 from t is flagged as unmatched.</dd>
+      <dt>Solve d1 for t</dt><dd>Solves one arity for the target t. At depth 1 it sets d0 to the value with the closest t̂. At depth 2 or more it solves d1 for t and tries the whole numbers on either side of that solution. It sets d1 to the sharpest of them whose t̂ lies within 0.01 of t, or to the one with the closer t̂ when neither does. When the solution falls below 1.5 or does not exist it leaves d1 unchanged. A tree whose t̂ lands more than 0.01 from t is flagged as unmatched.</dd>
       <dt>Width W</dt><dd>The span of s over which P(s) climbs from 0.05 to 0.95. Smaller is sharper.</dd>
       <dt>Sharpest</dt><dd>The smallest width W among the trees whose t̂ lies within 0.01 of t.</dd>
       <dt>Error area E</dt><dd>The area between P(s) and the ideal step at t. The FP area lies left of t and the FN area right of it.</dd>
