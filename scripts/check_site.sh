@@ -67,6 +67,13 @@ else
 fi
 grep -q '^#lay {[^}]*max-width: *100%' "$fridge" || err "fridge #lay select caps the config name below its full width"
 
+# The Deep Nested LSH maths matches the study reference and its explorer behaves (#31).
+if command -v node >/dev/null 2>&1; then
+	node scripts/check_deep_nested_lsh.mjs "$site/simulations/deep-nested-lsh/index.html" || err "deep nested LSH check failed"
+else
+	err "node is missing: scripts/check_deep_nested_lsh.mjs cannot run"
+fi
+
 grep -q 'href="/projects"' "$site/index.html" 2>/dev/null || err "nav in index.html lacks the Projects link"
 ! grep -Eq 'href="/(simulations|studies)/?"' "$site/index.html" 2>/dev/null || err "nav in index.html still links the old Simulations or Studies index"
 

@@ -37,6 +37,12 @@ PAGES = {
         "card": ["text", "muted", "seen", "unseen"],
         "graphic": ["focus", "event"],
     },
+    "simulations/deep-nested-lsh/index.html": {
+        "glass": ["ink", "muted", "accent"],
+        "card": ["ink", "ink2", "muted", "accent", "ok", "open", "fp", "fn"],
+        "graphic": ["accent", "fp", "fn"],
+        "card-graphic": ["fp", "fn", "d2", "on", "axis", "ink2"],
+    },
 }
 LIGHT = re.compile(r"(?m)^:root\s*\{")
 DARK = re.compile(r"@media\s*\(prefers-color-scheme:\s*dark\)\s*\{")
