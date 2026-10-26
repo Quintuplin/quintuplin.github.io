@@ -272,6 +272,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   <details class="terms" style="margin:0 14px 14px">
     <summary>Terms used on this page</summary>
     <dl>
+      <dt>LSH</dt><dd>Locality sensitive hashing. It hashes documents so similar pairs likely collide and become candidates without comparing every pair.</dd>
+      <dt>The study</dt><dd>A grid of generated document pairs. The presets and their trees come from it.</dd>
       <dt>Jaccard similarity s</dt><dd>Shared shingles of two documents over all their shingles. A shingle here is a run of three consecutive words after lowercasing.</dd>
       <dt>MinHash row</dt><dd>One hash value per document. Two documents agree on a row with probability s.</dd>
       <dt>Signature length n</dt><dd>The number of MinHash rows a tree reads. It is the product of the arities.</dd>
@@ -281,8 +283,11 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>Arity dj</dt><dd>How many nodes of level j − 1 each node at level j combines. Level 0 combines rows.</dd>
       <dt>AND level and OR level</dt><dd>An AND level fires only when every child fires. An OR level fires when any child fires.</dd>
       <dt>Cascade reading</dt><dd>Odd levels OR their children and even levels AND them. Depth 2 is standard (r, b) banding.</dd>
+      <dt>(r, b) banding</dt><dd>Standard LSH with b bands of r rows each. As a tuple it is (r, b) with r = d0 and b = d1.</dd>
       <dt>Flat reading</dt><dd>Every level above the bands ORs. It collapses to two-level banding (d0, n / d0).</dd>
       <dt>Root and rung</dt><dd>The ladder holds one rung per level with the signature rows at the bottom and the root on top. Each rung sets its level's arity and shows the children of one node. The root is the single top node.</dd>
+      <dt>Rung labels Lj</dt><dd>L0 is the level of bands, L1 the level above it and so on up to the root. The AND or OR tag beside each label names that level's operation.</dd>
+      <dt>Hidden tile +k · j on</dt><dd>A rung draws only its first children. The last tile counts the k children not drawn and, after a run, the j of them that fired.</dd>
       <dt>Candidate</dt><dd>A pair whose root fires. Only candidates go on to an exact check.</dd>
       <dt>S curve P(s)</dt><dd>The candidate probability curve. P(s) is the chance that a pair of similarity s becomes a candidate.</dd>
       <dt>Per-level curves</dt><dd>Each faint curve traces one level over s. It is the curve the subtree up to that level follows. Hover or focus a rung to pick out its curve.</dd>
@@ -290,7 +295,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>Target t</dt><dd>The Jaccard value meant to split pairs. Pairs at or above t should become candidates.</dd>
       <dt>Ideal step</dt><dd>The perfect filter at t. It is 0 below t and 1 at or above t.</dd>
       <dt>Threshold t̂</dt><dd>The s where the candidate probability P(s) crosses one half. The study solves d1 so t̂ lies within 0.01 of t.</dd>
-      <dt>Solve d1 for t</dt><dd>Sets the level 1 arity d1 for the target t. It picks the sharpest d1 whose t̂ lies within 0.01 of t. When none does it picks the closest t̂ and flags the tree as unmatched.</dd>
+      <dt>Solve d1 for t</dt><dd>Solves one arity for the target t. At depth 1 it sets d0 to the value with the closest t̂. At depth 2 or more it sets d1 to the sharpest value whose t̂ lies within 0.01 of t, or to the closest t̂ when none does. A tree whose t̂ lands more than 0.01 from t is flagged as unmatched.</dd>
       <dt>Width W</dt><dd>The span of s over which P(s) climbs from 0.05 to 0.95. Smaller is sharper.</dd>
       <dt>Sharpest</dt><dd>The smallest width W among the trees whose t̂ lies within 0.01 of t.</dd>
       <dt>Error area E</dt><dd>The area between P(s) and the ideal step at t. The FP area lies left of t and the FN area right of it.</dd>
@@ -298,13 +303,14 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>TP and TN</dt><dd>A true positive is a pair at or above t that becomes a candidate. A true negative is a pair below t that stays out.</dd>
       <dt>FP and FN</dt><dd>A false positive is a pair below t that becomes a candidate. A false negative is a pair at or above t that does not.</dd>
       <dt>f+ and f−</dt><dd>Tail exponents. f+ is the product of the AND arities with d0. f− is the product of the OR arities. f+ f− = n.</dd>
+      <dt>Measured slope</dt><dd>The local slope of a log-log tail at its far end, at s 10<sup>−6</sup> for the FP tail and at 1 − s 10<sup>−6</sup> for the FN tail. It approaches f+ and f−. The tail cards and the Measured caption show it.</dd>
       <dt>Trial dots and Wilson interval</dt><dd>Run sends one random pair at s up the tree. 1000 at s and Sweep send 1000 random pairs at each s and plot a dot for the share that became candidates. Its bar is the 95% Wilson score interval for that share. The dots should sit on the curve.</dd>
       <dt>Trial seed</dt><dd>Seeds the random pairs. Clear or a new seed drops the trial dots and restarts the pairs from the shown seed, so the same seed replays the same trials. It affects only the random trials.</dd>
       <dt>At its own threshold</dt><dd>The preset sets t to the tree's own t̂.</dd>
       <dt>Standard banding at 10000 rows</dt><dd>The study's best depth 2 (r, b) banding within 10000 rows at each target.</dd>
       <dt>Sharpest tree per depth at 10000 rows</dt><dd>The sharpest tree at each depth from 2 to 5 within 10000 rows at each target.</dd>
       <dt>Least error area beyond depth 5</dt><dd>Trees past depth 5 from the error area search at 1000 and 10000 rows. Each label names the search kind and the depth, such as two-tier 9D.</dd>
-      <dt>max-depth</dt><dd>The least error area tree at the deepest depth the budget allows with every arity at least 2.</dd>
+      <dt>max-depth</dt><dd>The least error area tree at the deepest depth at which a tree matched to t fits the budget with every arity at least 2.</dd>
       <dt>two-tier</dt><dd>The depth and the arities chosen together for the least error area.</dd>
       <dt>all-2s</dt><dd>Every arity 2 with one 3 where it fits. A naive baseline with no threshold match.</dd>
       <dt>Arity families at t 0.5</dt><dd>Trees at depths 3 to 5 near 10000 rows matched to t 0.5. The families differ in where the large arities sit.</dd>
