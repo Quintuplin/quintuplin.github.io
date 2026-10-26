@@ -381,17 +381,20 @@ test("trialSeedReplaysTrials", () => {
   flush();
   // Each trial dot carries a title with its counts at that s.
   const dots = () => $("ex-curve").querySelectorAll("title").map((t) => t.textContent);
-  const runAtSeed = (seed) => {
-    $("ex-clear").dispatch("click");
-    const input = $("ex-seed");
-    input.value = String(seed);
-    input.dispatch("change");
-    $("ex-many").dispatch("click");
-    flush();
-    return dots();
-  };
-  const first = runAtSeed(4242);
+  const run = () => { $("ex-many").dispatch("click"); flush(); return dots(); };
+  // A browser fires change only when the value differs, so each seed here differs from the one before.
+  const seed = (v) => { const input = $("ex-seed"); assert.notEqual(input.value, String(v)); input.value = String(v); input.dispatch("change"); };
+  seed(4242);
+  const first = run();
   assert.equal(first.length, 1, "1000 at s draws one dot");
   assert.match(first[0], / of 1000 candidates/);
-  assert.deepEqual(runAtSeed(4242), first, "the same trial seed replays the same trials");
+  $("ex-clear").dispatch("click");
+  assert.deepEqual(run(), first, "Clear replays the trials from the shown seed");
+  seed(7);
+  const other = run();
+  assert.equal(other.length, 1, "a new seed starts fresh trials");
+  assert.match(other[0], / of 1000 candidates/);
+  assert.notDeepEqual(other, first, "a different seed gives different trials");
+  seed(4242);
+  assert.deepEqual(run(), first, "returning to a seed replays its trials");
 });

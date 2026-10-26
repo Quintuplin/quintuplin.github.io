@@ -299,7 +299,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>FP and FN</dt><dd>A false positive is a pair below t that becomes a candidate. A false negative is a pair at or above t that does not.</dd>
       <dt>f+ and f−</dt><dd>Tail exponents. f+ is the product of the AND arities with d0. f− is the product of the OR arities. f+ f− = n.</dd>
       <dt>Trial dots and Wilson interval</dt><dd>Run sends one random pair at s up the tree. 1000 at s and Sweep send 1000 random pairs at each s and plot a dot for the share that became candidates. Its bar is the 95% Wilson score interval for that share. The dots should sit on the curve.</dd>
-      <dt>Trial seed</dt><dd>Seeds the random pairs. Entering a seed again replays the same trials from the start. It affects only the random trials.</dd>
+      <dt>Trial seed</dt><dd>Seeds the random pairs. Clear or a new seed drops the trial dots and restarts the pairs from the shown seed, so the same seed replays the same trials. It affects only the random trials.</dd>
       <dt>At its own threshold</dt><dd>The preset sets t to the tree's own t̂.</dd>
       <dt>Standard banding at 10000 rows</dt><dd>The study's best depth 2 (r, b) banding within 10000 rows at each target.</dd>
       <dt>Sharpest tree per depth at 10000 rows</dt><dd>The sharpest tree at each depth from 2 to 5 within 10000 rows at each target.</dd>
@@ -728,9 +728,19 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     }
     if ("s" in patch) ["curve", "ladderP", "readout", "controls"].forEach((p) => dirty.add(p));
     if ("flat" in patch || "d2" in patch) ["curve", "readout", "controls"].forEach((p) => dirty.add(p));
-    if ("seed" in patch) rng = C.mulberry32(state.seed);
+    if ("seed" in patch) restart();
     save();
     schedule();
+  }
+  // Drop the trial dots and restart the random stream from the shown seed, so the next run replays.
+  function restart() {
+    job++;
+    anim++;
+    trials.clear();
+    rng = C.mulberry32(state.seed);
+    resetTiles();
+    say("");
+    dirty.add("curve");
   }
   function schedule() { if (!frame) frame = requestAnimationFrame(draw); }
   function draw(now) {
@@ -1301,7 +1311,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     $("ex-one").addEventListener("click", runOne);
     $("ex-many").addEventListener("click", () => runBatch([state.s], 1000, "Running"));
     $("ex-sweep").addEventListener("click", () => runBatch(Array.from({ length: 19 }, (_, i) => +(0.05 * (i + 1)).toFixed(2)), 1000, "Sweeping"));
-    $("ex-clear").addEventListener("click", () => { job++; anim++; trials.clear(); resetTiles(); say(""); dirty.add("curve"); schedule(); });
+    $("ex-clear").addEventListener("click", () => { restart(); schedule(); });
     addEventListener("resize", () => { dirty.add("layout"); schedule(); });
     ["ladder", "curve", "readout", "tails", "controls"].forEach((p) => dirty.add(p));
     schedule();
