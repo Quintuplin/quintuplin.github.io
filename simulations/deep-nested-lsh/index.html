@@ -273,7 +273,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     <summary>Terms used on this page</summary>
     <dl>
       <dt>LSH</dt><dd>Locality sensitive hashing. It hashes documents so similar pairs likely collide and become candidates without comparing every pair.</dd>
-      <dt>The study</dt><dd>A grid of generated document pairs. The presets and their trees come from it.</dd>
+      <dt>The study</dt><dd>A search over trees by depth and row budget, scored on one generated corpus of 1000 documents. Most of its documents form clusters of near duplicates. The presets and their trees come from this search.</dd>
       <dt>Jaccard similarity s</dt><dd>Shared shingles of two documents over all their shingles. A shingle here is a run of three consecutive words after lowercasing.</dd>
       <dt>MinHash row</dt><dd>One hash value per document. Two documents agree on a row with probability s.</dd>
       <dt>Signature length n</dt><dd>The number of MinHash rows a tree reads. It is the product of the arities.</dd>
