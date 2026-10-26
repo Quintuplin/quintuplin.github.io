@@ -75,6 +75,7 @@ else
 fi
 # The outcome chip may shrink and wrap, so the FN chip stays inside the narrow root rung on phones (#31).
 grep -q '^\.outcome {[^}]*min-width: *0' simulations/deep-nested-lsh/index.html || err "deep nested LSH .outcome chip cannot shrink inside a narrow rung"
+! grep -q '^\.outcome {[^}]*nowrap' simulations/deep-nested-lsh/index.html || err "deep nested LSH .outcome chip cannot wrap inside a narrow rung"
 
 grep -q 'href="/projects"' "$site/index.html" 2>/dev/null || err "nav in index.html lacks the Projects link"
 ! grep -Eq 'href="/(simulations|studies)/?"' "$site/index.html" 2>/dev/null || err "nav in index.html still links the old Simulations or Studies index"
