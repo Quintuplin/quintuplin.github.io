@@ -72,6 +72,8 @@ body { margin: 0; color: var(--ink); font: 16px/1.6 var(--sans); -webkit-text-si
 main { min-width: 0; }
 a { color: var(--accent); text-underline-offset: 2px; }
 h1, h2 { font-weight: 600; letter-spacing: -0.01em; }
+h1 { font-size: clamp(30px, 6vw, 46px); line-height: 1.08; margin: 6px 0 10px; }
+.abstract { max-width: 72ch; }
 p { margin: 8px 0; }
 code, .mono { font-family: var(--mono); font-size: 0.88em; }
 .meta { color: var(--muted); font-size: 13.5px; }
@@ -176,6 +178,11 @@ output { font-family: var(--mono); color: var(--ink); font-size: 13.5px; min-wid
 .ex-tails figcaption { font-size: 12px; line-height: 1.4; color: var(--ink2); }
 .ex-tails svg { display: block; width: 100%; height: auto; }
 .ex-foot { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 10px 18px 14px; border-top: 1px solid var(--line); }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-size: 14px; }
+.terms dl { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px 18px; margin: 0; padding: 0 14px 12px; font-size: 14px; }
+@media (min-width: 640px) { .terms dl { grid-template-columns: minmax(0, 16em) minmax(0, 1fr); } }
+.terms dt { font-weight: 600; } .terms dd { margin: 0 0 6px; color: var(--ink2); }
 .svg-text { font: 11px var(--sans); fill: var(--muted); }
 .svg-label { font: 600 11px var(--sans); fill: var(--ink2); }
 </style>
@@ -202,6 +209,8 @@ output { font-family: var(--mono); color: var(--ink); font-size: 13.5px; min-wid
 @media (max-width: 600px) { .site-bar .ext { margin-left: 0; } }
 </style>
 <main>
+<h1>Deep Nested LSH Explorer</h1>
+<p class="abstract">Classical LSH bands signature rows with AND inside each band and OR across bands to sharpen the line between pairs judged similar and pairs judged dissimilar. Deep Nested LSH adds further alternating AND and OR levels and misclassifies fewer pairs than shallow banding at the same row budget.</p>
 <section id="explorer" class="card explorer" aria-labelledby="ex-title">
   <div class="ex-head">
     <h2 id="ex-title">Cascade explorer</h2>
@@ -257,8 +266,51 @@ output { font-family: var(--mono); color: var(--ink); font-size: 13.5px; min-wid
     <figure><figcaption id="ex-tail-fn-cap"></figcaption><svg id="ex-tail-fn" viewBox="0 0 300 120" role="img"></svg></figure>
   </div>
   <div class="ex-foot">
-    <label class="toggle">Seed <input type="number" id="ex-seed" min="1" max="999999" step="1" style="width:6.5em" class="mono"></label>
+    <label class="toggle">Trial seed <input type="number" id="ex-seed" min="1" max="999999" step="1" style="width:6.5em" class="mono"></label>
   </div>
+  <details class="terms" style="margin:0 14px 14px">
+    <summary>Terms used on this page</summary>
+    <dl>
+      <dt>Jaccard similarity s</dt><dd>Shared shingles of two documents over all their shingles. A shingle here is a run of three consecutive words after lowercasing.</dd>
+      <dt>MinHash row</dt><dd>One hash value per document. Two documents agree on a row with probability s.</dd>
+      <dt>Signature length n</dt><dd>The number of MinHash rows a tree reads. It is the product of the arities.</dd>
+      <dt>Row budget</dt><dd>The largest n a tree may use. The presets compare trees within 1000 or 10000 rows.</dd>
+      <dt>Tuple d and depth k</dt><dd>d = (d0, d1, …) lists one arity per level. Depth k is the number of levels. n is the product of the arities.</dd>
+      <dt>Band</dt><dd>d0 rows joined by AND. It fires when the two documents agree on every one of its rows.</dd>
+      <dt>Arity dj</dt><dd>How many nodes of level j − 1 each node at level j combines. Level 0 combines rows.</dd>
+      <dt>AND level and OR level</dt><dd>An AND level fires only when every child fires. An OR level fires when any child fires.</dd>
+      <dt>Cascade reading</dt><dd>Odd levels OR their children and even levels AND them. Depth 2 is standard (r, b) banding.</dd>
+      <dt>Flat reading</dt><dd>Every level above the bands ORs. It collapses to two-level banding (d0, n / d0).</dd>
+      <dt>Root and rung</dt><dd>The ladder holds one rung per level with the signature rows at the bottom and the root on top. Each rung sets its level's arity and shows the children of one node. The root is the single top node.</dd>
+      <dt>Candidate</dt><dd>A pair whose root fires. Only candidates go on to an exact check.</dd>
+      <dt>S curve P(s)</dt><dd>The candidate probability curve. P(s) is the chance that a pair of similarity s becomes a candidate.</dd>
+      <dt>Per-level curves</dt><dd>Each faint curve traces one level over s. It is the curve the subtree up to that level follows. Hover or focus a rung to pick out its curve.</dd>
+      <dt>p gauges</dt><dd>The p value and bar on each rung give the chance that a node at that level fires at the current s. The rows rung shows s itself.</dd>
+      <dt>Target t</dt><dd>The Jaccard value meant to split pairs. Pairs at or above t should become candidates.</dd>
+      <dt>Ideal step</dt><dd>The perfect filter at t. It is 0 below t and 1 at or above t.</dd>
+      <dt>Threshold t̂</dt><dd>The s where the candidate probability P(s) crosses one half. The study solves d1 so t̂ lies within 0.01 of t.</dd>
+      <dt>Solve d1 for t</dt><dd>Sets the level 1 arity d1 for the target t. It picks the sharpest d1 whose t̂ lies within 0.01 of t. When none does it picks the closest t̂ and flags the tree as unmatched.</dd>
+      <dt>Width W</dt><dd>The span of s over which P(s) climbs from 0.05 to 0.95. Smaller is sharper.</dd>
+      <dt>Sharpest</dt><dd>The smallest width W among the trees whose t̂ lies within 0.01 of t.</dd>
+      <dt>Error area E</dt><dd>The area between P(s) and the ideal step at t. The FP area lies left of t and the FN area right of it.</dd>
+      <dt>Depth 2 search skipped above 10 million rows</dt><dd>The error area card compares the tree with the sharpest depth 2 banding in the same rows. The page skips that search for trees above 10 million rows.</dd>
+      <dt>TP and TN</dt><dd>A true positive is a pair at or above t that becomes a candidate. A true negative is a pair below t that stays out.</dd>
+      <dt>FP and FN</dt><dd>A false positive is a pair below t that becomes a candidate. A false negative is a pair at or above t that does not.</dd>
+      <dt>f+ and f−</dt><dd>Tail exponents. f+ is the product of the AND arities with d0. f− is the product of the OR arities. f+ f− = n.</dd>
+      <dt>Trial dots and Wilson interval</dt><dd>Run sends one random pair at s up the tree. 1000 at s and Sweep send 1000 random pairs at each s and plot a dot for the share that became candidates. Its bar is the 95% Wilson score interval for that share. The dots should sit on the curve.</dd>
+      <dt>Trial seed</dt><dd>Seeds the random pairs. Entering a seed again replays the same trials from the start. It affects only the random trials.</dd>
+      <dt>At its own threshold</dt><dd>The preset sets t to the tree's own t̂.</dd>
+      <dt>Standard banding at 10000 rows</dt><dd>The study's best depth 2 (r, b) banding within 10000 rows at each target.</dd>
+      <dt>Sharpest tree per depth at 10000 rows</dt><dd>The sharpest tree at each depth from 2 to 5 within 10000 rows at each target.</dd>
+      <dt>Least error area beyond depth 5</dt><dd>Trees past depth 5 from the error area search at 1000 and 10000 rows. Each label names the search kind and the depth, such as two-tier 9D.</dd>
+      <dt>max-depth</dt><dd>The least error area tree at the deepest depth the budget allows with every arity at least 2.</dd>
+      <dt>two-tier</dt><dd>The depth and the arities chosen together for the least error area.</dd>
+      <dt>all-2s</dt><dd>Every arity 2 with one 3 where it fits. A naive baseline with no threshold match.</dd>
+      <dt>Arity families at t 0.5</dt><dd>Trees at depths 3 to 5 near 10000 rows matched to t 0.5. The families differ in where the large arities sit.</dd>
+      <dt>head-heavy, even-weights and tail-heavy</dt><dd>Head-heavy puts the large arities at the low levels near the rows. Tail-heavy puts them at the high levels near the root. Even-weights keeps the arities as close to equal as the threshold allows.</dd>
+      <dt>Flat reading collapse (7, 23, 3) and (7, 69)</dt><dd>Under the flat reading (7, 23, 3) collapses to the banding (7, 69). Switch on Flat reading to compare the two trees.</dd>
+    </dl>
+  </details>
 </section>
 </main>
 </div>
@@ -597,14 +649,13 @@ output { font-family: var(--mono); color: var(--ink); font-size: 13.5px; min-wid
   function presets() {
     const T = DATA.tables, groups = [], byKind = (k) => Object.values(T).filter((t) => t.kind === k).sort((a, b) => a.target - b.target);
     groups.push([`Standard banding at ${TOP} rows`, byKind("algorithm").map((t) => ({ dims: t.rows[0].tuple, t: t.target, label: `t ${t.target} ${K.tuple(t.rows[0].tuple)}` }))]);
-    groups.push([`Sharpest per depth at ${TOP} rows`, byKind("cascade").flatMap((t) => t.rows.filter((r) => r.config.startsWith(`n${TOP}_`))
+    groups.push([`Sharpest tree per depth at ${TOP} rows`, byKind("cascade").flatMap((t) => t.rows.filter((r) => r.config.startsWith(`n${TOP}_`))
       .map((r) => ({ dims: r.dims, t: t.target, label: `t ${t.target} depth ${r.depth} ${K.tuple(r.dims)}` })))]);
     groups.push([`Least error area beyond depth ${GRID_DEPTH}`, byKind("error_area").flatMap((t) => t.rows.filter((r) => r.depth > GRID_DEPTH)
       .map((r) => ({ dims: r.dims, t: t.target, label: `t ${t.target} ${t.budget || TOP} rows ${r.kind} ${r.depth}D` })))]);
     groups.push(["Arity families at t 0.5", (T.lsh_high_cap_family_table_t50 || { rows: [] }).rows.filter((r) => r.depth > 2)
       .map((r) => ({ dims: r.dims, t: 0.5, label: `${r.family} depth ${r.depth} ${K.tuple(r.dims)}` }))]);
-    groups.push(["Collapse pair", [[7, 23, 3], [7, 69]].map((d) => ({ dims: d, t: null, label: `${K.tuple(d)} at its own threshold` }))]);
-    groups.push(["First sketch", [[100, 1], [5, 20], [5, 5, 4]].map((d) => ({ dims: d, t: null, label: `${K.tuple(d)} at its own threshold` }))]);
+    groups.push(["Flat reading collapse (7, 23, 3) and (7, 69)", [[7, 23, 3], [7, 69]].map((d) => ({ dims: d, t: null, label: `${K.tuple(d)} at its own threshold` }))]);
     let id = 0;
     for (const [, items] of groups) for (const p of items) p.id = `p${id++}`;
     return groups;
