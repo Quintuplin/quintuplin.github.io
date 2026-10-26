@@ -334,7 +334,8 @@ class Element {
 
 // Runs the page's chart kit and explorer. Frames queue until flush() runs them. Reduced motion takes the instant path.
 // Missing ids are created on demand, so `looked` records every id the explorer asks for.
-function boot() {
+// `saved` is the explorer state found in storage on load.
+function boot(saved) {
   const body = new Element("body"), frames = new Map(), looked = new Set();
   let nextFrame = 1;
   const add = (tag, cls) => { const e = body.appendChild(new Element(tag)); if (cls) e.className = cls; return e; };
@@ -358,7 +359,7 @@ function boot() {
   const ctx = vm.createContext({
     console, performance, setTimeout, clearTimeout, document,
     matchMedia: () => ({ matches: true }),
-    localStorage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) },
+    localStorage: { getItem: (k) => store.get(k) ?? (saved ? JSON.stringify(saved) : null), setItem: (k, v) => store.set(k, v) },
     requestAnimationFrame: (f) => { frames.set(nextFrame, f); return nextFrame++; },
     cancelAnimationFrame: (id) => frames.delete(id),
     addEventListener: () => {},
@@ -421,4 +422,17 @@ test("trialSeedReplaysTrials", () => {
   assert.notDeepEqual(other, first, "a different seed gives different trials");
   seed(4242);
   assert.deepEqual(run(), first, "returning to a seed replays its trials");
+});
+
+const enterSeed = ($, v) => { const input = $("ex-seed"); input.value = String(v); input.dispatch("change"); };
+
+test("seedInputShowsEffectiveSeed", () => {
+  const { $, flush } = boot();
+  flush();
+  enterSeed($, 12.6);
+  flush();
+  assert.equal(String($("ex-seed").value), "13", "a fractional seed rounds and the box shows the rounded seed");
+  enterSeed($, 0);
+  flush();
+  assert.equal(String($("ex-seed").value), "13", "an invalid seed is refused and the box shows the current seed");
 });

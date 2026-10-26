@@ -1313,7 +1313,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     $("ex-flat").addEventListener("change", (e) => set({ flat: e.target.checked }));
     $("ex-d2").addEventListener("change", (e) => set({ d2: e.target.checked }));
     $("ex-s").addEventListener("input", (e) => set({ s: Number(e.target.value) }));
-    $("ex-seed").addEventListener("change", (e) => { const v = Math.round(Number(e.target.value)); if (v >= 1) set({ seed: v }); });
+    $("ex-seed").addEventListener("change", (e) => { const v = Math.round(Number(e.target.value)); if (v >= 1) set({ seed: v }); e.target.value = state.seed; });
     $("ex-one").addEventListener("click", runOne);
     $("ex-many").addEventListener("click", () => runBatch([state.s], 1000, "Running"));
     $("ex-sweep").addEventListener("click", () => runBatch(Array.from({ length: 19 }, (_, i) => +(0.05 * (i + 1)).toFixed(2)), 1000, "Sweeping"));
