@@ -1,0 +1,1331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Deep Nested LSH Explorer</title>
+<meta name="description" content="Build a nested AND and OR hashing tree over MinHash rows and watch its candidate probability curve, error areas and tails update live.">
+<style>
+/* Glass tokens match css/main.css; scripts/check_contrast.py checks them. Text on its own fill, such as chips and tiles, is checked by hand. */
+:root {
+  color-scheme: light;
+  --bg: #2b3a4a;
+  --glass: rgba(252, 251, 247, 0.86); --glass-solid: rgba(252, 251, 247, 0.97); --glass-border: rgba(255, 255, 255, 0.55);
+  --glass-shadow: 0 10px 40px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --surface: rgba(255, 255, 255, 0.78); --wash: rgba(22, 24, 28, 0.05);
+  --ink: #16181c; --ink2: #3d414a; --muted: #4a5560; --line: rgba(22, 24, 28, 0.14); --grid: rgba(22, 24, 28, 0.08); --axis: #858379;
+  --accent: #1a56b4; --accent-ink: #ffffff;
+  --ok: #17744a; --ok-bg: rgba(23, 116, 74, 0.12); --open: #8c3a3a; --d2: #2a78d6;
+  --fp: #1d55ad; --fp-fill: rgba(29, 85, 173, 0.14); --fn: #964310; --fn-fill: rgba(150, 67, 16, 0.13);
+  --band: rgba(26, 86, 180, 0.07); --on: #0c7d52; --on-ink: #ffffff; --off: rgba(22, 24, 28, 0.07);
+  --sans: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f1419;
+    --glass: rgba(18, 23, 30, 0.86); --glass-solid: rgba(18, 23, 30, 0.97); --glass-border: rgba(255, 255, 255, 0.10);
+    --glass-shadow: 0 12px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --surface: rgba(24, 29, 35, 0.80); --wash: rgba(255, 255, 255, 0.05);
+    --ink: #e9eaee; --ink2: #c6c9d1; --muted: #9ca8b4; --line: rgba(255, 255, 255, 0.12); --grid: rgba(255, 255, 255, 0.07); --axis: #737a85;
+    --accent: #6ea8ff; --accent-ink: #0f1115;
+    --ok: #63d398; --ok-bg: rgba(99, 211, 152, 0.14); --open: #f0a3a3; --d2: #5a9cf0;
+    --fp: #85b2ff; --fp-fill: rgba(133, 178, 255, 0.18); --fn: #ff9a52; --fn-fill: rgba(255, 154, 82, 0.18);
+    --band: rgba(142, 167, 255, 0.09); --on: #2fcf8c; --on-ink: #0f1115; --off: rgba(255, 255, 255, 0.07);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1419;
+  --glass: rgba(18, 23, 30, 0.86); --glass-solid: rgba(18, 23, 30, 0.97); --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-shadow: 0 12px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --surface: rgba(24, 29, 35, 0.80); --wash: rgba(255, 255, 255, 0.05);
+  --ink: #e9eaee; --ink2: #c6c9d1; --muted: #9ca8b4; --line: rgba(255, 255, 255, 0.12); --grid: rgba(255, 255, 255, 0.07); --axis: #737a85;
+  --accent: #6ea8ff; --accent-ink: #0f1115;
+  --ok: #63d398; --ok-bg: rgba(99, 211, 152, 0.14); --open: #f0a3a3; --d2: #5a9cf0;
+  --fp: #85b2ff; --fp-fill: rgba(133, 178, 255, 0.18); --fn: #ff9a52; --fn-fill: rgba(255, 154, 82, 0.18);
+  --band: rgba(142, 167, 255, 0.09); --on: #2fcf8c; --on-ink: #0f1115; --off: rgba(255, 255, 255, 0.07);
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+/* The body padding is the photo gutter around the glass sheet. */
+body { margin: 0; color: var(--ink); font: 16px/1.6 var(--sans); -webkit-text-size-adjust: 100%; padding-block: 32px;
+  padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+/* Fixed photo backdrop, as on the main site; dimmed in dark mode. */
+.backdrop { position: fixed; inset: 0; z-index: -1; background: url("/assets/bg.jpg") center / cover no-repeat; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .backdrop { filter: brightness(0.6) saturate(0.9); } }
+:root[data-theme="dark"] .backdrop { filter: brightness(0.6) saturate(0.9); }
+.sheet { max-width: 1180px; margin: 0 auto; padding: 20px 28px 28px; background: var(--glass);
+  -webkit-backdrop-filter: blur(10px) saturate(120%); backdrop-filter: blur(10px) saturate(120%);
+  border: 1px solid var(--glass-border); border-radius: 14px; box-shadow: var(--glass-shadow); }
+@media (prefers-reduced-transparency: reduce) {
+  .sheet { background: var(--glass-solid); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (max-width: 600px) {
+  body { padding: 12px max(8px, env(safe-area-inset-right, 0px)) 12px max(8px, env(safe-area-inset-left, 0px)); }
+  .sheet { padding: 14px 12px 16px; border-radius: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+main { min-width: 0; }
+a { color: var(--accent); text-underline-offset: 2px; }
+h1, h2 { font-weight: 600; letter-spacing: -0.01em; }
+h1 { font-size: clamp(30px, 6vw, 46px); line-height: 1.08; margin: 6px 0 10px; }
+.abstract { max-width: 72ch; }
+p { margin: 8px 0; }
+code, .mono { font-family: var(--mono); font-size: 0.88em; }
+.meta { color: var(--muted); font-size: 13.5px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin: 18px 0; }
+
+/* Explorer */
+.explorer { padding: 0; overflow: hidden; container: ex / inline-size; }
+.ex-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; padding: 16px 18px 0; }
+.ex-head h2 { margin: 0; padding: 0; border: 0; font-size: 22px; }
+.ex-controls { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+@media (min-width: 720px) { .ex-controls { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: end; } }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); min-width: 0; }
+.field-row { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+select, input[type="number"], button { font: inherit; color: var(--ink); }
+select { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font-size: 14px; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+output { font-family: var(--mono); color: var(--ink); font-size: 13.5px; min-width: 3.5em; }
+.toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 13.5px; color: var(--ink2); cursor: pointer; }
+.toggle input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.stepper { display: flex; align-items: center; }
+.stepper button { width: 26px; height: 28px; border: 0; background: transparent; border-radius: 6px; cursor: pointer; font-size: 16px; line-height: 1; color: var(--ink2); }
+.stepper button:hover:not(:disabled) { background: var(--wash); }
+.stepper button:disabled { opacity: 0.35; cursor: default; }
+.stepper input { width: 4.4em; text-align: center; border: 1px solid var(--line); border-radius: 6px; padding: 3px 2px; background: var(--surface); font: 500 14px var(--mono); -moz-appearance: textfield; }
+.stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.stepper input:disabled { color: var(--accent); background: transparent; border-style: dashed; }
+.ex-body { display: grid; grid-template-columns: minmax(0, 1fr); }
+@container ex (min-width: 720px) { .ex-body { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); } .ex-tree { border-left: 1px solid var(--line); } }
+.ex-plot { padding: 12px 12px 8px; min-width: 0; }
+.ex-plot svg { display: block; width: 100%; height: auto; touch-action: none; cursor: crosshair; border-radius: 8px; }
+.ex-plot svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--ink2); margin: 6px 2px 0; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 10px; border-radius: 3px; display: inline-block; }
+.sw.line { height: 0; border-top: 2.5px solid; border-radius: 0; }
+.sw.dash { height: 0; border-top: 2px dashed; border-radius: 0; }
+.ex-s { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); margin-top: 6px; }
+.ex-tree { padding: 12px 14px 14px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.ex-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 12px; font-size: 13.5px; cursor: pointer; }
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.text { border-color: transparent; background: transparent; color: var(--accent); padding-left: 6px; padding-right: 6px; }
+.btn:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Ladder: label, arity stepper and tiles per level. The fixed columns line every rung up. */
+.ladder-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.ladder-depth { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.ladder-key { margin: 0; font-size: 12px; line-height: 1.4; color: var(--ink2); }
+.op { font-weight: 600; } .op.AND { color: var(--fp); } .op.OR { color: var(--fn); }
+.ladder { --rl: 64px; --ra: 118px; display: flex; flex-direction: column; }
+@container ex (max-width: 479px) {
+  .ladder { --ra: 100px; }
+  .ladder .stepper button { width: 22px; }
+  .ladder .stepper input { width: 4.1em; font-size: 13px; }
+}
+.rung, .stem { display: grid; grid-template-columns: var(--rl) var(--ra) minmax(0, 1fr); gap: 0 6px; align-items: center; }
+.rung-l { font: 500 11px/1.3 var(--mono); color: var(--muted); min-width: 0; }
+.rung-l > span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rung-t { min-width: 0; }
+.gauge { display: block; height: 3px; margin: 2px 6px 0 0; border-radius: 2px; background: var(--line); overflow: hidden; }
+.gauge i { display: block; height: 100%; background: var(--muted); transition: width 200ms ease; }
+.gauge.AND i { background: var(--fp); } .gauge.OR i { background: var(--fn); }
+.rung.hot .rung-l { color: var(--ink); } .rung.hot .tiles { border-color: var(--axis); }
+.lvl-curve { fill: none; stroke-width: 1.4; opacity: 0.45; stroke-linejoin: round; }
+.lvl-curve.hot { opacity: 1; stroke-width: 2.4; }
+.lvl-curve.AND { stroke: var(--fp); } .lvl-curve.OR { stroke: var(--fn); }
+.lvl-dot { stroke: var(--surface); stroke-width: 1.5; } .lvl-dot.AND { fill: var(--fp); } .lvl-dot.OR { fill: var(--fn); }
+.tiles { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 0; padding: 3px 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--wash); width: max-content; max-width: 100%; }
+.rung.root .tiles { border-color: transparent; background: transparent; padding-left: 6px; }
+.tile { width: 24px; height: 24px; border-radius: 6px; background: var(--off); border: 1px solid var(--line); flex: none; display: grid; place-items: center;
+  font: 600 10px/1 var(--mono); color: var(--muted); transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease; }
+.tile.cell { width: 16px; height: 16px; border-radius: 4px; }
+.tile.first { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--axis); }
+.tile.on { background: var(--on); border-color: var(--on); color: var(--on-ink); }
+.tile.off { background: var(--surface); border-color: var(--axis); }
+.tile.pop { animation: pop 260ms cubic-bezier(.3,1.6,.5,1) both; }
+@keyframes pop { from { transform: scale(0.55); opacity: 0.4; } to { transform: scale(1); opacity: 1; } }
+.tile.more { width: auto; min-width: 24px; padding: 0 5px; font-size: 11px; border-style: dashed; background: transparent; color: var(--ink2); font-weight: 500; white-space: nowrap; }
+.tile.root { width: auto; padding: 0 10px; height: 30px; font-size: 12px; }
+.stem i { grid-column: 3; display: block; height: 10px; margin-left: 16px; border-left: 2px solid var(--axis); transition: border-color 200ms ease; }
+.stem.flow i { border-left-color: var(--on); }
+@media (prefers-reduced-motion: reduce) { .tile, .stem i, .gauge i { transition: none; } .tile.pop { animation: none; } }
+/* min-width 0 lets the chip wrap its words in the narrow root rung on phones. */
+.outcome { display: inline-flex; align-items: center; gap: 6px; font: 600 12px/1.2 var(--mono); padding: 6px 9px; border-radius: 999px; margin-left: 8px; min-width: 0; }
+.outcome[data-k="TP"] { background: var(--ok-bg); color: var(--ok); }
+.outcome[data-k="TN"] { background: var(--wash); color: var(--ink2); }
+.outcome[data-k="FP"] { background: var(--fp-fill); color: var(--fp); }
+.outcome[data-k="FN"] { background: var(--fn-fill); color: var(--fn); }
+.ex-msg { font-size: 13px; color: var(--ink2); min-height: 1.6em; margin: 0; }
+.readout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line); overflow: hidden; }
+@container ex (min-width: 480px) { .readout { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container ex (min-width: 860px) { .readout { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.ro { padding: 10px 14px; min-width: 0; box-shadow: 1px 0 0 var(--line), 0 1px 0 var(--line); }
+.ro-l { font: 500 11.5px/1.3 var(--mono); color: var(--muted); }
+.ro-v { font: 500 18px/1.35 var(--mono); overflow-wrap: anywhere; }
+.ro-s { font-size: 12px; color: var(--muted); }
+.ro sup, .ex-tails sup { font-size: 11px; }
+.ro-v.good { color: var(--ok); } .ro-v.bad { color: var(--open); }
+.ex-tails { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px 14px; padding: 10px 12px; border-top: 1px solid var(--line); }
+@container ex (min-width: 560px) { .ex-tails { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.ex-tails figure { margin: 0; min-width: 0; }
+.ex-tails figcaption { font-size: 12px; line-height: 1.4; color: var(--ink2); }
+.ex-tails svg { display: block; width: 100%; height: auto; }
+.ex-foot { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 10px 18px 14px; border-top: 1px solid var(--line); }
+details { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-size: 14px; }
+.terms dl { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px 18px; margin: 0; padding: 0 14px 12px; font-size: 14px; }
+@media (min-width: 640px) { .terms dl { grid-template-columns: minmax(0, 16em) minmax(0, 1fr); } }
+.terms dt { font-weight: 600; } .terms dd { margin: 0 0 6px; color: var(--ink2); }
+.svg-text { font: 11px var(--sans); fill: var(--muted); }
+.svg-label { font: 600 11px var(--sans); fill: var(--ink2); }
+</style>
+</head>
+<body>
+<div class="backdrop" aria-hidden="true"></div>
+<div class="sheet">
+<nav class="site-bar" aria-label="Site">
+  <a href="/">Home</a>
+  <a href="/about">About</a>
+  <a href="/cv">Resume</a>
+  <a href="/projects" aria-current="page">Projects</a>
+  <a class="ext" href="https://www.linkedin.com/in/jack-fraser-3a137ba3/">LinkedIn</a>
+  <a href="https://github.com/quintuplin">GitHub</a>
+</nav>
+<style>
+/* Static link bar back to the main site, styled like its nav. */
+.site-bar { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 22px; padding-bottom: 8px; margin-bottom: 8px;
+  border-bottom: 1px solid var(--rule, var(--border, var(--line))); font: 600 16px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+.site-bar a { padding-block: 2px; color: var(--muted); text-decoration: none; }
+.site-bar a:hover, .site-bar a:focus-visible { color: var(--text, var(--ink)); text-decoration: underline; }
+.site-bar a[aria-current] { color: var(--accent, var(--focus)); }
+.site-bar .ext { margin-left: auto; }
+@media (max-width: 600px) { .site-bar .ext { margin-left: 0; } }
+</style>
+<main>
+<h1>Deep Nested LSH Explorer</h1>
+<p class="abstract">Classical LSH bands signature rows with AND inside each band and OR across bands to sharpen the line between pairs judged similar and pairs judged dissimilar. Deep Nested LSH adds further alternating AND and OR levels and misclassifies fewer pairs than shallow banding at the same row budget.</p>
+<section id="explorer" class="card explorer" aria-labelledby="ex-title">
+  <div class="ex-head">
+    <h2 id="ex-title">Cascade explorer</h2>
+    <span class="meta">Build a tree. Watch a pair of documents flow up it.</span>
+  </div>
+  <div class="ex-controls">
+    <label class="field">Preset
+      <select id="ex-preset"></select>
+    </label>
+    <div class="field">
+      <label for="ex-t">Target Jaccard t <output id="ex-t-out" for="ex-t"></output></label>
+      <div class="field-row">
+        <input type="range" id="ex-t" min="0.05" max="0.95" step="0.01" style="flex:1 1 140px">
+        <label class="toggle"><input type="checkbox" id="ex-auto"> Solve d1 for t</label>
+      </div>
+    </div>
+  </div>
+  <div class="ex-body">
+    <div class="ex-plot">
+      <svg id="ex-curve" viewBox="0 0 560 340" role="slider" tabindex="0" aria-label="Candidate probability curve. Arrow keys move the pair similarity s" aria-valuemin="0" aria-valuemax="1"></svg>
+      <div class="legend" id="ex-legend">
+        <span><i class="sw line" style="border-color:var(--ink)"></i>Cascade P(s)</span>
+        <span><i class="sw line" style="border-color:var(--fp);opacity:0.6"></i>One level</span>
+        <span><i class="sw dash" style="border-color:var(--muted)"></i>Ideal step at t</span>
+        <span><i class="sw" style="background:var(--fp-fill);border:1px solid var(--fp)"></i>FP area</span>
+        <span><i class="sw" style="background:var(--fn-fill);border:1px solid var(--fn)"></i>FN area</span>
+        <span><i class="sw" style="background:var(--band)"></i>Width W</span>
+      </div>
+      <div class="field-row" style="margin-top:6px">
+        <label class="toggle"><input type="checkbox" id="ex-d2"> Sharpest depth 2 in the same rows</label>
+        <label class="toggle"><input type="checkbox" id="ex-flat"> Flat reading</label>
+      </div>
+      <div class="ex-s"><label for="ex-s">Pair similarity s</label><input type="range" id="ex-s" min="0" max="1" step="0.001"><output id="ex-s-out" for="ex-s"></output></div>
+    </div>
+    <div class="ex-tree">
+      <div class="ex-actions">
+        <button class="btn primary" id="ex-one" type="button" title="Run one pair up the tree">Run</button>
+        <button class="btn" id="ex-many" type="button" title="Run 1000 pairs at the current s">1000 at s</button>
+        <button class="btn" id="ex-sweep" type="button" title="Run 1000 pairs at each s from 0.05 to 0.95">Sweep</button>
+        <button class="btn text" id="ex-clear" type="button" title="Clear the trial dots and the ladder">Clear</button>
+      </div>
+      <div class="ladder-head">
+        <div class="ladder-depth" id="ex-depth">Depth k</div>
+        <p class="ladder-key">Each faint curve is one level. <span class="op AND">AND</span> levels set the FP tail. <span class="op OR">OR</span> levels set the FN tail.</p>
+      </div>
+      <div class="ladder" id="ex-ladder" role="group" aria-label="Tree ladder from root to signature rows. Each level holds its arity"></div>
+      <p class="ex-msg" id="ex-msg" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+  <div class="readout" id="ex-readout" aria-live="polite"></div>
+  <div class="ex-tails">
+    <figure><figcaption id="ex-tail-fp-cap"></figcaption><svg id="ex-tail-fp" viewBox="0 0 300 120" role="img"></svg></figure>
+    <figure><figcaption id="ex-tail-fn-cap"></figcaption><svg id="ex-tail-fn" viewBox="0 0 300 120" role="img"></svg></figure>
+  </div>
+  <div class="ex-foot">
+    <label class="toggle">Trial seed <input type="number" id="ex-seed" min="1" max="999999" step="1" style="width:6.5em" class="mono"></label>
+  </div>
+  <details class="terms" style="margin:0 14px 14px">
+    <summary>Terms used on this page</summary>
+    <dl>
+      <dt>LSH</dt><dd>Locality sensitive hashing. It hashes documents so similar pairs likely collide and become candidates without comparing every pair.</dd>
+      <dt>The study</dt><dd>A search over trees by depth and row budget, scored on one generated corpus of 1000 documents. Most of its documents form clusters of near duplicates. The presets and their trees come from this search.</dd>
+      <dt>Jaccard similarity s</dt><dd>Shared shingles of two documents over all their shingles. A shingle here is a run of three consecutive words after lowercasing.</dd>
+      <dt>MinHash row</dt><dd>One hash value per document. Two documents agree on a row with probability s.</dd>
+      <dt>Signature length n</dt><dd>The number of MinHash rows a tree reads. It is the product of the arities.</dd>
+      <dt>Row budget</dt><dd>The largest n a tree may use. The presets compare trees within 1000 or 10000 rows.</dd>
+      <dt>Tuple d and depth k</dt><dd>d = (d0, d1, …) lists one arity per level. Depth k is the number of levels. n is the product of the arities.</dd>
+      <dt>Band</dt><dd>d0 rows joined by AND. It fires when the two documents agree on every one of its rows.</dd>
+      <dt>Arity dj</dt><dd>How many nodes of level j − 1 each node at level j combines. Level 0 combines rows.</dd>
+      <dt>AND level and OR level</dt><dd>An AND level fires only when every child fires. An OR level fires when any child fires.</dd>
+      <dt>Cascade reading</dt><dd>Odd levels OR their children and even levels AND them. Depth 2 is standard (r, b) banding.</dd>
+      <dt>(r, b) banding</dt><dd>Standard LSH with b bands of r rows each. As a tuple it is (r, b) with r = d0 and b = d1.</dd>
+      <dt>Flat reading</dt><dd>Every level above the bands ORs. It collapses to two-level banding (d0, n / d0).</dd>
+      <dt>Root and rung</dt><dd>The ladder holds one rung per level with the signature rows at the bottom and the root on top. Each rung sets its level's arity and shows the children of one node. The root is the single top node.</dd>
+      <dt>Rung labels Lj</dt><dd>L0 is the level of bands, L1 the level above it and so on up to the root. The AND or OR tag beside each label names that level's operation.</dd>
+      <dt>Hidden tile +k · j on</dt><dd>A rung draws only its first children. The last tile counts the k children not drawn and, after a run, the j of them that fired.</dd>
+      <dt>Candidate</dt><dd>A pair whose root fires. Only candidates go on to an exact check.</dd>
+      <dt>S curve P(s)</dt><dd>The candidate probability curve. P(s) is the chance that a pair of similarity s becomes a candidate.</dd>
+      <dt>Per-level curves</dt><dd>Each faint curve traces one level over s. It is the curve the subtree up to that level follows. Hover or focus a rung to pick out its curve.</dd>
+      <dt>p gauges</dt><dd>The p value and bar on each rung give the chance that a node at that level fires at the current s. The rows rung shows s itself.</dd>
+      <dt>Target t</dt><dd>The Jaccard value meant to split pairs. Pairs at or above t should become candidates.</dd>
+      <dt>Ideal step</dt><dd>The perfect filter at t. It is 0 below t and 1 at or above t.</dd>
+      <dt>Threshold t̂</dt><dd>The s where the candidate probability P(s) crosses one half. The study solves d1 so t̂ lies within 0.01 of t.</dd>
+      <dt>Solve d1 for t</dt><dd>Solves one arity for the target t. At depth 1 it sets d0 to the value with the closest t̂. At depth 2 or more it solves d1 for t and tries the whole numbers on either side of that solution. It sets d1 to the sharpest of them whose t̂ lies within 0.01 of t, or to the one with the closer t̂ when neither does. When the solution falls below 1.5 or does not exist it leaves d1 unchanged. A tree whose t̂ lands more than 0.01 from t is flagged as unmatched.</dd>
+      <dt>Width W</dt><dd>The span of s over which P(s) climbs from 0.05 to 0.95. Smaller is sharper.</dd>
+      <dt>Sharpest</dt><dd>The smallest width W among the trees whose t̂ lies within 0.01 of t.</dd>
+      <dt>Error area E</dt><dd>The area between P(s) and the ideal step at t. The FP area lies left of t and the FN area right of it.</dd>
+      <dt>Depth 2 search skipped above 10 million rows</dt><dd>The error area card compares the tree with the sharpest depth 2 banding in the same rows. The page skips that search for trees above 10 million rows.</dd>
+      <dt>TP and TN</dt><dd>A true positive is a pair at or above t that becomes a candidate. A true negative is a pair below t that stays out.</dd>
+      <dt>FP and FN</dt><dd>A false positive is a pair below t that becomes a candidate. A false negative is a pair at or above t that does not.</dd>
+      <dt>f+ and f−</dt><dd>Tail exponents. f+ is the product of the AND arities with d0. f− is the product of the OR arities. f+ f− = n.</dd>
+      <dt>Measured slope</dt><dd>The local slope of a log-log tail at its far end, at s 10<sup>−6</sup> for the FP tail and at 1 − s 10<sup>−6</sup> for the FN tail. It approaches f+ and f−. The tail cards and the Measured caption show it.</dd>
+      <dt>Trial dots and Wilson interval</dt><dd>Run sends one random pair at s up the tree. 1000 at s and Sweep send 1000 random pairs at each s and plot a dot for the share that became candidates. Its bar is the 95% Wilson score interval for that share. The dots should sit on the curve.</dd>
+      <dt>Trial seed</dt><dd>Seeds the random pairs. Clear or a new seed drops the trial dots and restarts the pairs from the shown seed, so the same seed replays the same trials. It affects only the random trials.</dd>
+      <dt>At its own threshold</dt><dd>The preset sets t to the tree's own t̂.</dd>
+      <dt>Standard banding at 10000 rows</dt><dd>The study's best depth 2 (r, b) banding within 10000 rows at each target.</dd>
+      <dt>Sharpest tree per depth at 10000 rows</dt><dd>The sharpest tree at each depth from 2 to 5 within 10000 rows at each target.</dd>
+      <dt>Least error area beyond depth 5</dt><dd>Trees past depth 5 from the error area search at 1000 and 10000 rows. Each label names the search kind and the depth, such as two-tier 9D.</dd>
+      <dt>max-depth</dt><dd>The least error area tree at the deepest depth at which a tree matched to t fits the budget with every arity at least 2.</dd>
+      <dt>two-tier</dt><dd>The depth and the arities chosen together for the least error area.</dd>
+      <dt>all-2s</dt><dd>Every arity 2 with one 3 where it fits. A naive baseline with no threshold match.</dd>
+      <dt>Arity families at t 0.5</dt><dd>Trees at depths 3 to 5 near 10000 rows matched to t 0.5. The families differ in where the large arities sit.</dd>
+      <dt>head-heavy, even-weights and tail-heavy</dt><dd>Head-heavy puts the large arities at the low levels near the rows. Tail-heavy puts them at the high levels near the root. Even-weights keeps the arities as close to equal as the threshold allows.</dd>
+      <dt>Flat reading collapse (7, 23, 3) and (7, 69)</dt><dd>Under the flat reading (7, 23, 3) collapses to the banding (7, 69). Switch on Flat reading to compare the two trees.</dd>
+    </dl>
+  </details>
+</section>
+</main>
+</div>
+<script type="application/json" id="sim-data">
+{"provenance":{"sha":"e84c48d","grid":{"max_depth":5,"tolerance":0.01}},"facts":{"top_budget":10000,"algorithm":{"0.3":{"flat":{"algorithm":"flat OR (standard banding)","dims":2,"best_config":"n10000_d2","tuple":[6,951],"rows":5706,"fp_exp":6,"fn_exp":951,"precision":0.895,"recall":0.922,"F1":0.909},"cascade":{"algorithm":"alternating cascade","dims":5,"best_config":"n10000_d5","tuple":[2,16,7,11,4],"rows":9856,"fp_exp":56,"fn_exp":176,"precision":0.968,"recall":0.972,"F1":0.97}},"0.5":{"flat":{"algorithm":"flat OR (standard banding)","dims":2,"best_config":"n10000_d2","tuple":[10,710],"rows":7100,"fp_exp":10,"fn_exp":710,"precision":0.821,"recall":0.921,"F1":0.868},"cascade":{"algorithm":"alternating cascade","dims":5,"best_config":"n10000_d5","tuple":[3,13,8,8,4],"rows":9984,"fp_exp":96,"fn_exp":104,"precision":0.941,"recall":0.952,"F1":0.947}},"0.8":{"flat":{"algorithm":"flat OR (standard banding)","dims":2,"best_config":"n10000_d2","tuple":[27,287],"rows":7749,"fp_exp":27,"fn_exp":287,"precision":0.885,"recall":0.937,"F1":0.91},"cascade":{"algorithm":"alternating cascade","dims":5,"best_config":"n10000_d5","tuple":[8,7,5,7,5],"rows":9800,"fp_exp":200,"fn_exp":49,"precision":0.975,"recall":0.931,"F1":0.953}}}},"tables":{"lsh_algorithm_table_t30":{"kind":"algorithm","target":0.3,"budget":null,"rows":[{"algorithm":"flat OR (standard banding)","dims":2,"best_config":"n10000_d2","tuple":[6,951],"rows":5706,"fp_exp":6,"fn_exp":951,"precision":0.895,"recall":0.922,"F1":0.909},{"algorithm":"alternating cascade","dims":5,"best_config":"n10000_d5","tuple":[2,16,7,11,4],"rows":9856,"fp_exp":56,"fn_exp":176,"precision":0.968,"recall":0.972,"F1":0.97}],"decimals":{"precision":3,"recall":3,"F1":3}},"lsh_algorithm_table_t50":{"kind":"algorithm","target":0.5,"budget":null,"rows":[{"algorithm":"flat OR (standard banding)","dims":2,"best_config":"n10000_d2","tuple":[10,710],"rows":7100,"fp_exp":10,"fn_exp":710,"precision":0.821,"recall":0.921,"F1":0.868},{"algorithm":"alternating cascade","dims":5,"best_config":"n10000_d5","tuple":[3,13,8,8,4],"rows":9984,"fp_exp":96,"fn_exp":104,"precision":0.941,"recall":0.952,"F1":0.947}],"decimals":{"precision":3,"recall":3,"F1":3}},"lsh_algorithm_table_t80":{"kind":"algorithm","target":0.8,"budget":null,"rows":[{"algorithm":"flat OR (standard banding)","dims":2,"best_config":"n10000_d2","tuple":[27,287],"rows":7749,"fp_exp":27,"fn_exp":287,"precision":0.885,"recall":0.937,"F1":0.91},{"algorithm":"alternating cascade","dims":5,"best_config":"n10000_d5","tuple":[8,7,5,7,5],"rows":9800,"fp_exp":200,"fn_exp":49,"precision":0.975,"recall":0.931,"F1":0.953}],"decimals":{"precision":3,"recall":3,"F1":3}},"lsh_cascade_table_t30":{"kind":"cascade","target":0.3,"budget":null,"rows":[{"config":"n250_d2","dims":[3,26],"depth":2,"rows":78,"threshold":0.297,"width":0.3521,"fp_exp x fn_exp":[3,26],"FP":5393,"FN":1182,"errors":6575,"precision":0.58,"recall":0.863,"F1":0.694},{"config":"n250_d3","dims":[2,22,5],"depth":3,"rows":220,"threshold":0.298,"width":0.2451,"fp_exp x fn_exp":[10,22],"FP":717,"FN":960,"errors":1677,"precision":0.915,"recall":0.889,"F1":0.902},{"config":"n250_d4","dims":[2,15,4,2],"depth":4,"rows":240,"threshold":0.291,"width":0.2294,"fp_exp x fn_exp":[8,30],"FP":986,"FN":860,"errors":1846,"precision":0.888,"recall":0.9,"F1":0.894},{"config":"n250_d5","dims":[2,9,2,3,2],"depth":5,"rows":216,"threshold":0.303,"width":0.2385,"fp_exp x fn_exp":[8,27],"FP":605,"FN":957,"errors":1562,"precision":0.927,"recall":0.889,"F1":0.908},{"config":"n1000_d2","dims":[4,86],"depth":2,"rows":344,"threshold":0.299,"width":0.2739,"fp_exp x fn_exp":[4,86],"FP":2716,"FN":1031,"errors":3747,"precision":0.737,"recall":0.881,"F1":0.802},{"config":"n1000_d3","dims":[2,33,15],"depth":3,"rows":990,"threshold":0.299,"width":0.173,"fp_exp x fn_exp":[30,33],"FP":406,"FN":662,"errors":1068,"precision":0.952,"recall":0.923,"F1":0.937},{"config":"n1000_d4","dims":[2,14,7,5],"depth":4,"rows":980,"threshold":0.306,"width":0.1578,"fp_exp x fn_exp":[14,70],"FP":377,"FN":641,"errors":1018,"precision":0.955,"recall":0.926,"F1":0.94},{"config":"n1000_d5","dims":[2,11,3,5,3],"depth":5,"rows":990,"threshold":0.3,"width":0.1536,"fp_exp x fn_exp":[18,55],"FP":334,"FN":617,"errors":951,"precision":0.96,"recall":0.929,"F1":0.944},{"config":"n4500_d2","dims":[5,285],"depth":2,"rows":1425,"threshold":0.3,"width":0.2234,"fp_exp x fn_exp":[5,285],"FP":1359,"FN":761,"errors":2120,"precision":0.853,"recall":0.912,"F1":0.881},{"config":"n4500_d3","dims":[3,109,13],"depth":3,"rows":4251,"threshold":0.299,"width":0.124,"fp_exp x fn_exp":[39,109],"FP":292,"FN":485,"errors":777,"precision":0.965,"recall":0.944,"F1":0.955},{"config":"n4500_d4","dims":[2,20,14,8],"depth":4,"rows":4480,"threshold":0.295,"width":0.1039,"fp_exp x fn_exp":[28,160],"FP":322,"FN":335,"errors":657,"precision":0.963,"recall":0.961,"F1":0.962},{"config":"n4500_d5","dims":[2,14,5,8,4],"depth":5,"rows":4480,"threshold":0.298,"width":0.0995,"fp_exp x fn_exp":[40,112],"FP":277,"FN":351,"errors":628,"precision":0.968,"recall":0.959,"F1":0.963},{"config":"n10000_d2","dims":[6,951],"depth":2,"rows":5706,"threshold":0.3,"width":0.1884,"fp_exp x fn_exp":[6,951],"FP":935,"FN":670,"errors":1605,"precision":0.895,"recall":0.922,"F1":0.909},{"config":"n10000_d3","dims":[3,131,24],"depth":3,"rows":9432,"threshold":0.299,"width":0.1048,"fp_exp x fn_exp":[72,131],"FP":234,"FN":433,"errors":667,"precision":0.972,"recall":0.95,"F1":0.961},{"config":"n10000_d4","dims":[2,24,23,9],"depth":4,"rows":9936,"threshold":0.298,"width":0.0848,"fp_exp x fn_exp":[46,216],"FP":226,"FN":307,"errors":533,"precision":0.974,"recall":0.964,"F1":0.969},{"config":"n10000_d5","dims":[2,16,7,11,4],"depth":5,"rows":9856,"threshold":0.294,"width":0.0793,"fp_exp x fn_exp":[56,176],"FP":275,"FN":244,"errors":519,"precision":0.968,"recall":0.972,"F1":0.97}],"decimals":{"threshold":3,"width":4,"precision":3,"recall":3,"F1":3}},"lsh_cascade_table_t50":{"kind":"cascade","target":0.5,"budget":null,"rows":[{"config":"n250_d2","dims":[5,22],"depth":2,"rows":110,"threshold":0.499,"width":0.3647,"fp_exp x fn_exp":[5,22],"FP":1287,"FN":454,"errors":1741,"precision":0.673,"recall":0.854,"F1":0.753},{"config":"n250_d3","dims":[3,16,5],"depth":3,"rows":240,"threshold":0.493,"width":0.2643,"fp_exp x fn_exp":[15,16],"FP":767,"FN":370,"errors":1137,"precision":0.781,"recall":0.881,"F1":0.828},{"config":"n250_d4","dims":[3,10,4,2],"depth":4,"rows":240,"threshold":0.499,"width":0.257,"fp_exp x fn_exp":[12,20],"FP":689,"FN":375,"errors":1064,"precision":0.799,"recall":0.879,"F1":0.837},{"config":"n250_d5","dims":[2,5,4,3,2],"depth":5,"rows":240,"threshold":0.499,"width":0.2499,"fp_exp x fn_exp":[16,15],"FP":743,"FN":355,"errors":1098,"precision":0.787,"recall":0.886,"F1":0.834},{"config":"n1000_d2","dims":[7,89],"depth":2,"rows":623,"threshold":0.499,"width":0.27,"fp_exp x fn_exp":[7,89],"FP":769,"FN":436,"errors":1205,"precision":0.777,"recall":0.86,"F1":0.816},{"config":"n1000_d3","dims":[3,23,14],"depth":3,"rows":966,"threshold":0.498,"width":0.1901,"fp_exp x fn_exp":[42,23],"FP":489,"FN":289,"errors":778,"precision":0.852,"recall":0.907,"F1":0.879},{"config":"n1000_d4","dims":[2,7,14,5],"depth":4,"rows":980,"threshold":0.498,"width":0.1738,"fp_exp x fn_exp":[28,35],"FP":522,"FN":256,"errors":778,"precision":0.845,"recall":0.918,"F1":0.88},{"config":"n1000_d5","dims":[2,5,7,7,2],"depth":5,"rows":980,"threshold":0.505,"width":0.168,"fp_exp x fn_exp":[28,35],"FP":354,"FN":299,"errors":653,"precision":0.888,"recall":0.904,"F1":0.896},{"config":"n4500_d2","dims":[9,355],"depth":2,"rows":3195,"threshold":0.5,"width":0.2136,"fp_exp x fn_exp":[9,355],"FP":693,"FN":271,"errors":964,"precision":0.804,"recall":0.913,"F1":0.855},{"config":"n4500_d3","dims":[4,53,21],"depth":3,"rows":4452,"threshold":0.5,"width":0.1327,"fp_exp x fn_exp":[84,53],"FP":279,"FN":235,"errors":514,"precision":0.911,"recall":0.924,"F1":0.918},{"config":"n4500_d4","dims":[3,14,15,7],"depth":4,"rows":4410,"threshold":0.505,"width":0.116,"fp_exp x fn_exp":[45,98],"FP":253,"FN":215,"errors":468,"precision":0.92,"recall":0.931,"F1":0.925},{"config":"n4500_d5","dims":[2,5,8,14,4],"depth":5,"rows":4480,"threshold":0.504,"width":0.11,"fp_exp x fn_exp":[64,70],"FP":209,"FN":223,"errors":432,"precision":0.932,"recall":0.928,"F1":0.93},{"config":"n10000_d2","dims":[10,710],"depth":2,"rows":7100,"threshold":0.5,"width":0.1933,"fp_exp x fn_exp":[10,710],"FP":624,"FN":247,"errors":871,"precision":0.821,"recall":0.921,"F1":0.868},{"config":"n10000_d3","dims":[5,105,19],"depth":3,"rows":9975,"threshold":0.5,"width":0.1108,"fp_exp x fn_exp":[95,105],"FP":232,"FN":207,"errors":439,"precision":0.926,"recall":0.933,"F1":0.93},{"config":"n10000_d4","dims":[3,18,23,8],"depth":4,"rows":9936,"threshold":0.492,"width":0.0941,"fp_exp x fn_exp":[69,144],"FP":284,"FN":128,"errors":412,"precision":0.913,"recall":0.959,"F1":0.935},{"config":"n10000_d5","dims":[3,13,8,8,4],"depth":5,"rows":9984,"threshold":0.498,"width":0.0878,"fp_exp x fn_exp":[96,104],"FP":184,"FN":148,"errors":332,"precision":0.941,"recall":0.952,"F1":0.947}],"decimals":{"threshold":3,"width":4,"precision":3,"recall":3,"F1":3}},"lsh_cascade_table_t80":{"kind":"cascade","target":0.8,"budget":null,"rows":[{"config":"n250_d2","dims":[14,16],"depth":2,"rows":224,"threshold":0.798,"width":0.2179,"fp_exp x fn_exp":[14,16],"FP":175,"FN":47,"errors":222,"precision":0.725,"recall":0.907,"F1":0.806},{"config":"n250_d3","dims":[5,6,8],"depth":3,"rows":240,"threshold":0.806,"width":0.1867,"fp_exp x fn_exp":[40,6],"FP":93,"FN":60,"errors":153,"precision":0.828,"recall":0.882,"F1":0.854},{"config":"n250_d4","dims":[5,4,6,2],"depth":4,"rows":240,"threshold":0.808,"width":0.1795,"fp_exp x fn_exp":[30,8],"FP":123,"FN":59,"errors":182,"precision":0.785,"recall":0.884,"F1":0.831},{"config":"n250_d5","dims":[5,2,2,4,3],"depth":5,"rows":240,"threshold":0.808,"width":0.1775,"fp_exp x fn_exp":[30,8],"FP":113,"FN":49,"errors":162,"precision":0.802,"recall":0.904,"F1":0.85},{"config":"n1000_d2","dims":[19,48],"depth":2,"rows":912,"threshold":0.8,"width":0.1651,"fp_exp x fn_exp":[19,48],"FP":105,"FN":34,"errors":139,"precision":0.819,"recall":0.933,"F1":0.872},{"config":"n1000_d3","dims":[10,18,5],"depth":3,"rows":900,"threshold":0.8,"width":0.1308,"fp_exp x fn_exp":[50,18],"FP":58,"FN":45,"errors":103,"precision":0.889,"recall":0.911,"F1":0.9},{"config":"n1000_d4","dims":[5,4,10,5],"depth":4,"rows":1000,"threshold":0.808,"width":0.1217,"fp_exp x fn_exp":[50,20],"FP":45,"FN":36,"errors":81,"precision":0.913,"recall":0.929,"F1":0.921},{"config":"n1000_d5","dims":[6,3,3,6,3],"depth":5,"rows":972,"threshold":0.805,"width":0.1193,"fp_exp x fn_exp":[54,18],"FP":59,"FN":37,"errors":96,"precision":0.889,"recall":0.927,"F1":0.908},{"config":"n4500_d2","dims":[24,147],"depth":2,"rows":3528,"threshold":0.8,"width":0.1322,"fp_exp x fn_exp":[24,147],"FP":76,"FN":38,"errors":114,"precision":0.861,"recall":0.925,"F1":0.892},{"config":"n4500_d3","dims":[12,37,10],"depth":3,"rows":4440,"threshold":0.802,"width":0.0874,"fp_exp x fn_exp":[120,37],"FP":43,"FN":34,"errors":77,"precision":0.917,"recall":0.933,"F1":0.925},{"config":"n4500_d4","dims":[7,7,13,7],"depth":4,"rows":4459,"threshold":0.809,"width":0.08,"fp_exp x fn_exp":[91,49],"FP":12,"FN":42,"errors":54,"precision":0.975,"recall":0.917,"F1":0.945},{"config":"n4500_d5","dims":[8,8,7,5,2],"depth":5,"rows":4480,"threshold":0.81,"width":0.0757,"fp_exp x fn_exp":[112,40],"FP":24,"FN":35,"errors":59,"precision":0.952,"recall":0.931,"F1":0.941},{"config":"n10000_d2","dims":[27,287],"depth":2,"rows":7749,"threshold":0.8,"width":0.1179,"fp_exp x fn_exp":[27,287],"FP":62,"FN":32,"errors":94,"precision":0.885,"recall":0.937,"F1":0.91},{"config":"n10000_d3","dims":[13,54,14],"depth":3,"rows":9828,"threshold":0.8,"width":0.0732,"fp_exp x fn_exp":[182,54],"FP":31,"FN":23,"errors":54,"precision":0.94,"recall":0.955,"F1":0.947},{"config":"n10000_d4","dims":[8,12,20,5],"depth":4,"rows":9600,"threshold":0.805,"width":0.0651,"fp_exp x fn_exp":[160,60],"FP":19,"FN":29,"errors":48,"precision":0.962,"recall":0.943,"F1":0.952},{"config":"n10000_d5","dims":[8,7,5,7,5],"depth":5,"rows":9800,"threshold":0.809,"width":0.0607,"fp_exp x fn_exp":[200,49],"FP":12,"FN":35,"errors":47,"precision":0.975,"recall":0.931,"F1":0.953}],"decimals":{"threshold":3,"width":4,"precision":3,"recall":3,"F1":3}},"lsh_equal_rows_table_t30":{"kind":"equal_rows","target":0.3,"budget":null,"rows":[{"config":"n5706_d2","dims":[6,951],"depth":2,"rows":5706,"threshold":0.3,"width":0.1884,"fp_exp x fn_exp":[6,951],"FP":935,"FN":670,"errors":1605,"precision":0.895,"recall":0.922,"F1":0.909},{"config":"n5706_d3","dims":[3,117,17],"depth":3,"rows":5967,"threshold":0.301,"width":0.1153,"fp_exp x fn_exp":[51,117],"FP":242,"FN":464,"errors":706,"precision":0.971,"recall":0.946,"F1":0.959},{"config":"n5706_d4","dims":[2,22,17,8],"depth":4,"rows":5984,"threshold":0.294,"width":0.0961,"fp_exp x fn_exp":[34,176],"FP":280,"FN":263,"errors":543,"precision":0.968,"recall":0.97,"F1":0.969},{"config":"n5706_d5","dims":[2,17,7,8,3],"depth":5,"rows":5712,"threshold":0.293,"width":0.0919,"fp_exp x fn_exp":[42,136],"FP":299,"FN":246,"errors":545,"precision":0.966,"recall":0.972,"F1":0.969}],"decimals":{"threshold":3,"width":4,"precision":3,"recall":3,"F1":3}},"lsh_equal_rows_table_t50":{"kind":"equal_rows","target":0.5,"budget":null,"rows":[{"config":"n7100_d2","dims":[10,710],"depth":2,"rows":7100,"threshold":0.5,"width":0.1933,"fp_exp x fn_exp":[10,710],"FP":624,"FN":247,"errors":871,"precision":0.821,"recall":0.921,"F1":0.868},{"config":"n7100_d3","dims":[5,98,15],"depth":3,"rows":7350,"threshold":0.5,"width":0.1183,"fp_exp x fn_exp":[75,98],"FP":240,"FN":204,"errors":444,"precision":0.924,"recall":0.934,"F1":0.929},{"config":"n7100_d4","dims":[3,18,23,6],"depth":4,"rows":7452,"threshold":0.499,"width":0.1011,"fp_exp x fn_exp":[69,108],"FP":226,"FN":186,"errors":412,"precision":0.928,"recall":0.94,"F1":0.934},{"config":"n7100_d5","dims":[3,13,9,7,3],"depth":5,"rows":7371,"threshold":0.507,"width":0.0953,"fp_exp x fn_exp":[81,91],"FP":135,"FN":219,"errors":354,"precision":0.955,"recall":0.93,"F1":0.942}],"decimals":{"threshold":3,"width":4,"precision":3,"recall":3,"F1":3}},"lsh_equal_rows_table_t80":{"kind":"equal_rows","target":0.8,"budget":null,"rows":[{"config":"n7749_d2","dims":[27,287],"depth":2,"rows":7749,"threshold":0.8,"width":0.1179,"fp_exp x fn_exp":[27,287],"FP":62,"FN":32,"errors":94,"precision":0.885,"recall":0.937,"F1":0.91},{"config":"n7749_d3","dims":[13,51,12],"depth":3,"rows":7956,"threshold":0.8,"width":0.0767,"fp_exp x fn_exp":[156,51],"FP":30,"FN":20,"errors":50,"precision":0.942,"recall":0.961,"F1":0.951},{"config":"n7749_d4","dims":[8,9,14,8],"depth":4,"rows":8064,"threshold":0.809,"width":0.0682,"fp_exp x fn_exp":[112,72],"FP":17,"FN":24,"errors":41,"precision":0.966,"recall":0.953,"F1":0.959},{"config":"n7749_d5","dims":[6,5,9,10,3],"depth":5,"rows":8100,"threshold":0.809,"width":0.0641,"fp_exp x fn_exp":[162,50],"FP":17,"FN":23,"errors":40,"precision":0.966,"recall":0.955,"F1":0.96}],"decimals":{"threshold":3,"width":4,"precision":3,"recall":3,"F1":3}},"lsh_error_area_table_t30":{"kind":"error_area","target":0.3,"budget":null,"rows":[{"kind":"sweep","depth":2,"dims":[6,951],"rows":5706,"threshold":0.3,"width":0.1884,"error_area":0.045693},{"kind":"sweep","depth":3,"dims":[3,131,24],"rows":9432,"threshold":0.299,"width":0.1048,"error_area":0.025303},{"kind":"sweep","depth":4,"dims":[2,24,23,9],"rows":9936,"threshold":0.298,"width":0.0848,"error_area":0.020576},{"kind":"sweep","depth":5,"dims":[2,23,12,6,3],"rows":9936,"threshold":0.3,"width":0.0802,"error_area":0.019373},{"kind":"max-depth","depth":10,"dims":[2,13,3,2,2,2,2,2,2,2],"rows":9984,"threshold":0.301,"width":0.0754,"error_area":0.018239},{"kind":"all-2s","depth":13,"dims":[2,2,2,2,2,2,2,2,2,2,2,2,2],"rows":8192,"threshold":0.625,"width":0.0811,"error_area":0.325514}],"decimals":{"threshold":3,"width":4,"error_area":6}},"lsh_error_area_table_t30_n1000":{"kind":"error_area","target":0.3,"budget":1000,"rows":[{"kind":"sweep","depth":2,"dims":[4,86],"rows":344,"threshold":0.299,"width":0.2739,"error_area":0.066929},{"kind":"sweep","depth":3,"dims":[2,33,15],"rows":990,"threshold":0.299,"width":0.173,"error_area":0.04177},{"kind":"sweep","depth":4,"dims":[2,14,7,5],"rows":980,"threshold":0.306,"width":0.1578,"error_area":0.038513},{"kind":"sweep","depth":5,"dims":[2,11,3,5,3],"rows":990,"threshold":0.3,"width":0.1536,"error_area":0.03716},{"kind":"max-depth","depth":7,"dims":[2,10,2,2,2,3,2],"rows":960,"threshold":0.293,"width":0.1517,"error_area":0.037121},{"kind":"two-tier","depth":6,"dims":[2,10,2,3,4,2],"rows":960,"threshold":0.295,"width":0.1525,"error_area":0.037116},{"kind":"all-2s","depth":9,"dims":[2,2,2,2,2,2,2,2,3],"rows":768,"threshold":0.654,"width":0.1647,"error_area":0.354064}],"decimals":{"threshold":3,"width":4,"error_area":6}},"lsh_error_area_table_t50":{"kind":"error_area","target":0.5,"budget":null,"rows":[{"kind":"sweep","depth":1,"dims":[1],"rows":1,"threshold":0.5,"width":0.9,"error_area":0.25},{"kind":"sweep","depth":2,"dims":[10,710],"rows":7100,"threshold":0.5,"width":0.1933,"error_area":0.046557},{"kind":"sweep","depth":3,"dims":[5,105,19],"rows":9975,"threshold":0.5,"width":0.1108,"error_area":0.026804},{"kind":"sweep","depth":4,"dims":[3,17,24,8],"rows":9792,"threshold":0.503,"width":0.0944,"error_area":0.022972},{"kind":"sweep","depth":5,"dims":[3,13,8,8,4],"rows":9984,"threshold":0.498,"width":0.0878,"error_area":0.021256},{"kind":"max-depth","depth":12,"dims":[2,3,2,2,2,2,2,2,2,3,2,2],"rows":9216,"threshold":0.501,"width":0.0839,"error_area":0.020276},{"kind":"two-tier","depth":9,"dims":[2,5,3,2,3,3,3,3,2],"rows":9720,"threshold":0.499,"width":0.0823,"error_area":0.0199},{"kind":"all-2s","depth":13,"dims":[2,2,2,2,2,2,2,2,2,2,2,2,2],"rows":8192,"threshold":0.625,"width":0.0811,"error_area":0.125514}],"decimals":{"threshold":3,"width":4,"error_area":6}},"lsh_error_area_table_t50_n1000":{"kind":"error_area","target":0.5,"budget":1000,"rows":[{"kind":"sweep","depth":1,"dims":[1],"rows":1,"threshold":0.5,"width":0.9,"error_area":0.25},{"kind":"sweep","depth":2,"dims":[7,89],"rows":623,"threshold":0.499,"width":0.27,"error_area":0.065349},{"kind":"sweep","depth":3,"dims":[3,23,14],"rows":966,"threshold":0.498,"width":0.1901,"error_area":0.046054},{"kind":"sweep","depth":4,"dims":[2,7,14,5],"rows":980,"threshold":0.498,"width":0.1738,"error_area":0.042106},{"kind":"sweep","depth":5,"dims":[2,5,7,7,2],"rows":980,"threshold":0.505,"width":0.168,"error_area":0.040848},{"kind":"max-depth","depth":8,"dims":[2,2,2,5,2,2,3,2],"rows":960,"threshold":0.498,"width":0.1668,"error_area":0.0404},{"kind":"two-tier","depth":7,"dims":[2,5,4,2,2,3,2],"rows":960,"threshold":0.505,"width":0.1653,"error_area":0.040181},{"kind":"all-2s","depth":9,"dims":[2,2,2,2,2,2,2,2,3],"rows":768,"threshold":0.654,"width":0.1647,"error_area":0.154091}],"decimals":{"threshold":3,"width":4,"error_area":6}},"lsh_error_area_table_t80":{"kind":"error_area","target":0.8,"budget":null,"rows":[{"kind":"sweep","depth":1,"dims":[3],"rows":3,"threshold":0.794,"width":0.6146,"error_area":0.1548},{"kind":"sweep","depth":2,"dims":[27,287],"rows":7749,"threshold":0.8,"width":0.1179,"error_area":0.028199},{"kind":"sweep","depth":3,"dims":[13,54,14],"rows":9828,"threshold":0.8,"width":0.0732,"error_area":0.017726},{"kind":"sweep","depth":4,"dims":[9,13,14,6],"rows":9828,"threshold":0.802,"width":0.0652,"error_area":0.015819},{"kind":"sweep","depth":5,"dims":[7,7,7,7,4],"rows":9604,"threshold":0.801,"width":0.0622,"error_area":0.015067},{"kind":"max-depth","depth":11,"dims":[4,2,2,2,3,3,2,2,2,2,2],"rows":9216,"threshold":0.8,"width":0.0599,"error_area":0.014479},{"kind":"two-tier","depth":9,"dims":[5,3,3,2,2,3,3,3,2],"rows":9720,"threshold":0.802,"width":0.0589,"error_area":0.014325},{"kind":"all-2s","depth":13,"dims":[2,2,2,2,2,2,2,2,2,2,2,2,2],"rows":8192,"threshold":0.625,"width":0.0811,"error_area":0.174486}],"decimals":{"threshold":3,"width":4,"error_area":6}},"lsh_error_area_table_t80_n1000":{"kind":"error_area","target":0.8,"budget":1000,"rows":[{"kind":"sweep","depth":1,"dims":[3],"rows":3,"threshold":0.794,"width":0.6146,"error_area":0.1548},{"kind":"sweep","depth":2,"dims":[19,48],"rows":912,"threshold":0.8,"width":0.1651,"error_area":0.039564},{"kind":"sweep","depth":3,"dims":[10,18,5],"rows":900,"threshold":0.8,"width":0.1308,"error_area":0.031697},{"kind":"sweep","depth":4,"dims":[6,6,9,3],"rows":972,"threshold":0.8,"width":0.1232,"error_area":0.029781},{"kind":"sweep","depth":5,"dims":[6,3,3,6,3],"rows":972,"threshold":0.805,"width":0.1193,"error_area":0.029119},{"kind":"max-depth","depth":8,"dims":[5,2,2,2,2,2,2,3],"rows":960,"threshold":0.8,"width":0.1223,"error_area":0.029497},{"kind":"two-tier","depth":7,"dims":[5,2,2,4,3,2,2],"rows":960,"threshold":0.803,"width":0.1189,"error_area":0.028868},{"kind":"all-2s","depth":9,"dims":[2,2,2,2,2,2,2,2,3],"rows":768,"threshold":0.654,"width":0.1647,"error_area":0.145993}],"decimals":{"threshold":3,"width":4,"error_area":6}},"lsh_high_cap_family_table_t30":{"kind":"high_cap_family","target":0.3,"budget":null,"rows":[{"family":"head-heavy","config":"head_d2","depth":2,"dims":[6,951],"rows":5706,"row_delta":4294,"threshold":0.3,"width":0.1884,"fp_exp x fn_exp":[6,951]},{"family":"head-heavy","config":"head_d3","depth":3,"dims":[5,649,3],"rows":9735,"row_delta":265,"threshold":0.3,"width":0.1281,"fp_exp x fn_exp":[15,649]},{"family":"head-heavy","config":"head_d4","depth":4,"dims":[4,208,6,2],"rows":9984,"row_delta":16,"threshold":0.3,"width":0.1038,"fp_exp x fn_exp":[24,416]},{"family":"head-heavy","config":"head_d5","depth":5,"dims":[4,182,3,2,2],"rows":8736,"row_delta":1264,"threshold":0.3,"width":0.1072,"fp_exp x fn_exp":[24,364]},{"family":"even-weights","config":"even_d2","depth":2,"dims":[6,951],"rows":5706,"row_delta":4294,"threshold":0.3,"width":0.1884,"fp_exp x fn_exp":[6,951]},{"family":"even-weights","config":"even_d3","depth":3,"dims":[3,132,25],"rows":9900,"row_delta":100,"threshold":0.3,"width":0.1038,"fp_exp x fn_exp":[75,132]},{"family":"even-weights","config":"even_d4","depth":4,"dims":[2,25,25,8],"rows":10000,"row_delta":0,"threshold":0.3,"width":0.0847,"fp_exp x fn_exp":[50,200]},{"family":"even-weights","config":"even_d5","depth":5,"dims":[2,10,5,20,5],"rows":10000,"row_delta":0,"threshold":0.307,"width":0.0825,"fp_exp x fn_exp":[50,200]},{"family":"tail-heavy","config":"tail_d2","depth":2,"dims":[6,951],"rows":5706,"row_delta":4294,"threshold":0.3,"width":0.1884,"fp_exp x fn_exp":[6,951]},{"family":"tail-heavy","config":"tail_d3","depth":3,"dims":[2,48,60],"rows":5760,"row_delta":4240,"threshold":0.298,"width":0.1229,"fp_exp x fn_exp":[120,48]},{"family":"tail-heavy","config":"tail_d4","depth":4,"dims":[2,10,9,55],"rows":9900,"row_delta":100,"threshold":0.302,"width":0.1018,"fp_exp x fn_exp":[18,550]},{"family":"tail-heavy","config":"tail_d5","depth":5,"dims":[2,3,2,49,17],"rows":9996,"row_delta":4,"threshold":0.304,"width":0.0949,"fp_exp x fn_exp":[68,147]}],"decimals":{"threshold":3,"width":4}},"lsh_high_cap_family_table_t50":{"kind":"high_cap_family","target":0.5,"budget":null,"rows":[{"family":"head-heavy","config":"head_d2","depth":2,"dims":[10,710],"rows":7100,"row_delta":2900,"threshold":0.5,"width":0.1933,"fp_exp x fn_exp":[10,710]},{"family":"head-heavy","config":"head_d3","depth":3,"dims":[8,404,3],"rows":9696,"row_delta":304,"threshold":0.5,"width":0.1341,"fp_exp x fn_exp":[24,404]},{"family":"head-heavy","config":"head_d4","depth":4,"dims":[7,170,4,2],"rows":9520,"row_delta":480,"threshold":0.5,"width":0.1194,"fp_exp x fn_exp":[28,340]},{"family":"head-heavy","config":"head_d5","depth":5,"dims":[7,111,2,3,2],"rows":9324,"row_delta":676,"threshold":0.5,"width":0.1195,"fp_exp x fn_exp":[28,333]},{"family":"even-weights","config":"even_d2","depth":2,"dims":[10,710],"rows":7100,"row_delta":2900,"threshold":0.5,"width":0.1933,"fp_exp x fn_exp":[10,710]},{"family":"even-weights","config":"even_d3","depth":3,"dims":[5,105,19],"rows":9975,"row_delta":25,"threshold":0.5,"width":0.1108,"fp_exp x fn_exp":[95,105]},{"family":"even-weights","config":"even_d4","depth":4,"dims":[2,10,50,10],"rows":10000,"row_delta":0,"threshold":0.505,"width":0.098,"fp_exp x fn_exp":[100,100]},{"family":"even-weights","config":"even_d5","depth":5,"dims":[4,25,5,5,4],"rows":10000,"row_delta":0,"threshold":0.496,"width":0.0915,"fp_exp x fn_exp":[80,125]},{"family":"tail-heavy","config":"tail_d2","depth":2,"dims":[10,710],"rows":7100,"row_delta":2900,"threshold":0.5,"width":0.1933,"fp_exp x fn_exp":[10,710]},{"family":"tail-heavy","config":"tail_d3","depth":3,"dims":[4,62,40],"rows":9920,"row_delta":80,"threshold":0.502,"width":0.1135,"fp_exp x fn_exp":[160,62]},{"family":"tail-heavy","config":"tail_d4","depth":4,"dims":[2,5,17,58],"rows":9860,"row_delta":140,"threshold":0.505,"width":0.1118,"fp_exp x fn_exp":[34,290]},{"family":"tail-heavy","config":"tail_d5","depth":5,"dims":[2,2,2,21,59],"rows":9912,"row_delta":88,"threshold":0.5,"width":0.1125,"fp_exp x fn_exp":[236,42]}],"decimals":{"threshold":3,"width":4}},"lsh_high_cap_family_table_t80":{"kind":"high_cap_family","target":0.8,"budget":null,"rows":[{"family":"head-heavy","config":"head_d2","depth":2,"dims":[27,287],"rows":7749,"row_delta":2251,"threshold":0.8,"width":0.1179,"fp_exp x fn_exp":[27,287]},{"family":"head-heavy","config":"head_d3","depth":3,"dims":[23,208,2],"rows":9568,"row_delta":432,"threshold":0.8,"width":0.0919,"fp_exp x fn_exp":[46,208]},{"family":"head-heavy","config":"head_d4","depth":4,"dims":[22,106,2,2],"rows":9328,"row_delta":672,"threshold":0.8,"width":0.0899,"fp_exp x fn_exp":[44,212]},{"family":"head-heavy","config":"head_d5","depth":5,"dims":[18,63,2,2,2],"rows":9072,"row_delta":928,"threshold":0.799,"width":0.0776,"fp_exp x fn_exp":[72,126]},{"family":"even-weights","config":"even_d2","depth":2,"dims":[27,287],"rows":7749,"row_delta":2251,"threshold":0.8,"width":0.1179,"fp_exp x fn_exp":[27,287]},{"family":"even-weights","config":"even_d3","depth":3,"dims":[17,98,6],"rows":9996,"row_delta":4,"threshold":0.8,"width":0.0756,"fp_exp x fn_exp":[102,98]},{"family":"even-weights","config":"even_d4","depth":4,"dims":[5,5,20,20],"rows":10000,"row_delta":0,"threshold":0.792,"width":0.0727,"fp_exp x fn_exp":[100,100]},{"family":"even-weights","config":"even_d5","depth":5,"dims":[5,5,10,8,5],"rows":10000,"row_delta":0,"threshold":0.8,"width":0.0628,"fp_exp x fn_exp":[250,40]},{"family":"tail-heavy","config":"tail_d2","depth":2,"dims":[27,287],"rows":7749,"row_delta":2251,"threshold":0.8,"width":0.1179,"fp_exp x fn_exp":[27,287]},{"family":"tail-heavy","config":"tail_d3","depth":3,"dims":[8,23,54],"rows":9936,"row_delta":64,"threshold":0.803,"width":0.0789,"fp_exp x fn_exp":[432,23]},{"family":"tail-heavy","config":"tail_d4","depth":4,"dims":[3,3,29,38],"rows":9918,"row_delta":82,"threshold":0.791,"width":0.0805,"fp_exp x fn_exp":[87,114]},{"family":"tail-heavy","config":"tail_d5","depth":5,"dims":[2,2,6,7,58],"rows":9744,"row_delta":256,"threshold":0.81,"width":0.0807,"fp_exp x fn_exp":[696,14]}],"decimals":{"threshold":3,"width":4}}}}
+</script>
+<script id="cascade-src">
+// Cascade maths of the Deep Nested LSH study, ported from the study's cascade package at d94f31e.
+// scripts/check_deep_nested_lsh.mjs runs this script against the study reference values.
+(function (root) {
+  "use strict";
+  const ROW_CAP = 100000;
+  const TOLERANCE = 0.01;
+
+  // Level 0 ANDs rows into a band. Levels above alternate OR, AND, OR (shape.py).
+  const isOr = (j) => j % 2 === 1;
+  const rows = (d) => d.reduce((a, b) => a * b, 1);
+
+  function levels(s, d) {
+    const out = new Array(d.length);
+    let p = Math.pow(s, d[0]);
+    out[0] = p;
+    for (let j = 1; j < d.length; j++) {
+      p = isOr(j) ? 1 - Math.pow(1 - p, d[j]) : Math.pow(p, d[j]);
+      out[j] = p;
+    }
+    return out;
+  }
+
+  const curve = (s, d) => levels(s, d)[d.length - 1];
+
+  // Flat reading: every level above the leaves ORs, so the tree is n / d0 bands of d0 rows.
+  const flatCurve = (s, d) => 1 - Math.pow(1 - Math.pow(s, d[0]), rows(d) / d[0]);
+
+  function inverse(y, d) {
+    let lnp = Math.log(y);
+    for (let j = d.length - 1; j > 0; j--) {
+      lnp = isOr(j) ? Math.log(-Math.expm1(Math.log1p(-Math.exp(lnp)) / d[j])) : lnp / d[j];
+    }
+    return Math.exp(lnp / d[0]);
+  }
+
+  const threshold = (d) => inverse(0.5, d);
+  const width = (d, lo = 0.05, hi = 0.95) => inverse(hi, d) - inverse(lo, d);
+
+  // Level j as its own tree d[0..j]: the curve a node at that level follows and its midpoint and width.
+  const profile = (d) => d.map((arity, j) => {
+    const prefix = d.slice(0, j + 1);
+    return { or: isOr(j), arity, mid: threshold(prefix), width: width(prefix) };
+  });
+
+  // Real-valued d1 that puts the curve's `target` crossing at `t` (curve.py).
+  function bandsForThreshold(t, d, target = 0.5) {
+    let p = target;
+    for (let j = d.length - 1; j > 1; j--) {
+      p = isOr(j) ? -Math.expm1(Math.log1p(-p) / d[j]) : Math.pow(p, 1 / d[j]);
+    }
+    const p0 = Math.pow(t, d[0]);
+    if (!(p0 > 0 && p0 < 1) || !(p > 0 && p < 1)) return NaN;
+    return Math.log1p(-p) / Math.log1p(-p0);
+  }
+
+  // np.linspace and np.trapezoid as score.py calls them: last sample equals stop.
+  function trapezoid(a, b, n, f) {
+    const step = (b - a) / (n - 1);
+    let prevX = a, prevY = f(a), sum = 0;
+    for (let i = 1; i < n; i++) {
+      const x = i === n - 1 ? b : i * step + a;
+      const y = f(x);
+      sum += ((x - prevX) * (y + prevY)) / 2;
+      prevX = x;
+      prevY = y;
+    }
+    return sum;
+  }
+
+  function errorArea(d, target, samples = 3001) {
+    const left = target > 0 ? trapezoid(0, target, samples, (s) => curve(s, d)) : 0;
+    const right = target < 1 ? trapezoid(target, 1, samples, (s) => 1 - curve(s, d)) : 0;
+    return left + right;
+  }
+
+  // [f+, f-]: products of the AND arities (with d0) and of the OR arities. f+ f- = n.
+  function tails(d) {
+    let fp = d[0], fn = 1;
+    for (let j = 1; j < d.length; j++) {
+      if (isOr(j)) fn *= d[j];
+      else fp *= d[j];
+    }
+    return [fp, fn];
+  }
+
+  // Candidate d1 values the study's search tries, kept within the threshold tolerance (enumerate.py).
+  function d1Options(t, d) {
+    const solved = bandsForThreshold(t, d);
+    if (Number.isNaN(solved) || solved < 1.5) return [];
+    return [...new Set([Math.max(2, Math.floor(solved)), Math.max(2, Math.ceil(solved))])].map((b) => {
+      const dims = d.slice();
+      dims[1] = b;
+      return dims;
+    });
+  }
+
+  // Explorer solve: the narrowest matched option, else the closest threshold flagged as unmatched.
+  function solveD1(d, t) {
+    if (d.length === 1) {
+      let best = 1;
+      for (let r = 2; r <= 400; r++) if (Math.abs(threshold([r]) - t) < Math.abs(threshold([best]) - t)) best = r;
+      return { dims: [best], matched: Math.abs(threshold([best]) - t) <= TOLERANCE };
+    }
+    const options = d1Options(t, d);
+    if (!options.length) return { dims: d.slice(), matched: false };
+    const matched = options.filter((o) => Math.abs(threshold(o) - t) <= TOLERANCE);
+    if (matched.length) return { dims: matched.reduce((a, b) => (width(b) < width(a) ? b : a)), matched: true };
+    const off = (o) => Math.abs(threshold(o) - t);
+    return { dims: options.reduce((a, b) => (off(b) < off(a) ? b : a)), matched: false };
+  }
+
+  // Sharpest standard banding (r, b) within `budget` rows matched to `t` (best.py, enumerate.py).
+  function bestDepth2(budget, t) {
+    let best = null, bestWidth = Infinity;
+    for (let r = 2; r <= budget; r++) {
+      const probe = bandsForThreshold(t, [r, 1]);
+      if (Number.isNaN(probe)) continue;
+      if (r * Math.max(probe, 2) > budget) break;
+      for (const dims of d1Options(t, [r, 1])) {
+        if (rows(dims) > budget || Math.abs(threshold(dims) - t) > TOLERANCE) continue;
+        const w = width(dims);
+        if (w < bestWidth) [best, bestWidth] = [dims, w];
+      }
+    }
+    return best;
+  }
+
+  // ln(1 - e^x) for x < 0 without cancellation at either end.
+  const log1mexp = (x) => (x > -Math.LN2 ? Math.log(-Math.expm1(x)) : Math.log1p(-Math.exp(x)));
+
+  // (ln p, ln(1 - p)) carried together so both tails stay exact. Pass u = 1 - s to work near s = 1.
+  // Below e^-700 the other log underflows to 0, so 1 - (1 - x)^a is taken as a x, exact at that scale.
+  const TINY = -700;
+  function logPair(s, d, u) {
+    const lns = u === undefined ? Math.log(s) : Math.log1p(-u);
+    let lnp = d[0] * lns, lnq = log1mexp(lnp);
+    for (let j = 1; j < d.length; j++) {
+      if (isOr(j)) {
+        lnq = lnp < TINY ? lnq : lnq * d[j];
+        lnp = lnp < TINY ? lnp + Math.log(d[j]) : log1mexp(lnq);
+      } else {
+        lnp = lnq < TINY ? lnp : lnp * d[j];
+        lnq = lnq < TINY ? lnq + Math.log(d[j]) : log1mexp(lnp);
+      }
+    }
+    return { lnp, lnq };
+  }
+
+  // Log slopes at s = 1e-6 and 1 - s = 1e-6. They approach f+ and f- (STUDY_DESIGN, Why depth helps).
+  function localSlopes(d, at = 1e-6, h = 1e-4) {
+    const up = Math.exp(h), down = Math.exp(-h);
+    const fplus = (logPair(at * up, d).lnp - logPair(at * down, d).lnp) / (2 * h);
+    const fminus = (logPair(0, d, at * up).lnq - logPair(0, d, at * down).lnq) / (2 * h);
+    return { fplus, fminus };
+  }
+
+  function mulberry32(seed) {
+    let a = seed | 0;
+    return function () {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // Row agreement bits to node outcomes: levels[j] holds every level-j node, levels[k-1] the root.
+  function evalTree(bits, d) {
+    const out = [];
+    let cur = bits;
+    for (let j = 0; j < d.length; j++) {
+      const a = d[j], and = !isOr(j), next = new Uint8Array(cur.length / a);
+      for (let i = 0; i < next.length; i++) {
+        let v = and ? 1 : 0;
+        for (let c = 0; c < a; c++) v = and ? v & cur[i * a + c] : v | cur[i * a + c];
+        next[i] = v;
+      }
+      out.push(next);
+      cur = next;
+    }
+    return out;
+  }
+
+  // One pair: every row agrees with probability s.
+  function sampleTree(s, d, rng) {
+    const n = rows(d);
+    if (n > ROW_CAP) return null;
+    const bits = new Uint8Array(n);
+    for (let i = 0; i < n; i++) bits[i] = rng() < s ? 1 : 0;
+    return { bits, levels: evalTree(bits, d) };
+  }
+
+  // Many pairs: each band agrees with probability s^d0. Short-circuit skips children that cannot change a node.
+  function runTrials(s, d, count, rng) {
+    const p0 = Math.pow(s, d[0]);
+    const node = (j) => {
+      if (j === 0) return rng() < p0;
+      const or = isOr(j);
+      for (let c = 0; c < d[j]; c++) if (node(j - 1) === or) return or;
+      return !or;
+    };
+    let hits = 0;
+    for (let i = 0; i < count; i++) hits += node(d.length - 1) ? 1 : 0;
+    return hits;
+  }
+
+  // Wilson score interval as panels.py computes it, z = 1.96.
+  function wilson(k, n, z = 1.96) {
+    if (!n) return [NaN, NaN];
+    const p = k / n, z2 = z * z;
+    const denom = 1 + z2 / n;
+    const center = (p + z2 / (2 * n)) / denom;
+    const half = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / denom;
+    return [Math.min(center - half, p), Math.max(center + half, p)];
+  }
+
+  root.Cascade = {
+    ROW_CAP, TOLERANCE, isOr, rows, levels, curve, flatCurve, inverse, threshold, width, profile, bandsForThreshold,
+    errorArea, tails, solveD1, bestDepth2, logPair, localSlopes, mulberry32, evalTree, sampleTree, runTrials, wilson,
+  };
+})(globalThis);
+</script>
+<script id="chartkit-src">
+// ChartKit: the small SVG helpers the explorer draws with. Colours come from CSS variables.
+(function (root) {
+  "use strict";
+  const NS = "http://www.w3.org/2000/svg";
+  const tuple = (d) => `(${d.join(", ")})`;
+
+  function el(tag, attrs, parent) {
+    const node = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === "text") node.textContent = v;
+      else if (v !== undefined && v !== null) node.setAttribute(k, v);
+    }
+    if (parent) parent.appendChild(node);
+    return node;
+  }
+
+  function scale(domain, range, log) {
+    const t = log ? Math.log10 : (v) => v;
+    const [a, b] = domain.map(t);
+    const f = (v) => range[0] + ((t(v) - a) / (b - a)) * (range[1] - range[0]);
+    f.invert = (px) => {
+      const v = a + ((px - range[0]) / (range[1] - range[0])) * (b - a);
+      return log ? Math.pow(10, v) : v;
+    };
+    f.domain = domain;
+    f.range = range;
+    return f;
+  }
+
+  const logTicks = ([lo, hi]) => {
+    const out = [];
+    for (let e = Math.floor(Math.log10(lo)); e <= Math.ceil(Math.log10(hi)); e++) {
+      const v = Math.pow(10, e);
+      if (v >= lo * 0.999 && v <= hi * 1.001) out.push(v);
+    }
+    return out;
+  };
+  const tickLabel = (v) => (v >= 10000 ? `${v / 1000}k` : String(+v.toPrecision(3)));
+
+  // Axes, grid and labels. Returns the svg and the two scales.
+  function frame(parent, o) {
+    const w = o.w || 300, h = o.h || 220, m = Object.assign({ l: 44, r: 12, t: o.title ? 24 : 12, b: 38 }, o.m);
+    const svg = el("svg", { viewBox: `0 0 ${w} ${h}`, role: "img", "aria-label": o.label }, parent);
+    const x = scale(o.x.domain, [m.l, w - m.r], o.x.log), y = scale(o.y.domain, [h - m.b, m.t], o.y.log);
+    const grid = el("g", { style: "stroke:var(--grid);stroke-width:1" }, svg);
+    const text = el("g", { class: "svg-text" }, svg);
+    const xt = o.x.ticks || (o.x.log ? logTicks(o.x.domain) : []);
+    const yt = o.y.ticks || (o.y.log ? logTicks(o.y.domain) : []);
+    for (const v of xt) {
+      el("line", { x1: x(v), x2: x(v), y1: m.t, y2: h - m.b }, grid);
+      el("text", { x: x(v), y: h - m.b + 14, "text-anchor": "middle", text: (o.x.fmt || tickLabel)(v) }, text);
+    }
+    for (const v of yt) {
+      el("line", { x1: m.l, x2: w - m.r, y1: y(v), y2: y(v) }, grid);
+      el("text", { x: m.l - 6, y: y(v) + 3.5, "text-anchor": "end", text: (o.y.fmt || tickLabel)(v) }, text);
+    }
+    el("line", { x1: m.l, x2: w - m.r, y1: h - m.b, y2: h - m.b, style: "stroke:var(--axis)" }, svg);
+    if (o.x.label) el("text", { x: (m.l + w - m.r) / 2, y: h - 6, "text-anchor": "middle", class: "svg-label", text: o.x.label }, svg);
+    if (o.y.label) el("text", { x: 12, y: (m.t + h - m.b) / 2, "text-anchor": "middle", class: "svg-label",
+      transform: `rotate(-90 12 ${(m.t + h - m.b) / 2})`, text: o.y.label }, svg);
+    if (o.title) el("text", { x: m.l, y: 14, class: "svg-title", text: o.title }, svg);
+    return { svg, x, y, w, h, m };
+  }
+
+  // Path through points, breaking at non-finite values.
+  function path(points) {
+    let d = "", pen = false;
+    for (const [px, py] of points) {
+      if (!Number.isFinite(px) || !Number.isFinite(py)) { pen = false; continue; }
+      d += `${pen ? "L" : "M"}${px.toFixed(2)} ${py.toFixed(2)}`;
+      pen = true;
+    }
+    return d;
+  }
+
+  root.ChartKit = { el, scale, frame, path, tuple };
+})(globalThis);
+</script>
+<script id="explorer-src">
+// Cascade explorer: ladder tree editor and animation, curve plot with level curves, tail insets and trials.
+(function () {
+  "use strict";
+  const C = globalThis.Cascade, K = globalThis.ChartKit;
+  const DATA = JSON.parse(document.getElementById("sim-data").textContent);
+  const $ = (id) => document.getElementById(id);
+  const motion = matchMedia("(prefers-reduced-motion: reduce)");
+  const STORE = "deep-nested-lsh-explorer-v1";
+  const MAX_DEPTH = 13, MAX_ARITY = 100000, D2_LIMIT = 1e7, SAMPLES = 600, LEVEL_MS = 250, MORPH_MS = 300;
+  const M = { l: 42, r: 12, t: 12, b: 40 };
+  let W = 560, H = 340, fx, fy;
+  const GRID = Array.from({ length: SAMPLES }, (_, i) => i / (SAMPLES - 1));
+  const TOP = DATA.facts.top_budget, GRID_DEPTH = DATA.provenance.grid.max_depth;
+
+  const num = (v, d = 4) => (Number.isFinite(v) ? v.toFixed(d) : "n/a");
+  const sup = (e) => String(e).replace(/-/g, "−");
+  function count(v) {
+    if (!Number.isFinite(v)) return "n/a";
+    if (v < 1e7) return String(Math.round(v));
+    const e = Math.floor(Math.log10(v));
+    return `${(v / Math.pow(10, e)).toFixed(2)} × 10<sup>${sup(e)}</sup>`;
+  }
+  const isOp = (j) => (C.isOr(j) ? "OR" : "AND");
+  const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+
+  // ---- Presets from the embedded tables ----
+  function presets() {
+    const T = DATA.tables, groups = [], byKind = (k) => Object.values(T).filter((t) => t.kind === k).sort((a, b) => a.target - b.target);
+    groups.push([`Standard banding at ${TOP} rows`, byKind("algorithm").map((t) => ({ dims: t.rows[0].tuple, t: t.target, label: `t ${t.target} ${K.tuple(t.rows[0].tuple)}` }))]);
+    groups.push([`Sharpest tree per depth at ${TOP} rows`, byKind("cascade").flatMap((t) => t.rows.filter((r) => r.config.startsWith(`n${TOP}_`))
+      .map((r) => ({ dims: r.dims, t: t.target, label: `t ${t.target} depth ${r.depth} ${K.tuple(r.dims)}` })))]);
+    groups.push([`Least error area beyond depth ${GRID_DEPTH}`, byKind("error_area").flatMap((t) => t.rows.filter((r) => r.depth > GRID_DEPTH)
+      .map((r) => ({ dims: r.dims, t: t.target, label: `t ${t.target} ${t.budget || TOP} rows ${r.kind} ${r.depth}D` })))]);
+    groups.push(["Arity families at t 0.5", (T.lsh_high_cap_family_table_t50 || { rows: [] }).rows.filter((r) => r.depth > 2)
+      .map((r) => ({ dims: r.dims, t: 0.5, label: `${r.family} depth ${r.depth} ${K.tuple(r.dims)}` }))]);
+    groups.push(["Flat reading collapse (7, 23, 3) and (7, 69)", [[7, 23, 3], [7, 69]].map((d) => ({ dims: d, t: null, label: `${K.tuple(d)} at its own threshold` }))]);
+    let id = 0;
+    for (const [, items] of groups) for (const p of items) p.id = `p${id++}`;
+    return groups;
+  }
+  const GROUPS = presets();
+  const PRESETS = GROUPS.flatMap(([, items]) => items);
+  const DEFAULT = PRESETS.find((p) => p.t === 0.5 && same(p.dims, DATA.facts.algorithm["0.5"].cascade.tuple)) || PRESETS[0];
+
+  // ---- State ----
+  const targetOf = (p) => (p.t === null ? C.threshold(p.dims) : p.t);
+  const state = { dims: DEFAULT.dims.slice(), T: targetOf(DEFAULT), auto: false, s: 0.5, flat: false, d2: true, seed: 753, preset: DEFAULT.id, matched: true };
+  let derived = null, shown = null, morph = 0, job = 0, anim = 0, rng = C.mulberry32(state.seed), frame = 0, dirty = new Set();
+  const trials = new Map();
+
+  function load() {
+    try {
+      const v = JSON.parse(localStorage.getItem(STORE) || "null");
+      if (!v || !Array.isArray(v.dims) || v.dims.length < 1 || v.dims.length > MAX_DEPTH) return;
+      if (!v.dims.every((a) => Number.isInteger(a) && a >= 1 && a <= MAX_ARITY)) return;
+      if (!(v.T > 0 && v.T < 1) || !(v.s >= 0 && v.s <= 1) || !Number.isInteger(v.seed)) return;
+      Object.assign(state, { dims: v.dims, T: v.T, s: v.s, auto: !!v.auto, flat: !!v.flat, d2: v.d2 !== false, seed: v.seed,
+        preset: PRESETS.some((p) => p.id === v.preset) ? v.preset : "" });
+    } catch (e) { /* storage unavailable or malformed: keep defaults */ }
+  }
+  function save() {
+    try {
+      const { dims, T, s, auto, flat, d2, seed, preset } = state;
+      localStorage.setItem(STORE, JSON.stringify({ dims, T, s, auto, flat, d2, seed, preset }));
+    } catch (e) { /* private mode or quota: the explorer works without persistence */ }
+  }
+
+  function solve() {
+    if (!state.auto) { state.matched = Math.abs(C.threshold(state.dims) - state.T) <= C.TOLERANCE; return; }
+    const r = C.solveD1(state.dims, state.T);
+    state.dims = r.dims.map((v) => Math.min(MAX_ARITY, v));
+    state.matched = r.matched;
+  }
+
+  function derive() {
+    const d = state.dims, n = C.rows(d), T = state.T;
+    const out = { d, n, k: d.length, T, thr: C.threshold(d), W: C.width(d), lo: C.inverse(0.05, d), hi: C.inverse(0.95, d),
+      tails: C.tails(d), slopes: C.localSlopes(d), area: C.errorArea(d, T), ys: GRID.map((s) => C.curve(s, d)),
+      flat: GRID.map((s) => C.flatCurve(s, d)), flatThr: d.length > 1 ? C.threshold([d[0], n / d[0]]) : C.threshold(d) };
+    // Level j below the root traced over s: the curve its own subtree d[0..j] follows.
+    const per = GRID.map((s) => C.levels(s, d));
+    out.levelYs = d.slice(0, -1).map((_, j) => per.map((p) => p[j]));
+    out.best2 = n >= 4 && n <= D2_LIMIT ? C.bestDepth2(n, T) : null;
+    if (out.best2) {
+      out.best2Area = C.errorArea(out.best2, T);
+      out.best2Ys = GRID.map((s) => C.curve(s, out.best2));
+    }
+    return out;
+  }
+
+  // Patch state and redraw on the next frame. A shape or target change cancels running trials and animations.
+  function set(patch, opts = {}) {
+    const reshape = "dims" in patch || "T" in patch || "auto" in patch;
+    Object.assign(state, patch);
+    if (reshape) {
+      if (!opts.keepPreset) state.preset = patch.preset !== undefined ? patch.preset : "";
+      solve();
+      job++;
+      anim++;
+      trials.clear();
+      derived = derive();
+      morph = performance.now();
+      ["ladder", "curve", "readout", "tails", "controls"].forEach((p) => dirty.add(p));
+      say("");
+    }
+    if ("s" in patch) ["curve", "ladderP", "readout", "controls"].forEach((p) => dirty.add(p));
+    if ("flat" in patch || "d2" in patch) ["curve", "readout", "controls"].forEach((p) => dirty.add(p));
+    if ("seed" in patch) restart();
+    save();
+    schedule();
+  }
+  // Drop the trial dots and restart the random stream from the shown seed, so the next run replays.
+  function restart() {
+    job++;
+    anim++;
+    trials.clear();
+    rng = C.mulberry32(state.seed);
+    resetTiles();
+    say("");
+    // Controls redraw so a tree over the row cap says again why trials are off.
+    ["curve", "controls"].forEach((p) => dirty.add(p));
+  }
+  function schedule() { if (!frame) frame = requestAnimationFrame(draw); }
+  function draw(now) {
+    frame = 0;
+    const parts = dirty;
+    dirty = new Set();
+    if (parts.has("layout")) relayout(parts);
+    if (parts.has("controls")) renderControls();
+    if (parts.has("ladder")) renderLadder();
+    else if (parts.has("ladderP")) renderLadderP();
+    if (parts.has("readout")) renderReadout();
+    if (parts.has("tails")) renderTails();
+    if (parts.has("curve") || morphing(now)) renderCurve(now);
+  }
+  const morphing = (now) => shown && shown !== derived.ys && now - morph < MORPH_MS;
+  const say = (text) => { $("ex-msg").textContent = text; };
+
+  // ---- Controls ----
+  function renderControls() {
+    const sel = $("ex-preset");
+    sel.value = state.preset || "custom";
+    $("ex-t").value = state.T;
+    $("ex-t-out").textContent = state.T.toFixed(Math.abs(state.T * 100 - Math.round(state.T * 100)) < 1e-9 ? 2 : 4);
+    $("ex-auto").checked = state.auto;
+    $("ex-flat").checked = state.flat;
+    $("ex-d2").checked = state.d2;
+    $("ex-s").value = state.s;
+    $("ex-s-out").textContent = state.s.toFixed(3);
+    $("ex-seed").value = state.seed;
+    const tooBig = derived.n > C.ROW_CAP;
+    for (const id of ["ex-one", "ex-many", "ex-sweep"]) $(id).disabled = tooBig;
+    if (tooBig) say(`Trials run on trees of at most ${C.ROW_CAP} rows. This tree has ${derived.n > 1e7 ? derived.n.toExponential(2) : derived.n}. The curve and readout still apply.`);
+  }
+
+  function buildPresetSelect() {
+    const sel = $("ex-preset");
+    const custom = document.createElement("option");
+    custom.value = "custom";
+    custom.textContent = "Custom tuple";
+    sel.appendChild(custom);
+    for (const [name, items] of GROUPS) {
+      const g = document.createElement("optgroup");
+      g.label = name;
+      for (const p of items) {
+        const o = document.createElement("option");
+        o.value = p.id;
+        o.textContent = p.label;
+        g.appendChild(o);
+      }
+      sel.appendChild(g);
+    }
+    sel.addEventListener("change", () => {
+      const p = PRESETS.find((x) => x.id === sel.value);
+      if (p) set({ dims: p.dims.slice(), T: targetOf(p), auto: false, preset: p.id });
+    });
+  }
+
+  function stepper(value, { min, max, label, disabled, onSet }) {
+    const wrap = document.createElement("div");
+    wrap.className = "stepper";
+    const minus = document.createElement("button"), plus = document.createElement("button"), input = document.createElement("input");
+    minus.type = plus.type = "button";
+    minus.textContent = "−";
+    plus.textContent = "+";
+    minus.setAttribute("aria-label", `Decrease ${label}`);
+    plus.setAttribute("aria-label", `Increase ${label}`);
+    Object.assign(input, { type: "number", min, max, step: 1, value, disabled: !!disabled, inputMode: "numeric" });
+    input.setAttribute("aria-label", label);
+    minus.disabled = disabled || value <= min;
+    plus.disabled = disabled || value >= max;
+    const commit = (v) => { if (Number.isFinite(v)) onSet(Math.max(min, Math.min(max, Math.round(v)))); };
+    minus.addEventListener("click", () => commit(value - 1));
+    plus.addEventListener("click", () => commit(value + 1));
+    input.addEventListener("change", () => commit(Number(input.value)));
+    wrap.append(minus, input, plus);
+    return wrap;
+  }
+
+  function arityStepper(j) {
+    const d = state.dims, solved = state.auto && (d.length === 1 ? j === 0 : j === 1);
+    const box = stepper(d[j], { min: 1, max: MAX_ARITY, label: `arity d${j}`, disabled: solved, onSet: (v) => {
+      const next = d.slice();
+      next[j] = v;
+      set({ dims: next });
+    } });
+    if (solved) box.title = "Solved for the target";
+    return box;
+  }
+
+  function renderDepth() {
+    const d = state.dims;
+    $("ex-depth").replaceChildren("Depth k", stepper(d.length, { min: 1, max: MAX_DEPTH, label: "depth", onSet: (k) => {
+      const next = d.slice(0, k);
+      while (next.length < k) next.push(2);
+      set({ dims: next });
+    } }));
+  }
+
+  // ---- Ladder: one rung per level along the first-child path, root on top. Each rung holds its level's arity ----
+  // Tiles that fit the tile column with room left for the "+k · j on" tile. A tile and its gap take 28 px.
+  const capFor = (w) => Math.max(3, Math.min(10, Math.floor((w - 8 - 72) / 28) + 1));
+  const cap = () => {
+    const cell = $("ex-ladder").querySelector(".rung-t");
+    return cell ? capFor(cell.clientWidth) : shownCap;
+  };
+  let shownCap = 4;
+  let rungs = [];
+  // The level picked out in the plot: a hovered or focused rung wins over the one a run is revealing.
+  let hovered = null, flowing = null;
+
+  function rungSpec() {
+    const d = state.dims, k = d.length, out = [{ level: k - 1, count: 1, root: true }];
+    for (let j = k - 2; j >= 0; j--) out.push({ level: j, count: d[j + 1] });
+    out.push({ level: -1, count: d[0], rows: true });
+    return out;
+  }
+
+  // The tile column width does not depend on the tiles, so one measured rebuild settles the count.
+  function renderLadder() {
+    const tree = document.querySelector(".ex-tree"), active = document.activeElement;
+    const focus = tree.contains(active) && active.getAttribute("aria-label");
+    renderDepth();
+    flowing = null;
+    buildRungs(shownCap);
+    if (cap() !== shownCap) buildRungs(cap());
+    renderLadderP();
+    emphasise();
+    if (focus) {
+      const again = tree.querySelector(`[aria-label="${focus}"]`);
+      if (again && !again.disabled) again.focus();
+    }
+  }
+
+  function buildRungs(show) {
+    shownCap = show;
+    rungs = rungSpec().map((spec, i, all) => {
+      const row = document.createElement("div");
+      row.className = `rung${spec.root ? " root" : ""}`;
+      row.setAttribute("role", "group");
+      const label = document.createElement("div"), op = spec.rows ? "" : isOp(spec.level);
+      label.className = "rung-l";
+      label.innerHTML = spec.rows ? "<span><b>rows</b></span>" : `<span><b class="op ${op}">${op}</b> L${spec.level}</span>`;
+      const pText = document.createElement("span"), gauge = document.createElement("i"), bar = document.createElement("i");
+      gauge.className = `gauge ${op}`;
+      gauge.appendChild(bar);
+      label.append(pText, gauge);
+      // Hover or focus on a rung picks out its level curve in the plot.
+      row.addEventListener("pointerenter", () => highlight(spec.level));
+      row.addEventListener("focusin", () => highlight(spec.level));
+      row.addEventListener("pointerleave", () => highlight(null));
+      row.addEventListener("focusout", () => highlight(null));
+      const arity = document.createElement("div");
+      arity.className = "rung-a";
+      if (!spec.rows) arity.appendChild(arityStepper(spec.level));
+      const cell = document.createElement("div");
+      cell.className = "rung-t";
+      const tiles = document.createElement("div");
+      tiles.className = "tiles";
+      cell.appendChild(tiles);
+      const visible = spec.count > show ? show - 1 : spec.count;
+      const cells = [];
+      for (let i2 = 0; i2 < visible; i2++) {
+        const t = document.createElement("span");
+        t.className = `tile${spec.rows ? " cell" : ""}${spec.root ? " root" : ""}${!spec.rows && i2 === 0 && i < all.length - 1 ? " first" : ""}`;
+        if (spec.root) t.textContent = "root";
+        tiles.appendChild(t);
+        cells.push(t);
+      }
+      let more = null;
+      if (spec.count > visible) {
+        more = document.createElement("span");
+        more.className = "tile more";
+        more.textContent = `+${spec.count - visible}`;
+        tiles.appendChild(more);
+      }
+      row.append(label, arity, cell);
+      return { spec, row, pText, bar, cells, more, hidden: spec.count - visible };
+    });
+    const nodes = [];
+    rungs.forEach((r, i) => {
+      if (i > 0) {
+        const stem = document.createElement("div");
+        stem.className = "stem";
+        stem.appendChild(document.createElement("i"));
+        r.stem = stem;
+        nodes.push(stem);
+      }
+      nodes.push(r.row);
+    });
+    $("ex-ladder").replaceChildren(...nodes);
+  }
+
+  function renderLadderP() {
+    const d = state.dims, p = C.levels(state.s, d);
+    for (const r of rungs) {
+      const { level, rows } = r.spec, prob = rows ? state.s : p[level];
+      // A three digit exponent drops the decimal so "p 8e-100" still fits the 64 px label column.
+      const shown = prob < 1e-3 && prob > 0 ? prob.toExponential(prob < 1e-99 ? 0 : 1) : num(prob, 3);
+      r.pText.textContent = `p ${shown}`;
+      r.bar.style.width = `${(100 * prob).toFixed(1)}%`;
+      r.row.setAttribute("aria-label", `${rows ? "Signature rows" : `L${level} ${isOp(level)} of ${d[level]}`}. Fires with probability ${shown} at s ${state.s.toFixed(3)}`);
+    }
+  }
+
+  function resetTiles() {
+    flowing = null;
+    emphasise();
+    for (const r of rungs) {
+      for (const t of r.cells) { t.classList.remove("on", "off", "pop"); t.style.animationDelay = ""; if (r.spec.root) t.textContent = "root"; }
+      if (r.more) r.more.textContent = `+${r.hidden}`;
+      if (r.stem) r.stem.classList.remove("flow");
+      r.row.querySelector(".outcome")?.remove();
+    }
+  }
+
+  // Reveal one rung: values for its shown tiles and the count of hidden siblings that fired.
+  function reveal(r, values, instant) {
+    r.cells.forEach((t, i) => {
+      t.classList.remove("pop");
+      t.classList.toggle("on", !!values[i]);
+      t.classList.toggle("off", !values[i]);
+      if (!instant) {
+        void t.offsetWidth;
+        t.style.animationDelay = `${Math.min(i, 10) * 18}ms`;
+        t.classList.add("pop");
+      }
+    });
+    if (r.more) {
+      let on = 0;
+      for (let i = r.cells.length; i < values.length; i++) on += values[i];
+      r.more.textContent = `+${r.hidden} · ${on} on`;
+    }
+  }
+
+  function outcome(fired, s, T) {
+    const pos = s >= T;
+    return fired ? (pos ? "TP" : "FP") : pos ? "FN" : "TN";
+  }
+  const OUTCOME = { TP: "True positive", FP: "False positive", FN: "False negative", TN: "True negative" };
+
+  function runOne() {
+    // A shape change waiting for its frame leaves the rungs of the old tree, so draw it first.
+    if (frame) { cancelAnimationFrame(frame); draw(performance.now()); }
+    const d = state.dims, s = state.s, T = state.T, mine = ++anim;
+    const trial = C.sampleTree(s, d, rng);
+    if (!trial) return;
+    resetTiles();
+    // Rungs run root first, so walk them in reverse: rows, L0, L1 up to the root.
+    const order = rungs.slice().reverse();
+    const valuesFor = (r) => (r.spec.rows ? trial.bits.subarray(0, r.spec.count) : trial.levels[r.spec.level].subarray(0, r.spec.count));
+    const fired = trial.levels[d.length - 1][0] === 1;
+    const instant = motion.matches;
+    const finish = () => {
+      const kind = outcome(fired, s, T), root = rungs[0];
+      root.cells[0].textContent = fired ? "candidate" : "not candidate";
+      const chip = document.createElement("span");
+      chip.className = "outcome";
+      chip.dataset.k = kind;
+      chip.textContent = `${kind} ${OUTCOME[kind]}`;
+      root.row.querySelector(".tiles").appendChild(chip);
+      record(s, fired ? 1 : 0, 1);
+      say(`A pair at s ${s.toFixed(3)} against target ${T.toFixed(2)}. The root ${fired ? "fired so the pair is a candidate" : "stayed off so the pair is dropped"}. ${OUTCOME[kind]}.`);
+    };
+    // A deep tree still climbs in about a second.
+    const ms = Math.min(LEVEL_MS, 1200 / d.length);
+    order.forEach((r, i) => {
+      const step = () => {
+        if (mine !== anim) return;
+        reveal(r, valuesFor(r), instant);
+        // The stem under this rung joins its first node to the children shown below. It lights when that node fires.
+        if (i > 0) order[i - 1].stem.classList.toggle("flow", !!valuesFor(r)[0]);
+        if (!instant) { flowing = r.spec.level; emphasise(); }
+        if (i === order.length - 1) {
+          finish();
+          setTimeout(() => { if (mine === anim) { flowing = null; emphasise(); } }, ms);
+        }
+      };
+      if (instant) step();
+      else setTimeout(step, i * ms);
+    });
+  }
+
+  // ---- Trials ----
+  const key = (s) => Math.round(s * 1000) / 1000;
+  function record(s, k, n) {
+    const t = trials.get(key(s)) || { k: 0, n: 0 };
+    t.k += k;
+    t.n += n;
+    trials.set(key(s), t);
+    dirty.add("curve");
+    schedule();
+  }
+
+  // Bulk runs go in chunks per frame. A newer job or any shape change stops an older one.
+  function runBatch(points, perPoint, label) {
+    const mine = ++job, d = state.dims;
+    let i = 0, done = 0;
+    const chunk = Math.max(20, Math.min(perPoint, Math.floor(400000 / Math.max(1, C.rows(d) / d[0]))));
+    const tick = () => {
+      if (mine !== job) return;
+      const s = points[i], take = Math.min(chunk, perPoint - done);
+      record(s, C.runTrials(s, d, take, rng), take);
+      done += take;
+      if (done >= perPoint) { i++; done = 0; }
+      if (i < points.length) {
+        say(`${label} ${Math.round((100 * (i * perPoint + done)) / (points.length * perPoint))}%`);
+        requestAnimationFrame(tick);
+      } else {
+        say(summary(points));
+      }
+    };
+    requestAnimationFrame(tick);
+  }
+  function summary(points) {
+    if (points.length > 1) return `Swept ${points.length} values of s. Dots show the share of candidates with 95% Wilson intervals. They should sit on the curve.`;
+    const s = points[0], t = trials.get(key(s)), [lo, hi] = C.wilson(t.k, t.n);
+    return `${t.k} of ${t.n} pairs at s ${s.toFixed(3)} became candidates. The interval ${num(lo, 3)} to ${num(hi, 3)} should hold P(s) ${num(C.curve(s, state.dims), 3)}.`;
+  }
+
+  // ---- Curve plot ----
+  // The viewBox follows the rendered width so axis text stays 11 px at every width.
+  const plot = {};
+  const plotWidth = () => Math.round($("ex-curve").getBoundingClientRect().width) || 560;
+  function buildPlot() {
+    const svg = $("ex-curve"), el = K.el;
+    W = plotWidth();
+    H = Math.round(Math.max(220, Math.min(340, W * 0.66)));
+    fx = K.scale([0, 1], [M.l, W - M.r]);
+    fy = K.scale([0, 1], [H - M.b, M.t]);
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.replaceChildren();
+    const grid = el("g", { style: "stroke:var(--grid);stroke-width:1" }, svg), text = el("g", { class: "svg-text" }, svg);
+    for (const v of [0, 0.2, 0.4, 0.6, 0.8, 1]) {
+      el("line", { x1: fx(v), x2: fx(v), y1: M.t, y2: H - M.b }, grid);
+      el("line", { x1: M.l, x2: W - M.r, y1: fy(v), y2: fy(v) }, grid);
+      el("text", { x: fx(v), y: H - M.b + 15, "text-anchor": "middle", text: v }, text);
+      el("text", { x: M.l - 7, y: fy(v) + 4, "text-anchor": "end", text: v }, text);
+    }
+    el("text", { x: (M.l + W - M.r) / 2, y: H - 8, "text-anchor": "middle", class: "svg-label", text: "pair similarity s (Jaccard)" }, svg);
+    el("text", { x: 13, y: (M.t + H - M.b) / 2, "text-anchor": "middle", class: "svg-label", transform: `rotate(-90 13 ${(M.t + H - M.b) / 2})`, text: "P(candidate)" }, svg);
+    plot.band = el("rect", { y: M.t, height: H - M.t - M.b, style: "fill:var(--band)" }, svg);
+    plot.fp = el("path", { style: "fill:var(--fp-fill);stroke:none" }, svg);
+    plot.fn = el("path", { style: "fill:var(--fn-fill);stroke:none" }, svg);
+    plot.step = el("path", { style: "fill:none;stroke:var(--muted);stroke-width:1.5;stroke-dasharray:5 4" }, svg);
+    plot.flat = el("path", { style: "fill:none;stroke:var(--muted);stroke-width:1.8;stroke-dasharray:2 3" }, svg);
+    plot.d2 = el("path", { style: "fill:none;stroke:var(--d2);stroke-width:1.8;stroke-dasharray:7 4;opacity:0.85" }, svg);
+    plot.levels = el("g", {}, svg);
+    plot.levelsFor = null;
+    plot.lvl = [];
+    plot.lvlDot = [];
+    plot.curve = el("path", { style: "fill:none;stroke:var(--ink);stroke-width:2.6;stroke-linejoin:round" }, svg);
+    plot.lvlDots = el("g", {}, svg);
+    plot.lvlTag = el("g", { style: "display:none" }, svg);
+    plot.lvlBox = el("rect", { x: M.l + 8, y: M.t + 6, rx: 5, height: 22, style: "fill:var(--surface);stroke:var(--line)" }, plot.lvlTag);
+    plot.lvlText = el("text", { x: M.l + 16, y: M.t + 21, class: "svg-label", style: "fill:var(--ink)" }, plot.lvlTag);
+    plot.thr = el("g", {}, svg);
+    plot.thrLine = el("line", { y1: fy(0), style: "stroke:var(--ink2);stroke-width:1;stroke-dasharray:2 3" }, plot.thr);
+    plot.thrDot = el("circle", { r: 3.5, style: "fill:var(--surface);stroke:var(--ink);stroke-width:1.5" }, plot.thr);
+    plot.thrText = el("text", { class: "svg-label" }, plot.thr);
+    plot.dots = el("g", {}, svg);
+    plot.cursor = el("g", {}, svg);
+    plot.cLine = el("line", { y1: M.t, y2: H - M.b, style: "stroke:var(--accent);stroke-width:1.5" }, plot.cursor);
+    plot.cDot = el("circle", { r: 5.5, style: "fill:var(--accent);stroke:var(--surface);stroke-width:2" }, plot.cursor);
+    plot.cBox = el("rect", { rx: 5, height: 22, style: "fill:var(--surface);stroke:var(--line)" }, plot.cursor);
+    plot.cText = el("text", { class: "svg-label", style: "fill:var(--ink)" }, plot.cursor);
+  }
+
+  function wirePlot() {
+    const svg = $("ex-curve");
+    const pick = (ev) => {
+      const r = svg.getBoundingClientRect();
+      const s = fx.invert(((ev.clientX - r.left) / r.width) * W);
+      set({ s: Math.max(0, Math.min(1, Math.round(s * 1000) / 1000)) });
+    };
+    svg.addEventListener("pointerdown", (ev) => { svg.setPointerCapture(ev.pointerId); pick(ev); });
+    svg.addEventListener("pointermove", (ev) => { if (ev.buttons) pick(ev); });
+    svg.addEventListener("keydown", (ev) => {
+      const step = ev.shiftKey ? 0.05 : 0.01;
+      const to = { ArrowLeft: state.s - step, ArrowDown: state.s - step, ArrowRight: state.s + step, ArrowUp: state.s + step, Home: 0, End: 1 }[ev.key];
+      if (to === undefined) return;
+      ev.preventDefault();
+      set({ s: Math.max(0, Math.min(1, Math.round(to * 1000) / 1000)) });
+    });
+  }
+
+  function highlight(level) { hovered = level; emphasise(); }
+  // Bold the picked level's curve, mark its rung and label it with its own midpoint and width.
+  function emphasise() {
+    if (!plot.lvlTag || !derived) return;
+    const D = derived, lvl = hovered !== null && hovered < D.k ? hovered : flowing;
+    plot.lvl.forEach((p, j) => p.classList.toggle("hot", j === lvl));
+    plot.lvlDot.forEach((c, j) => c.setAttribute("r", j === lvl ? 4.5 : 3));
+    for (const r of rungs) r.row.classList.toggle("hot", lvl !== null && r.spec.level === lvl);
+    if (lvl === null || lvl < 0 || lvl >= D.k) { plot.lvlTag.style.display = "none"; return; }
+    const p = (D.profile ||= C.profile(D.d))[lvl], text = `L${lvl} ${isOp(lvl)} t ${num(p.mid, 2)} W ${num(p.width, 2)}`;
+    plot.lvlText.textContent = text;
+    plot.lvlBox.setAttribute("width", Math.round(text.length * 6.6 + 16));
+    plot.lvlTag.style.display = "";
+  }
+
+  const ease = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+  const at = (ys, s) => {
+    const x = s * (SAMPLES - 1), i = Math.min(SAMPLES - 2, Math.floor(x));
+    return ys[i] + (ys[i + 1] - ys[i]) * (x - i);
+  };
+
+  function renderCurve(now) {
+    const D = derived, T = D.T;
+    let ys = D.ys;
+    if (shown && shown !== D.ys && !motion.matches) {
+      const u = Math.min(1, (now - morph) / MORPH_MS);
+      if (u < 1) {
+        const e = ease(u);
+        ys = D.ys.map((y, i) => shown[i] + (y - shown[i]) * e);
+        dirty.add("curve");
+        schedule();
+      } else shown = D.ys;
+    } else shown = D.ys;
+    const line = (arr) => K.path(GRID.map((s, i) => [fx(s), fy(arr[i])]));
+    plot.curve.setAttribute("d", line(ys));
+    const pT = at(ys, T), left = GRID.filter((s) => s < T), right = GRID.filter((s) => s > T);
+    plot.fp.setAttribute("d", `M${fx(0)} ${fy(0)}` + left.map((s) => `L${fx(s)} ${fy(at(ys, s))}`).join("") + `L${fx(T)} ${fy(pT)}L${fx(T)} ${fy(0)}Z`);
+    plot.fn.setAttribute("d", `M${fx(T)} ${fy(pT)}` + right.map((s) => `L${fx(s)} ${fy(at(ys, s))}`).join("") + `L${fx(1)} ${fy(1)}L${fx(T)} ${fy(1)}Z`);
+    plot.step.setAttribute("d", `M${fx(0)} ${fy(0)}L${fx(T)} ${fy(0)}L${fx(T)} ${fy(1)}L${fx(1)} ${fy(1)}`);
+    const lo = Number.isFinite(D.lo) ? D.lo : 0, hi = Number.isFinite(D.hi) ? D.hi : 1;
+    plot.band.setAttribute("x", fx(lo));
+    plot.band.setAttribute("width", Math.max(0, fx(hi) - fx(lo)));
+    plot.flat.setAttribute("d", state.flat && D.k > 1 ? line(D.flat) : "");
+    plot.d2.setAttribute("d", state.d2 && D.best2 && !same(D.best2, D.d) ? line(D.best2Ys) : "");
+    const thr = Number.isFinite(D.thr) ? D.thr : 0.5;
+    plot.thrLine.setAttribute("x1", fx(thr));
+    plot.thrLine.setAttribute("x2", fx(thr));
+    plot.thrLine.setAttribute("y2", fy(0.5));
+    plot.thrDot.setAttribute("cx", fx(thr));
+    plot.thrDot.setAttribute("cy", fy(0.5));
+    plot.thrText.setAttribute("x", thr > 0.75 ? fx(thr) - 8 : fx(thr) + 8);
+    plot.thrText.setAttribute("text-anchor", thr > 0.75 ? "end" : "start");
+    plot.thrText.setAttribute("y", fy(0.5) + 4);
+    plot.thrText.textContent = `t̂ ${num(D.thr, 3)}`;
+    // Trial dots with Wilson bars.
+    const dots = [];
+    for (const [s, t] of trials) {
+      const [a, b] = C.wilson(t.k, t.n), g = K.el("g", {});
+      K.el("line", { x1: fx(s), x2: fx(s), y1: fy(a), y2: fy(b), style: "stroke:var(--ink2);stroke-width:1.4" }, g);
+      K.el("circle", { cx: fx(s), cy: fy(t.k / t.n), r: 3.2, style: "fill:var(--surface);stroke:var(--ink);stroke-width:1.5" }, g);
+      K.el("title", { text: `s ${s}: ${t.k} of ${t.n} candidates. 95% interval ${num(a, 3)} to ${num(b, 3)}` }, g);
+      dots.push(g);
+    }
+    plot.dots.replaceChildren(...dots);
+    const s = state.s, P = C.curve(s, D.d), cx = fx(s), cy = fy(P);
+    // Level curves change only with the tree or the plot size. Their dots follow s.
+    if (plot.levelsFor !== D) {
+      plot.levelsFor = D;
+      plot.lvl = D.levelYs.map((arr, j) => K.el("path", { class: `lvl-curve ${isOp(j)}`, d: line(arr) }));
+      plot.lvlDot = D.levelYs.map((_, j) => K.el("circle", { class: `lvl-dot ${isOp(j)}`, r: 3 }));
+      plot.levels.replaceChildren(...plot.lvl);
+      plot.lvlDots.replaceChildren(...plot.lvlDot);
+      emphasise();
+    }
+    const ps = C.levels(s, D.d);
+    plot.lvlDot.forEach((c, j) => { c.setAttribute("cx", cx); c.setAttribute("cy", fy(ps[j])); });
+    plot.cLine.setAttribute("x1", cx);
+    plot.cLine.setAttribute("x2", cx);
+    plot.cDot.setAttribute("cx", cx);
+    plot.cDot.setAttribute("cy", cy);
+    const label = `s ${s.toFixed(3)}  P ${num(P, 3)}`, bw = 112, bx = cx + 10 + bw > W - M.r ? cx - 10 - bw : cx + 10, by = Math.max(M.t, Math.min(H - M.b - 26, cy - 30));
+    plot.cBox.setAttribute("x", bx);
+    plot.cBox.setAttribute("y", by);
+    plot.cBox.setAttribute("width", bw);
+    plot.cText.setAttribute("x", bx + 8);
+    plot.cText.setAttribute("y", by + 15);
+    plot.cText.textContent = label;
+    const svg = $("ex-curve");
+    svg.setAttribute("aria-valuenow", s.toFixed(3));
+    svg.setAttribute("aria-valuetext", `s ${s.toFixed(3)}. P ${num(P, 3)}. Threshold ${num(D.thr, 3)}`);
+  }
+
+  // ---- Readout ----
+  function card(label, value, sub, cls) {
+    return `<div class="ro"><div class="ro-l">${label}</div><div class="ro-v${cls ? ` ${cls}` : ""}">${value}</div>${sub ? `<div class="ro-s">${sub}</div>` : ""}</div>`;
+  }
+  function renderReadout() {
+    const D = derived, [fp, fn] = D.tails, off = Math.abs(D.thr - D.T), product = Math.abs(fp * fn - D.n) <= 1e-9 * D.n;
+    const flat = state.flat && D.k > 1 ? `. Flat reading (${D.d[0]}, ${count(D.n / D.d[0])}) t̂ ${num(D.flatThr, 4)}` : "";
+    let vs = D.n > D2_LIMIT ? "Depth 2 search skipped above 10 million rows" : "No matched depth 2 tree fits n rows";
+    if (D.best2) {
+      const change = (100 * (D.area - D.best2Area)) / D.best2Area;
+      vs = `Sharpest depth 2 ${K.tuple(D.best2)} E ${num(D.best2Area, 6)}. This tree ${change <= 0 ? "−" : "+"}${Math.abs(change).toFixed(1)}%`;
+    }
+    $("ex-readout").innerHTML = [
+      card("rows n", count(D.n), `${D.k} level${D.k > 1 ? "s" : ""}. f+ × f− ${product ? "=" : "≠"} n`, product ? "" : "bad"),
+      card("threshold t̂", num(D.thr, 4), (off <= C.TOLERANCE ? `within ${C.TOLERANCE} of t ${D.T.toFixed(2)}` : `${num(off, 3)} from t ${D.T.toFixed(2)}`) + flat, off <= C.TOLERANCE ? "good" : "bad"),
+      card("width W", num(D.W, 4), "s span from P 0.05 to 0.95"),
+      card("error area E", num(D.area, 6), vs),
+      card("f+ AND tail", count(fp), `slope at s 10<sup>−6</sup> ${num(D.slopes.fplus, 2)}`),
+      card("f− OR tail", count(fn), `slope at 1 − s 10<sup>−6</sup> ${num(D.slopes.fminus, 2)}`),
+    ].join("");
+  }
+
+  // ---- Tail insets: log10 P against log10 s and log10 (1 − P) against log10 (1 − s) ----
+  const LN10 = Math.LN10;
+  function tailSeries(side) {
+    const d = state.dims, xs = [], ys = [];
+    for (let i = 0; i <= 240; i++) {
+      const lx = -6 + (6 * i) / 240, v = Math.pow(10, lx);
+      const pair = side === "fp" ? C.logPair(v, d) : C.logPair(0, d, v);
+      xs.push(lx);
+      ys.push((side === "fp" ? pair.lnp : pair.lnq) / LN10);
+    }
+    return { xs, ys };
+  }
+  // Compact panels sized to their column. The captions name the axes.
+  const tailWidth = () => Math.round($("ex-tail-fp").parentNode.getBoundingClientRect().width) || 300;
+  let tailW = 0;
+  function renderTail(side) {
+    const svg = $(`ex-tail-${side}`), D = derived, slope = side === "fp" ? D.tails[0] : D.tails[1];
+    // The full range down to s = 10^-6 shows the tail as a straight line of slope f.
+    const { xs, ys } = tailSeries(side), xd = [-6, 0];
+    const yd = [Math.min(...ys.filter(Number.isFinite), -1), 0];
+    yd[1] = 0.04 * (yd[1] - yd[0]);
+    svg.replaceChildren();
+    const f = K.frame(svg, { w: tailW, h: 120, m: { l: 38, r: 8, t: 8, b: 20 }, label: "", x: { domain: xd, ticks: ticks(xd), fmt: (v) => `${sup(v)}` },
+      y: { domain: yd, ticks: ticks(yd, 3), fmt: (v) => `${sup(v)}` } });
+    svg.replaceWith(f.svg);
+    f.svg.id = `ex-tail-${side}`;
+    f.svg.setAttribute("aria-label", `${side === "fp" ? "False positive" : "False negative"} tail on log axes with a reference line of slope ${slope}`);
+    const clip = K.el("clipPath", { id: `clip-${side}` }, f.svg);
+    K.el("rect", { x: f.m.l, y: f.m.t, width: f.w - f.m.l - f.m.r, height: f.h - f.m.t - f.m.b }, clip);
+    const g = K.el("g", { "clip-path": `url(#clip-${side})` }, f.svg);
+    K.el("path", { d: K.path(xs.map((x, i) => [f.x(x), f.y(ys[i])])), style: "stroke:var(--ink);stroke-width:2;fill:none" }, g);
+    // Reference line of the tail slope through the far end of the curve, where the asymptote holds. Drawn last so it stays visible on the curve.
+    const ax = xs[0], ay = ys[0];
+    K.el("path", { d: K.path([[f.x(xd[0]), f.y(ay + slope * (xd[0] - ax))], [f.x(xd[1]), f.y(ay + slope * (xd[1] - ax))]]), style: `stroke:var(${side === "fp" ? "--fp" : "--fn"});stroke-width:2;stroke-dasharray:5 4;fill:none` }, g);
+    const measured = side === "fp" ? D.slopes.fplus : D.slopes.fminus;
+    $(`ex-tail-${side}-cap`).innerHTML = side === "fp"
+      ? `<strong>FP tail.</strong> log10 P against log10 s. Dashed slope f+ = ${count(slope)}. Measured ${num(measured, 2)}.`
+      : `<strong>FN tail.</strong> log10 (1 − P) against log10 (1 − s). Dashed slope f− = ${count(slope)}. Measured ${num(measured, 2)}.`;
+  }
+  function ticks([a, b], n = 4) {
+    const raw = (b - a) / n, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 5, 10].map((m) => m * mag).find((v) => v >= raw), out = [];
+    for (let v = Math.ceil(a / step) * step; v <= b + 1e-9; v += step) out.push(+v.toFixed(2));
+    return out;
+  }
+  function renderTails() { tailW = tailWidth(); renderTail("fp"); renderTail("fn"); }
+
+  // Window resizes rebuild only what changed size.
+  function relayout(parts) {
+    if (plotWidth() !== W) { buildPlot(); parts.add("curve"); }
+    if (tailWidth() !== tailW) parts.add("tails");
+    if (cap() !== shownCap) { anim++; parts.add("ladder"); }
+  }
+
+  function init() {
+    load();
+    rng = C.mulberry32(state.seed);
+    solve();
+    derived = derive();
+    buildPresetSelect();
+    buildPlot();
+    wirePlot();
+    $("ex-t").addEventListener("input", (e) => set({ T: Number(e.target.value) }));
+    $("ex-auto").addEventListener("change", (e) => set({ auto: e.target.checked }, { keepPreset: !e.target.checked }));
+    $("ex-flat").addEventListener("change", (e) => set({ flat: e.target.checked }));
+    $("ex-d2").addEventListener("change", (e) => set({ d2: e.target.checked }));
+    $("ex-s").addEventListener("input", (e) => set({ s: Number(e.target.value) }));
+    $("ex-seed").addEventListener("change", (e) => { const v = Math.round(Number(e.target.value)); if (v >= 1) set({ seed: v }); e.target.value = state.seed; });
+    $("ex-one").addEventListener("click", runOne);
+    $("ex-many").addEventListener("click", () => runBatch([state.s], 1000, "Running"));
+    $("ex-sweep").addEventListener("click", () => runBatch(Array.from({ length: 19 }, (_, i) => +(0.05 * (i + 1)).toFixed(2)), 1000, "Sweeping"));
+    $("ex-clear").addEventListener("click", () => { restart(); schedule(); });
+    addEventListener("resize", () => { dirty.add("layout"); schedule(); });
+    ["ladder", "curve", "readout", "tails", "controls"].forEach((p) => dirty.add(p));
+    schedule();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
