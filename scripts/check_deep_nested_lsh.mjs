@@ -155,6 +155,8 @@ test("solveD1PicksSharpestMatch", () => {
   assert.deepEqual(C.solveD1([5], 0.8), { dims: [3], matched: true });
   // No single band reaches below 0.5, so the closest is d0 1 and unmatched.
   assert.deepEqual(C.solveD1([5], 0.3), { dims: [1], matched: false });
+  // d1 5 and 6 both match t 0.9 and 5 is narrower, so the last matched option is not the pick.
+  assert.deepEqual(C.solveD1([20, 1], 0.9), { dims: [20, 5], matched: true });
 });
 
 test("evalTreeMatchesCurve", () => {
