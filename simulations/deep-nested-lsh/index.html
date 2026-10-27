@@ -309,8 +309,9 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>FP and FN</dt><dd>A false positive is a pair below t that becomes a candidate. A false negative is a pair at or above t that does not.</dd>
       <dt>f+ and f−</dt><dd>Tail exponents. f+ is the product of the AND arities with d0. f− is the product of the OR arities. f+ f− = n.</dd>
       <dt>Measured slope</dt><dd>The local slope of a log-log tail at its far end, at s 10<sup>−6</sup> for the FP tail and at 1 − s 10<sup>−6</sup> for the FN tail. It approaches f+ and f−. The tail cards and the Measured slope captions show it.</dd>
-      <dt>Trial dots and Wilson interval</dt><dd>Run sends one random pair at s up the tree. 1000 at s and Sweep send 1000 random pairs at each s and plot a dot for the share that became candidates. Its bar is the 95% Wilson score interval for that share. The dots should sit on the curve.</dd>
-      <dt>Trial seed</dt><dd>Seeds the random pairs. Clear or a new seed drops the trial dots and restarts the pairs from the shown seed, so the same seed replays the same trials. It affects only the random trials.</dd>
+      <dt>Trial pair and realised s′</dt><dd>Two random sets of shingle ids at the corpus median set size, drawn from the corpus vocabulary. Whole ids allow only some Jaccard values, so a pair asked for at s realises the nearest one, s′. Each row hashes the pair as the study does, with h(x) = (a x + c) mod 2<sup>61</sup> − 1, and agrees when the least hash of the two sets falls on a shared id.</dd>
+      <dt>Trial dots and Wilson interval</dt><dd>Run sends one random pair at s up the tree. 1000 at s and Sweep send 1000 random pairs at each s and plot a dot at s′ for the share that became candidates. Its bar is the 95% Wilson score interval for that share. The dots should sit on the curve.</dd>
+      <dt>Trial seed</dt><dd>Seeds the row hashes and the random pairs. Clear or a new seed drops the trial dots and restarts both from the shown seed, so the same seed replays the same trials. It affects only the random trials.</dd>
       <dt>At its own threshold</dt><dd>The preset sets t to the tree's own t̂.</dd>
       <dt>Standard banding at 10000 rows</dt><dd>The study's best depth 2 (r, b) banding within 10000 rows at each target.</dd>
       <dt>Sharpest tree per depth at 10000 rows</dt><dd>The sharpest tree at each depth the study searched within 10000 rows at each target.</dd>
@@ -576,26 +577,88 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     return out;
   }
 
-  // One pair: every row agrees with probability s.
-  function sampleTree(s, d, rng) {
+  // Row hashes h(x) = (a x + c) mod p, p = 2^61 − 1, as the study draws them (lsh_demo.minhash_signatures).
+  // A value v travels as v = hi 2^31 + lo with hi < 2^30 and lo < 2^31, so every step stays exact in doubles.
+  const T30 = 2 ** 30, T31 = 2 ** 31;
+  const isP = (hi, lo) => hi === T30 - 1 && lo === T31 - 1;
+
+  // Rows as [a hi, a lo, c hi, c lo] in one flat array, a in [1, p) and c in [0, p). rowsUpTo(n) grows it on demand,
+  // so row i depends only on the stream.
+  function drawRows(rng) {
+    const flat = [];
+    return (n) => {
+      while (flat.length < 4 * n) {
+        const [ah, al, ch, cl] = [T30, T31, T30, T31].map((m) => Math.floor(rng() * m));
+        if ((ah || al) && !isP(ah, al) && !isP(ch, cl)) flat.push(ah, al, ch, cl);
+      }
+      return flat;
+    };
+  }
+
+  // Exact (a x + c) mod p for row i and x < 2^22, written to out as [hi, lo]. 2^61 = 1 (mod p) folds the carries.
+  function hash61(flat, i, x, out) {
+    let hi = flat[4 * i] * x + flat[4 * i + 2], lo = flat[4 * i + 1] * x + flat[4 * i + 3];
+    const q = Math.floor(lo / T31);
+    lo -= q * T31;
+    hi += q;
+    const r = Math.floor(hi / T30);
+    hi -= r * T30;
+    lo += r;
+    if (lo >= T31) { lo -= T31; hi += 1; }
+    if (hi >= T30) { hi -= T30; lo += 1; }
+    if (isP(hi, lo)) hi = lo = 0;
+    out[0] = hi;
+    out[1] = lo;
+    return out;
+  }
+
+  // Two sets of about m ids at Jaccard s: U = round(2m / (1 + s)) distinct ids, the first I = round(s U) shared.
+  // The pair realises s' = I / U.
+  const pairShape = (s, m) => { const U = Math.round((2 * m) / (1 + s)); return { U, I: Math.round(s * U) }; };
+  // Such a pair over a vocabulary of V ids.
+  function drawPair(s, rng, m, V) {
+    const { U, I } = pairShape(s, m), ids = new Set();
+    while (ids.size < U) ids.add(Math.floor(rng() * V));
+    return { ids: [...ids], I, s: I / U };
+  }
+
+  // MinHash agreement on row i: the least hash over the union falls on a shared id.
+  const out2 = new Float64Array(2);
+  function agree(flat, pair, i) {
+    let bh = Infinity, bl = Infinity, arg = 0;
+    for (let k = 0; k < pair.ids.length; k++) {
+      hash61(flat, i, pair.ids[k], out2);
+      if (out2[0] < bh || (out2[0] === bh && out2[1] < bl)) [bh, bl, arg] = [out2[0], out2[1], k];
+    }
+    return arg < pair.I ? 1 : 0;
+  }
+
+  // One pair through every row of the tree.
+  function sampleTree(pair, d, rowsUpTo) {
     const n = rows(d);
     if (n > ROW_CAP) return null;
-    const bits = new Uint8Array(n);
-    for (let i = 0; i < n; i++) bits[i] = rng() < s ? 1 : 0;
+    const flat = rowsUpTo(n), bits = new Uint8Array(n);
+    for (let i = 0; i < n; i++) bits[i] = agree(flat, pair, i);
     return { bits, levels: evalTree(bits, d) };
   }
 
-  // Many pairs: each band agrees with probability s^d0. Short-circuit skips children that cannot change a node.
-  function runTrials(s, d, count, rng) {
-    const p0 = Math.pow(s, d[0]);
-    const node = (j) => {
-      if (j === 0) return rng() < p0;
+  // Many fresh pairs at s on the same rows. A node stops at the first child that settles it, and a band at its first miss.
+  function runTrials(s, d, count, rng, rowsUpTo, { size, vocab }) {
+    const flat = rowsUpTo(rows(d));
+    let pair, hits = 0;
+    const node = (j, i) => {
+      if (j === 0) {
+        for (let r = i * d[0]; r < (i + 1) * d[0]; r++) if (!agree(flat, pair, r)) return false;
+        return true;
+      }
       const or = isOr(j);
-      for (let c = 0; c < d[j]; c++) if (node(j - 1) === or) return or;
+      for (let c = 0; c < d[j]; c++) if (node(j - 1, i * d[j] + c) === or) return or;
       return !or;
     };
-    let hits = 0;
-    for (let i = 0; i < count; i++) hits += node(d.length - 1) ? 1 : 0;
+    for (let t = 0; t < count; t++) {
+      pair = drawPair(s, rng, size, vocab);
+      hits += node(d.length - 1, 0) ? 1 : 0;
+    }
     return hits;
   }
 
@@ -611,8 +674,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
 
   root.Cascade = {
     ROW_CAP, TOLERANCE, MAX_FREE_ARITY, isOr, rows, levels, curve, flatCurve, inverse, threshold, width, profile, bandsForThreshold,
-    errorArea, tails, solveD1, freeArities, treeSearch, bestTree, expectedCounts, spread, logPair, localSlopes, mulberry32, evalTree, sampleTree,
-    runTrials, wilson,
+    errorArea, tails, solveD1, freeArities, treeSearch, bestTree, expectedCounts, spread, logPair, localSlopes, mulberry32, evalTree,
+    drawRows, hash61, pairShape, drawPair, agree, sampleTree, runTrials, wilson,
   };
 })(globalThis);
 </script>
@@ -710,6 +773,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   let W = 560, H = 340, fx, fy;
   const GRID = Array.from({ length: SAMPLES }, (_, i) => i / (SAMPLES - 1));
   const TOP = DATA.facts.top_budget, PAIRS = DATA.facts.corpus.pairs;
+  // Trial pairs are sets of the corpus median size over the corpus vocabulary.
+  const PAIR = { size: DATA.facts.corpus.set_median, vocab: DATA.facts.corpus.vocab };
   const byKind = (k) => Object.values(DATA.tables).filter((t) => t.kind === k).sort((a, b) => a.target - b.target);
 
   const num = (v, d = 4) => (Number.isFinite(v) ? v.toFixed(d) : "n/a");
@@ -763,7 +828,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   // ---- State ----
   const targetOf = (p) => (p.t === null ? C.threshold(p.dims) : p.t);
   const state = { dims: DEFAULT.dims.slice(), T: targetOf(DEFAULT), auto: false, s: 0.5, flat: false, d2: true, seed: 753, preset: DEFAULT.id, matched: true };
-  let derived = null, shown = null, morph = 0, job = 0, anim = 0, rng = C.mulberry32(state.seed), frame = 0, dirty = new Set();
+  let derived = null, shown = null, morph = 0, job = 0, anim = 0, frame = 0, dirty = new Set(), rng, hashes;
   const trials = new Map();
 
   function load() {
@@ -833,12 +898,17 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     save();
     schedule();
   }
-  // Drop the trial dots and restart the random stream from the shown seed, so the next run replays.
+  // The seed fixes the row hashes and the pair stream, each from its own generator.
+  function seedStreams() {
+    rng = C.mulberry32(state.seed);
+    hashes = C.drawRows(C.mulberry32(~state.seed));
+  }
+  // Drop the trial dots and restart the random streams from the shown seed, so the next run replays.
   function restart() {
     job++;
     anim++;
     trials.clear();
-    rng = C.mulberry32(state.seed);
+    seedStreams();
     resetTiles();
     say("");
     // Controls redraw so a tree over the row cap says again why trials are off.
@@ -1120,9 +1190,9 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   function runOne() {
     // A shape change waiting for its frame leaves the rungs of the old tree, so draw it first.
     if (frame) { cancelAnimationFrame(frame); draw(performance.now()); }
-    const d = state.dims, s = state.s, T = state.T, mine = ++anim;
-    const trial = C.sampleTree(s, d, rng);
-    if (!trial) return;
+    const d = state.dims, T = state.T, mine = ++anim;
+    if (C.rows(d) > C.ROW_CAP) return;
+    const pair = C.drawPair(state.s, rng, PAIR.size, PAIR.vocab), s = pair.s, trial = C.sampleTree(pair, d, hashes);
     resetTiles();
     // Rungs run root first, so walk them in reverse: rows, L0, L1 up to the root.
     const order = rungs.slice().reverse();
@@ -1138,7 +1208,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       chip.textContent = `${kind} ${OUTCOME[kind]}`;
       root.row.querySelector(".tiles").appendChild(chip);
       record(s, fired ? 1 : 0, 1);
-      say(`A pair at s ${s.toFixed(3)} against target ${T.toFixed(2)}. The root ${fired ? "fired so the pair is a candidate" : "stayed off so the pair is dropped"}. ${OUTCOME[kind]}.`);
+      say(`A pair at s′ ${s.toFixed(3)} against target ${T.toFixed(2)}. The root ${fired ? "fired so the pair is a candidate" : "stayed off so the pair is dropped"}. ${OUTCOME[kind]}.`);
     };
     // A deep tree still climbs in about a second.
     const ms = Math.min(LEVEL_MS, 1200 / d.length);
@@ -1170,15 +1240,18 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     schedule();
   }
 
-  // Bulk runs go in chunks per frame. A newer job or any shape change stops an older one.
+  // The Jaccard the pairs drawn at s realise.
+  const realised = (s) => { const { U, I } = C.pairShape(s, PAIR.size); return I / U; };
+  // Bulk runs fill a time slice per frame, since a linear-hash trial costs from one row to every row. A newer job or any shape change stops an older one.
   function runBatch(points, perPoint, label) {
     const mine = ++job, d = state.dims;
     let i = 0, done = 0;
-    const chunk = Math.max(20, Math.min(perPoint, Math.floor(400000 / Math.max(1, C.rows(d) / d[0]))));
     const tick = () => {
       if (mine !== job) return;
-      const s = points[i], take = Math.min(chunk, perPoint - done);
-      record(s, C.runTrials(s, d, take, rng), take);
+      const end = performance.now() + SLICE_MS, s = points[i];
+      let hits = 0, take = 0;
+      for (; take < perPoint - done && (!take || performance.now() < end); take++) hits += C.runTrials(s, d, 1, rng, hashes, PAIR);
+      record(realised(s), hits, take);
       done += take;
       if (done >= perPoint) { i++; done = 0; }
       if (i < points.length) {
@@ -1191,9 +1264,9 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     requestAnimationFrame(tick);
   }
   function summary(points) {
-    if (points.length > 1) return `Swept ${points.length} values of s. Dots show the share of candidates with 95% Wilson intervals. They should sit on the curve.`;
-    const s = points[0], t = trials.get(key(s)), [lo, hi] = C.wilson(t.k, t.n);
-    return `${t.k} of ${t.n} pairs at s ${s.toFixed(3)} became candidates. The interval ${num(lo, 3)} to ${num(hi, 3)} should hold P(s) ${num(C.curve(s, state.dims), 3)}.`;
+    if (points.length > 1) return `Swept ${points.length} values of s. Dots show the share of candidates at each realised s′ with 95% Wilson intervals. They should sit on the curve.`;
+    const s = realised(points[0]), t = trials.get(key(s)), [lo, hi] = C.wilson(t.k, t.n);
+    return `${t.k} of ${t.n} pairs at s′ ${s.toFixed(3)} became candidates. The interval ${num(lo, 3)} to ${num(hi, 3)} should hold P(s′) ${num(C.curve(s, state.dims), 3)}.`;
   }
 
   // ---- Curve plot ----
@@ -1437,7 +1510,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
 
   function init() {
     load();
-    rng = C.mulberry32(state.seed);
+    seedStreams();
     solve();
     derived = derive();
     buildPresetSelect();
