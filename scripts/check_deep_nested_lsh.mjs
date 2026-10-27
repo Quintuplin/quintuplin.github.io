@@ -909,19 +909,38 @@ test("searchDepthStaysResponsive", () => {
   assert.deepEqual(arities($, k), want, "the async search lands on the capped treeSearch result");
 });
 
-// A search the work cap stops names the arity shells it finished.
-test("searchDepthNamesBound", () => {
-  const work = 2000, { $, flush, step } = boot(undefined, (src) => src.replace(/\bSEARCH_WORK = [\d.e]+/, `SEARCH_WORK = ${work}`));
+// Searches the default tree in an explorer whose work cap is `work`, beside the capped treeSearch reference.
+function searchCapped(work) {
+  const { $, flush, step } = boot(undefined, (src) => src.replace(/\bSEARCH_WORK = [\d.e]+/, `SEARCH_WORK = ${work}`));
   flush();
-  const k = Number(depthInput($).value), n = C.rows(arities($, k)), T = Number($("ex-t").value);
+  const k = Number(depthInput($).value), before = arities($, k), n = C.rows(before), T = Number($("ex-t").value);
   const ref = drainSearch(C.treeSearch(n, k, T, 1, work), Infinity);
-  assert.ok(ref.complete === false && ref.arity >= 2, `depth ${k} within ${n} rows stops at ${work} nodes after a whole shell`);
   $("ex-search").dispatch("click");
   for (let i = 0; i < 1e5 && step(); i++);
-  const msg = $("ex-msg").textContent;
+  return { k, n, before, ref, after: arities($, k), msg: $("ex-msg").textContent };
+}
+
+// A search the work cap stops names the arity shells it finished.
+test("searchDepthNamesBound", () => {
+  const work = 2000, { k, n, ref, after, msg } = searchCapped(work);
+  assert.ok(ref.complete === false && ref.arity >= 2, `depth ${k} within ${n} rows stops at ${work} nodes after a whole shell`);
   assert.match(msg, /Bounded search/);
   assert.ok(msg.includes(`free arities up to ${ref.arity}`) && msg.includes(String(C.MAX_FREE_ARITY)), msg);
-  assert.deepEqual(arities($, k), ref.dims);
+  assert.deepEqual(after, ref.dims);
+});
+
+// A cap inside the first shell says so, with a tree found and with none yet.
+test("searchDepthNamesShellTwoBound", () => {
+  for (const [work, found] of [[10, true], [1, false]]) {
+    const { k, n, before, ref, after, msg } = searchCapped(work);
+    assert.ok(ref.complete === false && ref.arity < 2 && !!ref.dims === found, `depth ${k} within ${n} rows stops at ${work} nodes inside shell 2`);
+    assert.ok(msg.includes("Bounded search. The work cap stopped it inside the free arity 2 shell.") && msg.includes(String(C.MAX_FREE_ARITY)), msg);
+    if (found) assert.deepEqual(after, ref.dims);
+    else {
+      assert.match(msg, new RegExp(`^No depth ${k} tree within ${n} rows`));
+      assert.deepEqual(after, before, "a search with no tree leaves the tree alone");
+    }
+  }
 });
 
 // Guard: the pipeline count and a sweep once each took a full slice per frame, so frames ran twice the slice.
