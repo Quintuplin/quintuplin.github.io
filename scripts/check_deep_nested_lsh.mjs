@@ -773,21 +773,29 @@ test("pipelineCountsFollowShape", () => {
     select.dispatch("change");
   };
   const errorsOf = (d) => verifyRows().find((v) => same(v.d, d) && v.r.target === 0.3).r["E[errors]"];
+  const pipeCard = () => $("ex-readout").textContent.match(/pipeline expected errors \(theory\)(.*?)f\+ AND tail/)[1];
   const deep = [2, 17, 7, 8, 3], banding = [6, 951];
+  pick(banding);
   tick($, "ex-pipeline", true);
-  step();
-  pick(banding);
   drain(step);
-  let text = $("ex-readout").textContent;
-  assert.ok(shows(text, errorsOf(banding)) && !shows(text, errorsOf(deep)), `pipeline card for ${banding}: ${text}`);
-  pick(deep);
-  step();
-  pick(banding);
-  step();
-  pick(deep);
-  drain(step);
-  text = $("ex-readout").textContent;
-  assert.ok(shows(text, errorsOf(deep)) && !shows(text, errorsOf(banding)), `pipeline card for ${deep} after A B A: ${text}`);
+  assert.ok(shows(pipeCard(), errorsOf(banding)), `pipeline card for ${banding}: ${pipeCard()}`);
+  // Each move leaves the deep tree's count part done. The next tree is over the row limit, then one whose count is cached.
+  const moves = [["a tree over the row limit", () => {
+    const d1 = $("ex-ladder").querySelector('[aria-label="arity d1"]');
+    d1.value = "100";
+    d1.dispatch("change");
+  }, /^n\/a/], [`the cached ${banding}`, () => pick(banding), new RegExp(`^${errorsOf(banding)}(?!\\d)`)]];
+  for (const [what, move, want] of moves) {
+    pick(deep);
+    step();
+    assert.match(pipeCard(), /^Computing/, `the ${deep} count is still running`);
+    move();
+    assert.equal(step(), false, `the ${deep} count stops after the move to ${what}`);
+    drain(step);
+    const card = pipeCard();
+    assert.match(card, want, `pipeline card for ${what}`);
+    assert.ok(!shows(card, errorsOf(deep)), `pipeline card for ${what} shows the ${deep} errors: ${card}`);
+  }
 });
 
 test("searchDepthFindsSharpestTree", () => {
