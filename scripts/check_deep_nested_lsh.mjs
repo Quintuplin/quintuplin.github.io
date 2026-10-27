@@ -176,6 +176,21 @@ test("bestTreeMatchesTables", () => {
   assert.ok(searched >= 60, `only ${searched} tuples searched`);
 });
 
+// The depth 1 scan stops early once t̂ passes t, which no table row reaches.
+test("bestTreeDepthOneMatchesFullScan", () => {
+  const scan = (n, t) => {
+    let best = null;
+    for (let r = 1; r <= n; r++) {
+      const d = [r];
+      if (Math.abs(C.threshold(d) - t) <= C.TOLERANCE && (!best || C.width(d) < C.width(best))) best = d;
+    }
+    return best;
+  };
+  for (const n of [1, 2, 7, 64, 500, 5000]) {
+    for (const t of [0.01, 0.05, 0.3, 0.5, 0.8, 0.95, 0.99]) assert.deepEqual(C.bestTree(n, 1, t), scan(n, t), `n ${n} t ${t}`);
+  }
+});
+
 test("solveD1PicksSharpestMatch", () => {
   const near = (d, t) => Math.abs(C.threshold(d) - t) <= C.TOLERANCE;
   let both = 0;
