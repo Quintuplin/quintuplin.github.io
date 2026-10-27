@@ -301,7 +301,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>Width W</dt><dd>The span of s over which P(s) climbs from 0.05 to 0.95. Smaller is sharper.</dd>
       <dt>Sharpest</dt><dd>The smallest width W among the trees whose t̂ lies within 0.01 of t. The search tries every d0, solves d1 for t and tries every arity up to the free-arity cap at the levels above d1.</dd>
       <dt>Free-arity cap 24</dt><dd>The largest arity the study's search tries at levels 2 and up. d0 and d1 have no cap.</dd>
-      <dt>Sharpest at depth k</dt><dd>Swaps in the sharpest tree of the current depth whose rows fit within the current n at t. It covers trees of at most 10 million rows.</dd>
+      <dt>Sharpest at depth k</dt><dd>Swaps in the sharpest tree of the current depth whose rows fit within the current n at t. It covers trees of at most 10 million rows. It searches in shells. Shell A holds the trees whose largest arity above d1 is A, for A from 2 up to the free-arity cap.</dd>
+      <dt>Bounded search</dt><dd>The search stops after 30 million partial trees, so it gives the same result on every device. A stopped search says so and names the last shell it finished. Its tree is the sharpest with free arities up to that shell and may miss a sharper tree with a larger arity. A search that finishes every shell gives the sharpest tree.</dd>
       <dt>Depth cap</dt><dd id="ex-cap-note">The explorer stops at the deepest depth the study's search covers.</dd>
       <dt>Error area E</dt><dd>The area between P(s) and the ideal step at t over s from 0 to 1. The FP area lies left of t and the FN area right of it. It is a theory value.</dd>
       <dt>Expected counts (theory)</dt><dd>P(s) applied to every pair of the study corpus. E[FP] sums P(s) over the pairs below t. E[FN] sums 1 − P(s) over the pairs at or above t. E[errors] adds the two after rounding each.</dd>
@@ -909,8 +910,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   const $ = (id) => document.getElementById(id);
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   const STORE = "deep-nested-lsh-explorer-v2";
-  // Depth stops where the study's search stops.
-  const MAX_DEPTH = DATA.provenance.grid.max_depth, MAX_ARITY = 100000, SEARCH_LIMIT = 1e7, PIPE_LIMIT = 20000, SLICE_MS = 12, SAMPLES = 600, LEVEL_MS = 250, MORPH_MS = 300;
+  // Depth stops where the study's search stops. The depth search stops after SEARCH_WORK partial trees, the same on every device.
+  const MAX_DEPTH = DATA.provenance.grid.max_depth, MAX_ARITY = 100000, SEARCH_LIMIT = 1e7, SEARCH_WORK = 3e7, PIPE_LIMIT = 20000, SLICE_MS = 12, SAMPLES = 600, LEVEL_MS = 250, MORPH_MS = 300;
   const M = { l: 42, r: 12, t: 12, b: 40 };
   let W = 560, H = 340, fx, fy;
   const GRID = Array.from({ length: SAMPLES }, (_, i) => i / (SAMPLES - 1));
@@ -1197,17 +1198,22 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   function searchDepth() {
     const { n, k, T } = derived;
     if (n > SEARCH_LIMIT) return say("The search covers trees of at most 10 million rows.");
-    const mine = ++job, steps = C.treeSearch(n, k, T);
+    const mine = ++job, steps = C.treeSearch(n, k, T, 1, SEARCH_WORK);
     const tick = (now) => {
       if (mine !== job) return;
       const end = sliceDeadline(now);
       let r;
       do r = steps.next(); while (!r.done && performance.now() < end);
       if (!r.done) {
-        say(`Searching depth ${k} trees within ${n} rows. Tried d0 up to ${r.value.d0}.`);
-        requestAnimationFrame(tick);
-      } else if (r.value.dims) set({ dims: r.value.dims, auto: false });
-      else say(`No depth ${k} tree within ${n} rows has t̂ within ${C.TOLERANCE} of t ${T.toFixed(2)}.`);
+        say(`Searching depth ${k} trees within ${n} rows. Free arities up to ${r.value.arity} and d0 up to ${r.value.d0}.`);
+        return requestAnimationFrame(tick);
+      }
+      const { dims, arity, complete } = r.value, allows = `The study allows ${C.MAX_FREE_ARITY}.`;
+      const bound = complete ? "" : arity >= 2 ? `Bounded search. Every tree with free arities up to ${arity} was tried. ${allows}`
+        : `Bounded search. The work cap stopped it inside the free arity 2 shell. ${allows}`;
+      // set() clears the message, so the bound follows it.
+      if (dims) set({ dims, auto: false });
+      say(dims ? bound : `No depth ${k} tree within ${n} rows has t̂ within ${C.TOLERANCE} of t ${T.toFixed(2)}. ${bound}`.trim());
     };
     requestAnimationFrame(tick);
   }
