@@ -958,7 +958,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     const rows = DATA.tables.lsh_error_area_table_t50?.rows || [];
     const least = (rs) => rs.reduce((a, r) => (!a || r.error_area < a.error_area ? r : a), null);
     const inside = least(rows.filter((r) => r.depth <= MAX_DEPTH)), past = least(rows.filter((r) => r.depth > MAX_DEPTH));
-    let text = `The explorer stops at depth ${MAX_DEPTH}. That is the deepest the study's search covers.`;
+    let text = `The explorer stops at depth ${MAX_DEPTH}. That is the deepest the study's sharpest tree search covers.`;
     if (inside && past) {
       const c = (100 * (past.error_area - inside.error_area)) / inside.error_area;
       text += ` Past it the study's error area search at ${TOP} rows and t 0.5 found a ${past.kind} tree at depth ${past.depth} with ${Math.abs(c).toFixed(0)}% ${c < 0 ? "less" : "more"} error area than the best within depth ${MAX_DEPTH}.`;
