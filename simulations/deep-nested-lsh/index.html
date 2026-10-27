@@ -1013,6 +1013,13 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     const at = (s) => C.quorumCurve(s, D.n, D.T);
     D.quorum = { ys: GRID.map(at), counts: C.expectedCounts(at, PAIRS, D.T) };
   }
+  // Slice runners in one frame share one SLICE_MS budget, so a pipeline count beside a search or sweep keeps the frame short.
+  // Callbacks in a frame get the same timestamp. A runner past the budget still takes one step, so none stalls.
+  let sliceAt = -1, sliceEnd = 0;
+  function sliceDeadline(now) {
+    if (now !== sliceAt) { sliceAt = now; sliceEnd = performance.now() + SLICE_MS; }
+    return sliceEnd;
+  }
   // The pipeline costs an FFT per similarity, so it fills a slice per frame under its own token, apart from trials.
   // A newer shape or the toggle going off stops it. Finished counts are kept by rows, target and retrieval.
   const PIPES = new Map();
@@ -1021,9 +1028,9 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     if (!state.pipeline || D.pipe || D.n > PIPE_LIMIT) return;
     if (PIPES.has(key)) { D.pipe = PIPES.get(key); return; }
     const xs = [...GRID, ...PAIRS.map(([a, b]) => a / b)], ys = [];
-    const tick = () => {
+    const tick = (now) => {
       if (mine !== pipeJob) return;
-      const end = performance.now() + SLICE_MS;
+      const end = sliceDeadline(now);
       do ys.push(C.quorumCurve(xs[ys.length], D.n, D.T, D.retrieval)); while (ys.length < xs.length && performance.now() < end);
       if (ys.length < xs.length) return requestAnimationFrame(tick);
       const by = new Map(xs.map((s, i) => [s, ys[i]]));
@@ -1172,9 +1179,9 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     const { n, k, T } = derived;
     if (n > SEARCH_LIMIT) return say("The search covers trees of at most 10 million rows.");
     const mine = ++job, steps = C.treeSearch(n, k, T);
-    const tick = () => {
+    const tick = (now) => {
       if (mine !== job) return;
-      const end = performance.now() + SLICE_MS;
+      const end = sliceDeadline(now);
       let r;
       do r = steps.next(); while (!r.done && performance.now() < end);
       if (!r.done) {
@@ -1410,9 +1417,9 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   function runBatch(points, perPoint, label) {
     const mine = ++job, d = state.dims, t = state.pipeline ? state.T : undefined;
     let i = 0, done = 0;
-    const tick = () => {
+    const tick = (now) => {
       if (mine !== job) return;
-      const end = performance.now() + SLICE_MS, s = points[i];
+      const end = sliceDeadline(now), s = points[i];
       let hits = 0, take = 0;
       for (; take < perPoint - done && (!take || performance.now() < end); take++) hits += C.runTrials(s, d, 1, rng, hashes, PAIR, t);
       record(realised(s), hits, take);

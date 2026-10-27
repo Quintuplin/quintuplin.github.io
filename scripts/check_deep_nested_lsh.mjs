@@ -581,11 +581,11 @@ function boot(saved) {
   ctx.globalThis = ctx.window = ctx;
   ctx.Cascade = C;
   for (const id of ["chartkit-src", "explorer-src"]) vm.runInContext(PageScripts.read(id), ctx, { filename: id });
-  // Runs the frames due now. True while more are queued.
+  // Runs the frames due now, each given the frame's one timestamp as a browser does. True while more are queued.
   const step = () => {
-    const due = [...frames.values()];
+    const due = [...frames.values()], now = performance.now();
     frames.clear();
-    due.forEach((f) => f(performance.now()));
+    due.forEach((f) => f(now));
     return frames.size > 0;
   };
   const flush = () => { for (let i = 0; i < 100 && step(); i++); };
@@ -831,6 +831,25 @@ test("searchDepthStaysResponsive", () => {
   while (frames < 1e5 && timed(step)) frames++;
   assert.ok(worst < FRAME_BUDGET_MS, `a search task took ${worst.toFixed(0)} ms at depth ${k} over ${C.rows(dims)} rows`);
   assert.deepEqual(arities($, k), C.bestTree(C.rows(dims), k, T), "the async search lands on the bestTree result");
+});
+
+// Guard: the pipeline count and a sweep once each took a full slice per frame, so frames ran twice the slice.
+const SLICE_MS = Number(PageScripts.read("explorer-src").match(/\bSLICE_MS = (\d+)/)[1]);
+test("sweepWithPipelineStaysInFrame", () => {
+  const { $, flush, step } = boot();
+  flush();
+  tick($, "ex-pipeline", true);
+  step();
+  $("ex-sweep").dispatch("click");
+  const ms = [];
+  while (ms.length < 1e4 && /Computing/.test($("ex-readout").textContent)) {
+    const t0 = performance.now();
+    step();
+    ms.push(performance.now() - t0);
+  }
+  assert.match($("ex-msg").textContent, /Sweeping/, "the sweep outlasts the pipeline count");
+  const mid = ms.sort((a, b) => a - b)[ms.length >> 1];
+  assert.ok(ms.length >= 5 && mid < 1.5 * SLICE_MS, `frames took ${mid.toFixed(1)} ms at the median over ${ms.length} frames, slice ${SLICE_MS} ms`);
 });
 
 test("searchStopsWhenTreeChanges", () => {
