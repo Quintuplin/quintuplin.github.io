@@ -73,6 +73,8 @@ if command -v node >/dev/null 2>&1; then
 else
 	err "node is missing: scripts/check_deep_nested_lsh.mjs cannot run"
 fi
+# Its data generator refuses a dirty study tree or a --sha other than HEAD (#33).
+python3 -I scripts/check_build_deep_nested_lsh_data.py || err "deep nested LSH generator sha check failed"
 # The outcome chip may shrink and wrap, so the FN chip stays inside the narrow root rung on phones (#31).
 grep -q '^\.outcome {[^}]*min-width: *0' simulations/deep-nested-lsh/index.html || err "deep nested LSH .outcome chip cannot shrink inside a narrow rung"
 ! grep -q '^\.outcome {[^}]*nowrap' simulations/deep-nested-lsh/index.html || err "deep nested LSH .outcome chip cannot wrap inside a narrow rung"
