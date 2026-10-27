@@ -442,23 +442,28 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   }
 
   // Arities for levels 2 to depth − 1, each at least 2, with room left for a d1 of 2 (cascade_free_arity_tuples).
-  function freeArities(depth, budget, d0, max = MAX_FREE_ARITY) {
-    const out = [], free = Math.max(depth - 2, 0);
-    const walk = (chosen, product) => {
-      if (chosen.length === free) return void out.push(chosen.slice());
-      for (let a = 2; a <= max && d0 * product * a * 2 <= budget; a++) {
-        chosen.push(a);
-        walk(chosen, product * a);
-        chosen.pop();
+  // Yielded one at a time in depth-first order, since deep trees over many rows have millions.
+  function* freeArities(depth, budget, d0, max = MAX_FREE_ARITY) {
+    const free = Math.max(depth - 2, 0), a = [1], product = [1];
+    if (!free) {
+      yield [];
+      return;
+    }
+    for (let j = 0; j >= 0;) {
+      // Larger arities only grow the product, so the first one past the budget ends this level.
+      if (++a[j] > max || d0 * product[j] * a[j] * 2 > budget) j--;
+      else if (j === free - 1) yield a.slice();
+      else {
+        product[j + 1] = product[j] * a[j];
+        a[++j] = 1;
       }
-    };
-    walk([], 1);
-    return out;
+    }
   }
 
-  // Sharpest depth-k tree with low to budget rows and t̂ within the tolerance of t (enumerate_cascade_configs, best_cascade_config).
-  function bestTree(budget, depth, t, low = 1) {
-    let best = null, bestWidth = Infinity;
+  // bestTree in steps: yields the d0 reached every SEARCH_STEP tuples, so a caller can spread a long search over frames.
+  const SEARCH_STEP = 256;
+  function* treeSearch(budget, depth, t, low = 1) {
+    let best = null, bestWidth = Infinity, work = 0;
     const consider = (dims) => {
       const n = rows(dims);
       if (n < low || n > budget || Math.abs(threshold(dims) - t) > TOLERANCE) return;
@@ -467,18 +472,33 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     };
     if (depth === 1) {
       // t̂ rises with the rows, so the scan ends once it passes t.
-      for (let r = 1; r <= budget && threshold([r]) <= t + TOLERANCE; r++) consider([r]);
+      for (let r = 1; r <= budget && threshold([r]) <= t + TOLERANCE; r++) {
+        consider([r]);
+        if (++work % SEARCH_STEP === 0) yield r;
+      }
       return best;
     }
     const twos = Array(depth - 2).fill(2);
     for (let d0 = 2; d0 <= budget; d0++) {
+      if (++work % SEARCH_STEP === 0) yield d0;
       const probe = bandsForThreshold(t, [d0, 1, ...twos]);
       if (Number.isNaN(probe)) continue;
       // The cheapest shape grows with d0, so once it overruns the budget every larger d0 does too.
       if (d0 * Math.max(probe, 2) * 2 ** (depth - 2) > budget) break;
-      for (const free of freeArities(depth, budget, d0)) for (const dims of d1Options(t, [d0, 1, ...free])) consider(dims);
+      for (const free of freeArities(depth, budget, d0)) {
+        for (const dims of d1Options(t, [d0, 1, ...free])) consider(dims);
+        if (++work % SEARCH_STEP === 0) yield d0;
+      }
     }
     return best;
+  }
+
+  // Sharpest depth-k tree with low to budget rows and t̂ within the tolerance of t (enumerate_cascade_configs, best_cascade_config).
+  function bestTree(budget, depth, t, low = 1) {
+    const steps = treeSearch(budget, depth, t, low);
+    let r;
+    do r = steps.next(); while (!r.done);
+    return r.value;
   }
 
   // Expected FP, FN and candidates over the corpus pairs [num, den, count] when a pair at s passes with accept(s) (expected_counts).
@@ -591,7 +611,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
 
   root.Cascade = {
     ROW_CAP, TOLERANCE, MAX_FREE_ARITY, isOr, rows, levels, curve, flatCurve, inverse, threshold, width, profile, bandsForThreshold,
-    errorArea, tails, solveD1, freeArities, bestTree, expectedCounts, spread, logPair, localSlopes, mulberry32, evalTree, sampleTree,
+    errorArea, tails, solveD1, freeArities, treeSearch, bestTree, expectedCounts, spread, logPair, localSlopes, mulberry32, evalTree, sampleTree,
     runTrials, wilson,
   };
 })(globalThis);
@@ -685,7 +705,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   const STORE = "deep-nested-lsh-explorer-v2";
   // Depth stops where the study's search stops.
-  const MAX_DEPTH = DATA.provenance.grid.max_depth, MAX_ARITY = 100000, SEARCH_LIMIT = 1e7, SAMPLES = 600, LEVEL_MS = 250, MORPH_MS = 300;
+  const MAX_DEPTH = DATA.provenance.grid.max_depth, MAX_ARITY = 100000, SEARCH_LIMIT = 1e7, SLICE_MS = 12, SAMPLES = 600, LEVEL_MS = 250, MORPH_MS = 300;
   const M = { l: 42, r: 12, t: 12, b: 40 };
   let W = 560, H = 340, fx, fy;
   const GRID = Array.from({ length: SAMPLES }, (_, i) => i / (SAMPLES - 1));
@@ -914,12 +934,23 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   }
 
   // Replaces the tree with the sharpest one of its depth within its rows at t.
+  // Deep searches take seconds, so it runs a slice per frame. A newer job or any shape change stops it.
   function searchDepth() {
     const { n, k, T } = derived;
     if (n > SEARCH_LIMIT) return say("The search covers trees of at most 10 million rows.");
-    const best = C.bestTree(n, k, T);
-    if (best) set({ dims: best, auto: false });
-    else say(`No depth ${k} tree within ${n} rows has t̂ within ${C.TOLERANCE} of t ${T.toFixed(2)}.`);
+    const mine = ++job, steps = C.treeSearch(n, k, T);
+    const tick = () => {
+      if (mine !== job) return;
+      const end = performance.now() + SLICE_MS;
+      let r;
+      do r = steps.next(); while (!r.done && performance.now() < end);
+      if (!r.done) {
+        say(`Searching depth ${k} trees within ${n} rows. Tried d0 up to ${r.value}.`);
+        requestAnimationFrame(tick);
+      } else if (r.value) set({ dims: r.value, auto: false });
+      else say(`No depth ${k} tree within ${n} rows has t̂ within ${C.TOLERANCE} of t ${T.toFixed(2)}.`);
+    };
+    requestAnimationFrame(tick);
   }
 
   // How much the least error area tree past the cap gains on the best within it, from the t 0.5 search at the top budget.

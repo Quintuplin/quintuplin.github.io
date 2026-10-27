@@ -406,16 +406,19 @@ function boot(saved) {
     cancelAnimationFrame: (id) => frames.delete(id),
     addEventListener: () => {},
   });
+  // The maths is stateless, so the explorer shares this realm's copy. Inside a vm context it runs about 9 times slower.
   ctx.globalThis = ctx.window = ctx;
-  for (const id of ["cascade-src", "chartkit-src", "explorer-src"]) vm.runInContext(PageScripts.read(id), ctx, { filename: id });
-  const flush = () => {
-    for (let i = 0; i < 100 && frames.size; i++) {
-      const due = [...frames.values()];
-      frames.clear();
-      due.forEach((f) => f(performance.now()));
-    }
+  ctx.Cascade = C;
+  for (const id of ["chartkit-src", "explorer-src"]) vm.runInContext(PageScripts.read(id), ctx, { filename: id });
+  // Runs the frames due now. True while more are queued.
+  const step = () => {
+    const due = [...frames.values()];
+    frames.clear();
+    due.forEach((f) => f(performance.now()));
+    return frames.size > 0;
   };
-  return { $: (id) => document.getElementById(id), body, flush, looked };
+  const flush = () => { for (let i = 0; i < 100 && step(); i++); };
+  return { $: (id) => document.getElementById(id), body, flush, step, looked };
 }
 
 const depthInput = ($) => $("ex-depth").querySelector("input");
@@ -570,4 +573,39 @@ test("searchDepthFindsSharpestTree", () => {
   const want = C.bestTree(n, 3, T);
   assert.ok(want, `a depth 3 tree fits ${n} rows at t ${T}`);
   assert.deepEqual(arities($, 3), want);
+});
+
+// The heaviest search the explorer allows: the deepest tree just under the row limit, t 0.99.
+const SEARCH_LIMIT = Number(PageScripts.read("explorer-src").match(/\bSEARCH_LIMIT = ([\d.e]+)/)[1]);
+const FRAME_BUDGET_MS = 100;
+function bootDeepSearch() {
+  const k = MAX_DEPTH, side = Math.floor(Math.sqrt(SEARCH_LIMIT / 2 ** (k - 2))), T = 0.99;
+  assert.ok(k >= 2 && side <= 1e5, `depth ${k} tree near ${SEARCH_LIMIT} rows within the arity cap`);
+  const dims = [side, side, ...Array(k - 2).fill(2)];
+  const page = boot({ dims, T, s: 0.5, seed: 753 });
+  for (let i = 0; i < 1e4 && page.step(); i++);
+  return { ...page, k, dims, T };
+}
+
+// Guard: the depth search once ran in one task, so a deep tree over many rows froze the tab for seconds.
+test("searchDepthStaysResponsive", () => {
+  const { $, step, k, dims, T } = bootDeepSearch();
+  let worst = 0, frames = 0;
+  const timed = (f) => { const t0 = performance.now(), more = f(); worst = Math.max(worst, performance.now() - t0); return more; };
+  timed(() => $("ex-search").dispatch("click"));
+  while (frames < 1e5 && timed(step)) frames++;
+  assert.ok(worst < FRAME_BUDGET_MS, `a search task took ${worst.toFixed(0)} ms at depth ${k} over ${C.rows(dims)} rows`);
+  assert.deepEqual(arities($, k), C.bestTree(C.rows(dims), k, T), "the async search lands on the bestTree result");
+});
+
+test("searchStopsWhenTreeChanges", () => {
+  const { $, flush, step, k, dims } = bootDeepSearch();
+  $("ex-search").dispatch("click");
+  step();
+  assert.match($("ex-msg").textContent, /Searching/, "a progress line while the search runs");
+  setDepth($, flush, k - 1 || 2);
+  const kept = Number(depthInput($).value);
+  for (let i = 0; i < 1e5 && step(); i++);
+  assert.deepEqual(arities($, kept), dims.concat(2).slice(0, kept), "the stale search leaves the new tree alone");
+  assert.doesNotMatch($("ex-msg").textContent, /Searching/);
 });
