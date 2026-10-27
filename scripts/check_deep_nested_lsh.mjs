@@ -307,6 +307,112 @@ test("linearTrialsMatchCurve", () => {
   }
 });
 
+// ---- QuorumChecks: accept at quorum, alone or behind retrieval on the kept bands ----
+const quorumTable = study.tables.lsh_quorum_table;
+const retrievalOf = (d) => [d[0], C.tails(d)[1]];
+const quorumMemo = new Map();
+const quorumCounts = (n, t, index) => {
+  const k = `${n}|${t}|${index}`;
+  if (!quorumMemo.has(k)) quorumMemo.set(k, C.expectedCounts((s) => C.quorumCurve(s, n, t, index), PAIRS, t));
+  return quorumMemo.get(k);
+};
+// Verify rows of the quorum table with the equal-rows tree whose kept bands they retrieve through.
+const verifyRows = () => quorumTable.rows.filter((r) => Array.isArray(r.retrieval)).map((r) => ({ r,
+  d: tablesOf("equal_rows").filter((t) => t.target === r.target).flatMap((t) => t.rows)
+    .find((x) => x.rows === r.rows && same(retrievalOf(x.dims), r.retrieval))?.dims }));
+
+// One printed quorum row at its print precision.
+function checkQuorumRow(r, index) {
+  const { target: t, rows: n } = r, inv = (y) => C.quorumInverse(y, n, t, index), c = quorumCounts(n, t, index);
+  const fields = { threshold: inv(0.5), width: inv(0.95) - inv(0.05), "E[FP]": c.fp, "E[FN]": c.fn, "E[errors]": c.errors };
+  if (index) fields.retrieved = counts(index, t).candidates;
+  for (const [f, v] of Object.entries(fields)) {
+    assert.ok(agrees(r[f], v, f === "retrieved" ? 0 : quorumTable.decimals[f]), `quorum ${n} ${r.retrieval} at ${t} ${f}: ${v} vs ${r[f]}`);
+  }
+}
+
+const quorumRows = () => parity.rows.filter((r) => r.quorum);
+
+test("quorumMatchesStudy", () => {
+  assert.ok(quorumRows().length >= 50);
+  for (const r of quorumRows()) {
+    for (const [t, q] of Object.entries(r.quorum)) parity.s.forEach((s, i) => close(C.quorumCurve(s, C.rows(r.dims), +t), q.full[i], `quorum ${r.dims} at ${t} s ${s}`));
+  }
+  const all = quorumTable.rows.filter((r) => r.retrieval === "all");
+  assert.equal(all.length, 9);
+  all.forEach((r) => checkQuorumRow(r));
+});
+
+test("pipelineMatchesStudy", () => {
+  for (const r of quorumRows()) {
+    for (const [t, q] of Object.entries(r.quorum)) parity.s.forEach((s, i) => close(C.pipelineCurve(s, r.dims, +t), q.pipeline[i], `pipeline ${r.dims} at ${t} s ${s}`));
+  }
+  const verify = verifyRows();
+  assert.equal(verify.length, 12);
+  for (const { r, d } of verify) {
+    assert.ok(d, `an equal-rows tree retrieves through ${r.retrieval} at ${r.target}`);
+    checkQuorumRow(r, retrievalOf(d));
+  }
+});
+
+// Guard: the closed form drops pairs no kept band retrieves. Depth 4 and 5 trees keep bands scattered among the rows.
+test("pipelineMatchesBruteForce", () => {
+  assert.ok(parity.brute.some((b) => b.dims.length >= 4));
+  for (const b of parity.brute) {
+    for (const [t, ys] of Object.entries(b.pipeline)) parity.s.forEach((s, i) => close(C.pipelineCurve(s, b.dims, +t), ys[i], `brute ${b.dims} at ${t} s ${s}`));
+  }
+});
+
+test("pipelineBeatsItsCascade", () => {
+  for (const { r, d } of verifyRows()) {
+    const pipe = quorumCounts(r.rows, r.target, retrievalOf(d)).errors, cascade = counts(d, r.target).errors;
+    assert.ok(pipe < cascade, `${d} at ${r.target}: pipeline ${pipe} vs cascade ${cascade}`);
+  }
+});
+
+// Band i is kept when it is child 0 at every AND level above the bands.
+function keptRef(d) {
+  const out = [];
+  for (let i = 0; i < C.rows(d) / d[0]; i++) {
+    let rest = i, kept = true;
+    for (let j = 1; j < d.length; j++) {
+      if (!C.isOr(j) && rest % d[j]) kept = false;
+      rest = Math.floor(rest / d[j]);
+    }
+    if (kept) out.push(i);
+  }
+  return out;
+}
+
+test("pipelineTrialsMatchCurve", () => {
+  const shapes = [[3], [2, 3], [3, 4, 2], [2, 3, 2, 2], [2, 2, 3, 2, 2]];
+  for (const d of shapes) assert.deepEqual(C.keptBands(d), keptRef(d), `kept bands of ${d}`);
+  // One trial decides as the full tree's bits say: a kept band agrees in full and the quorum holds.
+  const hashes = C.drawRows(C.mulberry32(13)), outcomes = new Set();
+  for (const d of shapes.slice(3)) {
+    for (const t of [0.3, 0.5]) {
+      for (const s of [0.3, 0.5, 0.8]) {
+        for (let seed = 1; seed <= 25; seed++) {
+          const { bits } = C.sampleTree(C.drawPair(s, C.mulberry32(seed), PAIR.size, PAIR.vocab), d, hashes);
+          const full = (i) => bits.subarray(i * d[0], (i + 1) * d[0]).every(Boolean);
+          const want = keptRef(d).some(full) && bits.reduce((a, b) => a + b, 0) >= Math.ceil(+(t * bits.length).toFixed(9)) ? 1 : 0;
+          assert.equal(C.runTrials(s, d, 1, C.mulberry32(seed), hashes, PAIR, t), want, `${d} at t ${t} s ${s} seed ${seed}`);
+          outcomes.add(want);
+        }
+      }
+    }
+  }
+  assert.deepEqual([...outcomes].sort(), [0, 1], "both outcomes occur");
+  const trials = 2000;
+  for (const [d, t] of [[[5, 20], 0.5], [[2, 3, 2, 2], 0.3], [[3, 4, 2, 2, 2], 0.5]]) {
+    for (const y of [0.2, 0.5, 0.8]) {
+      const s = C.quorumInverse(y, C.rows(d), t, retrievalOf(d)), { U, I } = realised(s), p = C.pipelineCurve(I / U, d, t);
+      const hits = C.runTrials(s, d, trials, C.mulberry32(17), hashes, PAIR, t);
+      assert.ok(Math.abs(hits / trials - p) < 4 * Math.sqrt(p * (1 - p) / trials), `${d} at t ${t}: rate ${hits / trials} vs ${p} at ${I}/${U}`);
+    }
+  }
+});
+
 // curve() loses digits once a level nears 0 or 1, so the reference carries the hit rate and its complement in linear space.
 function hitMiss(s, d) {
   const ln = (x, xc) => (x < 0.5 ? Math.log(x) : Math.log1p(-xc));
@@ -629,6 +735,59 @@ test("defaultReproducesStandaloneOrdering", () => {
     assert.ok(m, `the study measured ${d}`);
     assert.ok(shows(text, m.mean.toFixed(1)), `readout shows measured mean ${m.mean.toFixed(1)} for ${d}: ${text}`);
   }
+});
+
+const drain = (step) => { for (let i = 0; i < 1e5 && step(); i++); };
+const tick = ($, id, on) => { $(id).checked = on; $(id).dispatch("change"); };
+const seedRow = (t, config) => tablesOf("seed_spread").flatMap((x) => x.rows).find((x) => x.target === t && x.config === config);
+
+test("pipelineToggleShowsStudyCounts", () => {
+  const { $, flush, step } = boot();
+  flush();
+  const d = arities($, Number(depthInput($).value)), T = Number($("ex-t").value), n = C.rows(d);
+  const { r } = verifyRows().find((v) => same(v.d, d) && v.r.target === T) || {};
+  assert.ok(r, `the study verified the default tree ${d}`);
+  assert.equal($("ex-pipeline").checked, false, "pipeline off by default");
+  assert.equal($("ex-quorum").checked, false, "quorum off by default");
+  assert.doesNotMatch($("ex-readout").textContent, /pipeline|quorum/);
+  tick($, "ex-pipeline", true);
+  drain(step);
+  let text = $("ex-readout").textContent;
+  const m = C.spread(seedRow(T, `verify_${n}_${d.join("x")}`)["errors by draw"]).mean.toFixed(1);
+  for (const v of [r["E[errors]"], r.retrieved, m]) assert.ok(shows(text, v), `pipeline card shows ${v}: ${text}`);
+  assert.match(text, /pipeline expected errors \(theory\)/);
+  tick($, "ex-quorum", true);
+  drain(step);
+  text = $("ex-readout").textContent;
+  assert.match(text, /quorum check expected errors \(theory\)/);
+  assert.ok(shows(text, quorumCounts(n, T).errors), `quorum card shows ${quorumCounts(n, T).errors}: ${text}`);
+});
+
+// Guard: a slow pipeline count for one tree must never land on the next tree.
+test("pipelineCountsFollowShape", () => {
+  const { $, flush, step } = boot();
+  flush();
+  const select = $("ex-preset"), pick = (dims) => {
+    const o = select.querySelectorAll("option").find((x) => x.textContent.startsWith("t 0.3 depth") && x.textContent.includes(`(${dims.join(", ")})`));
+    select.value = o.value;
+    select.dispatch("change");
+  };
+  const errorsOf = (d) => verifyRows().find((v) => same(v.d, d) && v.r.target === 0.3).r["E[errors]"];
+  const deep = [2, 17, 7, 8, 3], banding = [6, 951];
+  tick($, "ex-pipeline", true);
+  step();
+  pick(banding);
+  drain(step);
+  let text = $("ex-readout").textContent;
+  assert.ok(shows(text, errorsOf(banding)) && !shows(text, errorsOf(deep)), `pipeline card for ${banding}: ${text}`);
+  pick(deep);
+  step();
+  pick(banding);
+  step();
+  pick(deep);
+  drain(step);
+  text = $("ex-readout").textContent;
+  assert.ok(shows(text, errorsOf(deep)) && !shows(text, errorsOf(banding)), `pipeline card for ${deep} after A B A: ${text}`);
 });
 
 test("searchDepthFindsSharpestTree", () => {
