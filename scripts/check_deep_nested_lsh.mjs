@@ -191,6 +191,80 @@ test("bestTreeDepthOneMatchesFullScan", () => {
   }
 });
 
+// Plain port of enumerate_cascade_configs and best_cascade_config with free arities up to maxArity.
+function scanTrees(budget, depth, t, low = 1, maxArity = C.MAX_FREE_ARITY) {
+  let best = null, bestW = Infinity;
+  const consider = (d) => {
+    const n = C.rows(d);
+    if (n < low || n > budget || Math.abs(C.threshold(d) - t) > C.TOLERANCE) return;
+    const w = C.width(d);
+    if (w < bestW) [best, bestW] = [d, w];
+  };
+  function* free(d0, chosen, product) {
+    if (chosen.length === depth - 2) { yield chosen; return; }
+    for (let a = 2; a <= maxArity && d0 * product * a * 2 <= budget; a++) yield* free(d0, [...chosen, a], product * a);
+  }
+  for (let d0 = 2; d0 <= budget; d0++) {
+    const probe = C.bandsForThreshold(t, [d0, 1, ...Array(depth - 2).fill(2)]);
+    if (Number.isNaN(probe)) continue;
+    if (d0 * Math.max(probe, 2) * 2 ** (depth - 2) > budget) break;
+    for (const f of free(d0, [], 1)) {
+      const solved = C.bandsForThreshold(t, [d0, 1, ...f]);
+      if (Number.isNaN(solved) || solved < 1.5) continue;
+      for (const b of new Set([Math.max(2, Math.floor(solved)), Math.max(2, Math.ceil(solved))])) consider([d0, b, ...f]);
+    }
+  }
+  return best;
+}
+// Runs a search to its end and fails once it takes more than maxSteps steps.
+function drainSearch(gen, maxSteps) {
+  for (let steps = 0; ; steps++) {
+    const r = gen.next();
+    if (r.done) return r.value;
+    assert.ok(steps < maxSteps, `the search ran past ${maxSteps} steps`);
+  }
+}
+const SEARCH_STEP = Number(PageScripts.read("cascade-src").match(/\bSEARCH_STEP = (\d+)/)[1]);
+const SEARCH_WORK = Number(PageScripts.read("explorer-src").match(/\bSEARCH_WORK = ([\d.e]+)/)?.[1]);
+
+test("treeSearchMatchesExhaustiveScan", () => {
+  const cases = [];
+  for (const t of [0.05, 0.2, 0.3, 0.5, 0.8, 0.95, 0.99]) {
+    for (let k = 2; k <= 7; k++) for (const n of [50, 1e3, 3e4, 1e5]) cases.push([n, k, t]);
+    for (let k = 8; k <= 10; k++) for (const n of [1e3, 1e4]) cases.push([n, k, t]);
+  }
+  cases.push([3e4, 10, 0.5]);
+  for (const [n, k, t] of cases) {
+    const want = scanTrees(n, k, t), got = C.treeSearch(n, k, t);
+    assert.deepEqual(drainSearch(got, Infinity).dims, want, `depth ${k} within ${n} rows at t ${t}`);
+    assert.deepEqual(C.bestTree(n, k, t), want, `bestTree depth ${k} within ${n} rows at t ${t}`);
+  }
+});
+
+// Guard: the depth search once enumerated billions of trees at depth 10 over 10 million rows.
+test("deepSearchFinishesWithinWorkCap", () => {
+  assert.ok(SEARCH_WORK > 0, "the explorer sets a search work cap");
+  for (const t of [0.3, 0.5, 0.8, 0.99]) {
+    const t0 = performance.now(), r = drainSearch(C.treeSearch(1e7, 10, t, 1, SEARCH_WORK), SEARCH_WORK / SEARCH_STEP + 1e4);
+    const s = (performance.now() - t0) / 1000;
+    assert.ok(s < 20, `t ${t}: the capped search took ${s.toFixed(1)} s`);
+    assert.equal(r.complete, false, `t ${t}: depth 10 over 10 million rows needs the cap`);
+    assert.ok(r.arity >= 2, `t ${t}: shells up to ${r.arity} finished`);
+    assert.equal(r.dims.length, 10);
+    assert.ok(Math.abs(C.threshold(r.dims) - t) <= C.TOLERANCE && C.rows(r.dims) <= 1e7, `t ${t}: ${r.dims}`);
+  }
+});
+
+// A capped search is at least as sharp as the full scan over the arity shells it finished.
+test("cappedSearchCoversItsArityShells", () => {
+  for (const [n, k, t, limit] of [[1e5, 6, 0.5, 2e4], [1e5, 7, 0.8, 5e4], [3e4, 5, 0.3, 3e3]]) {
+    const r = drainSearch(C.treeSearch(n, k, t, 1, limit), Infinity), ref = scanTrees(n, k, t, 1, r.arity);
+    assert.equal(r.complete, false, `depth ${k} within ${n} rows stops at ${limit} nodes`);
+    assert.ok(r.arity >= 2 && r.arity < C.MAX_FREE_ARITY, `shells up to ${r.arity}`);
+    assert.ok(ref && C.width(r.dims) <= C.width(ref), `depth ${k}: ${r.dims} against ${ref} with arities up to ${r.arity}`);
+  }
+});
+
 test("solveD1PicksSharpestMatch", () => {
   const near = (d, t) => Math.abs(C.threshold(d) - t) <= C.TOLERANCE;
   let both = 0;
@@ -548,7 +622,7 @@ class Element {
 // Runs the page's chart kit and explorer. Frames queue until flush() runs them. Reduced motion takes the instant path.
 // Missing ids are created on demand, so `looked` records every id the explorer asks for.
 // `saved` is the explorer state found in storage on load.
-function boot(saved) {
+function boot(saved, patch = (src) => src) {
   const body = new Element("body"), frames = new Map(), looked = new Set();
   let nextFrame = 1;
   const add = (tag, cls) => { const e = body.appendChild(new Element(tag)); if (cls) e.className = cls; return e; };
@@ -580,7 +654,7 @@ function boot(saved) {
   // The maths is stateless, so the explorer shares this realm's copy. Inside a vm context it runs about 9 times slower.
   ctx.globalThis = ctx.window = ctx;
   ctx.Cascade = C;
-  for (const id of ["chartkit-src", "explorer-src"]) vm.runInContext(PageScripts.read(id), ctx, { filename: id });
+  for (const id of ["chartkit-src", "explorer-src"]) vm.runInContext(id === "explorer-src" ? patch(PageScripts.read(id)) : PageScripts.read(id), ctx, { filename: id });
   // Runs the frames due now, each given the frame's one timestamp as a browser does. True while more are queued.
   const step = () => {
     const due = [...frames.values()], now = performance.now();
@@ -830,7 +904,23 @@ test("searchDepthStaysResponsive", () => {
   timed(() => $("ex-search").dispatch("click"));
   while (frames < 1e5 && timed(step)) frames++;
   assert.ok(worst < FRAME_BUDGET_MS, `a search task took ${worst.toFixed(0)} ms at depth ${k} over ${C.rows(dims)} rows`);
-  assert.deepEqual(arities($, k), C.bestTree(C.rows(dims), k, T), "the async search lands on the bestTree result");
+  const want = drainSearch(C.treeSearch(C.rows(dims), k, T, 1, SEARCH_WORK), Infinity).dims;
+  assert.deepEqual(arities($, k), want, "the async search lands on the capped treeSearch result");
+});
+
+// A search the work cap stops names the arity shells it finished.
+test("searchDepthNamesBound", () => {
+  const work = 2000, { $, flush, step } = boot(undefined, (src) => src.replace(/\bSEARCH_WORK = [\d.e]+/, `SEARCH_WORK = ${work}`));
+  flush();
+  const k = Number(depthInput($).value), n = C.rows(arities($, k)), T = Number($("ex-t").value);
+  const ref = drainSearch(C.treeSearch(n, k, T, 1, work), Infinity);
+  assert.ok(ref.complete === false && ref.arity >= 2, `depth ${k} within ${n} rows stops at ${work} nodes after a whole shell`);
+  $("ex-search").dispatch("click");
+  for (let i = 0; i < 1e5 && step(); i++);
+  const msg = $("ex-msg").textContent;
+  assert.match(msg, /Bounded search/);
+  assert.ok(msg.includes(`free arities up to ${ref.arity}`) && msg.includes(String(C.MAX_FREE_ARITY)), msg);
+  assert.deepEqual(arities($, k), ref.dims);
 });
 
 // Guard: the pipeline count and a sweep once each took a full slice per frame, so frames ran twice the slice.
