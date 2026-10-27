@@ -943,6 +943,28 @@ test("sweepWithPipelineStaysInFrame", () => {
   assert.ok(ms.length >= 5 && mid < 1.5 * SLICE_MS, `frames took ${mid.toFixed(1)} ms at the median over ${ms.length} frames, slice ${SLICE_MS} ms`);
 });
 
+// Guard: a depth search beside a pipeline count must share the slice too. At t 0.95 near the pipeline limit both take a while.
+const PIPE_LIMIT = Number(PageScripts.read("explorer-src").match(/\bPIPE_LIMIT = (\d+)/)[1]);
+test("searchWithPipelineStaysInFrame", () => {
+  const dims = [23, 3, 8, 12, 3], T = 0.95;
+  assert.ok(C.rows(dims) <= PIPE_LIMIT, `${dims} gets a pipeline count`);
+  const { $, flush, step } = boot({ dims, T, s: 0.5, seed: 753 });
+  flush();
+  tick($, "ex-pipeline", true);
+  step();
+  $("ex-search").dispatch("click");
+  step();
+  const ms = [], both = () => /Computing/.test($("ex-readout").textContent) && /Searching/.test($("ex-msg").textContent);
+  assert.ok(both(), "the search starts while the pipeline count runs");
+  while (ms.length < 1e4 && both()) {
+    const t0 = performance.now();
+    step();
+    ms.push(performance.now() - t0);
+  }
+  const mid = ms.sort((a, b) => a - b)[ms.length >> 1];
+  assert.ok(ms.length >= 5 && mid < 1.5 * SLICE_MS, `frames took ${mid.toFixed(1)} ms at the median over ${ms.length} frames, slice ${SLICE_MS} ms`);
+});
+
 test("searchStopsWhenTreeChanges", () => {
   const { $, flush, step, k, dims } = bootDeepSearch();
   $("ex-search").dispatch("click");
