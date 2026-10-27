@@ -229,9 +229,9 @@ const SEARCH_WORK = Number(PageScripts.read("explorer-src").match(/\bSEARCH_WORK
 
 test("treeSearchMatchesExhaustiveScan", () => {
   const cases = [];
-  // Depth 6 and 7 over 1e5 rows take seconds each, so one target covers them.
+  // Depth 6 and 7 over 1e5 rows take seconds each, so the extreme targets and 0.5 cover them.
   for (const t of [0.05, 0.2, 0.3, 0.5, 0.8, 0.95, 0.99]) {
-    for (let k = 2; k <= 7; k++) for (const n of [50, 1e3, 3e4, 1e5]) if (k < 6 || n < 1e5 || t === 0.5) cases.push([n, k, t]);
+    for (let k = 2; k <= 7; k++) for (const n of [50, 1e3, 3e4, 1e5]) if (k < 6 || n < 1e5 || [0.05, 0.5, 0.99].includes(t)) cases.push([n, k, t]);
     for (let k = 8; k <= 10; k++) for (const n of [1e3, 1e4]) cases.push([n, k, t]);
   }
   cases.push([3e4, 10, 0.5]);
