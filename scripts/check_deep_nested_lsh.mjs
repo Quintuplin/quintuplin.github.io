@@ -418,6 +418,12 @@ function boot(saved) {
   return { $: (id) => document.getElementById(id), body, flush, looked };
 }
 
+const depthInput = ($) => $("ex-depth").querySelector("input");
+const setDepth = ($, flush, k) => { const input = depthInput($); input.value = String(k); input.dispatch("change"); flush(); };
+// The arities the ladder shows, d0 first.
+const arities = ($, k) => Array.from({ length: k }, (_, j) => Number($("ex-ladder").querySelector(`[aria-label="arity d${j}"]`).value));
+const shows = (text, v) => new RegExp(`(^|[^\\d.])${String(v).replace(".", "\\.")}($|[^\\d])`).test(text);
+
 // ---- BehaviourChecks ----
 test("runRightAfterShapeChangeUsesNewTree", () => {
   const { $, flush } = boot();
@@ -451,6 +457,11 @@ test("trialSeedReplaysTrials", () => {
   const run = () => { $("ex-many").dispatch("click"); flush(); return dots(); };
   // A browser fires change only when the value differs, so each seed here differs from the one before.
   const seed = (v) => { const input = $("ex-seed"); assert.notEqual(input.value, String(v)); input.value = String(v); input.dispatch("change"); };
+  // At its threshold the tree fires about half the time, so two seeds almost surely differ.
+  const at = $("ex-s");
+  at.value = String(Math.round(C.threshold(arities($, Number(depthInput($).value))) * 1000) / 1000);
+  at.dispatch("input");
+  flush();
   seed(4242);
   const first = run();
   assert.equal(first.length, 1, "1000 at s draws one dot");
@@ -490,15 +501,9 @@ test("seedChangeKeepsRowCapMessage", () => {
   assert.match($("ex-msg").textContent, why, "a seed change keeps the reason trials are off");
 });
 
-const depthInput = ($) => $("ex-depth").querySelector("input");
-const setDepth = ($, flush, k) => { const input = depthInput($); input.value = String(k); input.dispatch("change"); flush(); };
-// The arities the ladder shows, d0 first.
-const arities = ($, k) => Array.from({ length: k }, (_, j) => Number($("ex-ladder").querySelector(`[aria-label="arity d${j}"]`).value));
-const shows = (text, v) => new RegExp(`(^|[^\\d.])${String(v).replace(".", "\\.")}($|[^\\d])`).test(text);
-
 // Guard: the explorer once let the depth reach 13 while the study's search stops at its grid max.
 test("depthCappedAtGrid", () => {
-  for (let k = 1; k <= 13; k++) {
+  for (let k = 1; k <= Math.max(13, MAX_DEPTH + 2); k++) {
     const { $, flush } = boot();
     flush();
     assert.equal(Number(depthInput($).max), MAX_DEPTH, "the depth box stops at the grid max");
