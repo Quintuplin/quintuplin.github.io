@@ -63,21 +63,11 @@ fridge=simulations/fridge-event-sim/index.html
 checkFridge() { node scripts/check_fridge.mjs "$site/$fridge" || err "fridge behaviour check failed"; }
 
 # The Deep Nested LSH maths matches the study reference and its explorer behaves (#31).
-# The maths check runs in the background beside the fridge and explorer checks, so the job stays under 2 minutes (#46).
-# Its output waits until it ends so the logs do not interleave.
-runDeepChecks() {
-	deep="$site/simulations/deep-nested-lsh/index.html"
-	mathsLog=$(mktemp "${TMPDIR:-/tmp}/deep-maths.XXXXXX")
-	node scripts/check_deep_nested_lsh.mjs "$deep" >"$mathsLog" 2>&1 &
-	maths=$!
-	checkFridge
-	node scripts/check_deep_nested_lsh_explorer.mjs "$deep" || err "deep nested LSH explorer check failed"
-	wait "$maths"
-	mathsStatus=$?
-	cat "$mathsLog"
-	rm -f "$mathsLog"
-	[ "$mathsStatus" -eq 0 ] || err "deep nested LSH maths check failed"
-}
+deep="$site/simulations/deep-nested-lsh/index.html"
+deepMaths() { node scripts/check_deep_nested_lsh.mjs "$deep"; }
+deepExplorer() { node scripts/check_deep_nested_lsh_explorer.mjs "$deep"; }
+. scripts/run_deep_checks.sh
+sh scripts/check_run_deep_checks.sh || err "the background glue of runDeepChecks is broken"
 if command -v node >/dev/null 2>&1; then
 	runDeepChecks
 else
