@@ -322,6 +322,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>Standard banding at 10000 rows</dt><dd>The study's best depth 2 (r, b) banding within 10000 rows at each target.</dd>
       <dt>Sharpest tree per depth at 10000 rows</dt><dd>The sharpest tree at each depth the study searched within 10000 rows at each target.</dd>
       <dt>Equal-rows ladder</dt><dd>The sharpest tree at each depth whose rows lie within 5% of the rows the best banding uses at that target. It compares depths at a matched signature length.</dd>
+      <dt>Best measured</dt><dd>Marks the depth on a ladder with the fewest errors the study measured, as the mean over its seed draws. A tie goes to the shallower depth. The page opens on the deepest such equal-rows tree across the targets.</dd>
       <dt>Least error area beyond depth k</dt><dd>Trees from the error area search deeper than the sharpest tree presets. They show only when they fit within the depth cap. Each label names the search kind and the depth.</dd>
       <dt>two-tier, max-depth and all-2s</dt><dd>Kinds of error area search. Two-tier chooses the depth and the arities together for the least error area. Max-depth takes the deepest depth at which a matched tree fits. All-2s sets every arity to 2 with one 3 where it fits and has no threshold match.</dd>
       <dt>Arity families at t 0.5</dt><dd>Trees at depth 3 and up within 10000 rows matched to t 0.5, searched with arities up to 60 above d1. The families differ in where the large arities sit.</dd>
@@ -932,14 +933,16 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 
   // ---- Presets from the embedded tables ----
+  // The study's best measured depth per ladder, keyed by target and sweep (equal or n<budget>).
+  const BEST_DEPTH = new Map((DATA.tables.lsh_best_depth_table?.rows || []).map((r) => [`${r.target}|${r.sweep}`, r["best depth"]]));
   function presets() {
     const T = DATA.tables, groups = [], sharpest = byKind("cascade");
     const deepest = Math.max(0, ...sharpest.flatMap((t) => t.rows.map((r) => r.depth)));
     groups.push([`Standard banding at ${TOP} rows`, byKind("algorithm").map((t) => ({ dims: t.rows[0].tuple, t: t.target, label: `t ${t.target} ${K.tuple(t.rows[0].tuple)}` }))]);
     groups.push([`Sharpest tree per depth at ${TOP} rows`, sharpest.flatMap((t) => t.rows.filter((r) => r.config.startsWith(`n${TOP}_`))
-      .map((r) => ({ dims: r.dims, t: t.target, label: `t ${t.target} depth ${r.depth} ${K.tuple(r.dims)}` })))]);
+      .map((r) => ({ dims: r.dims, t: t.target, best: BEST_DEPTH.get(`${t.target}|n${TOP}`) === r.depth, label: `t ${t.target} depth ${r.depth} ${K.tuple(r.dims)}` })))]);
     groups.push(["Equal-rows ladder", byKind("equal_rows").flatMap((t) => t.rows
-      .map((r) => ({ dims: r.dims, t: t.target, ladder: true, label: `t ${t.target} depth ${r.depth} ${K.tuple(r.dims)} ${r.rows} rows` })))]);
+      .map((r) => ({ dims: r.dims, t: t.target, ladder: true, best: BEST_DEPTH.get(`${t.target}|equal`) === r.depth, label: `t ${t.target} depth ${r.depth} ${K.tuple(r.dims)} ${r.rows} rows` })))]);
     groups.push([`Least error area beyond depth ${deepest}`, byKind("error_area").flatMap((t) => t.rows.filter((r) => r.depth > deepest)
       .map((r) => ({ dims: r.dims, t: t.target, label: `t ${t.target} ${t.budget || TOP} rows ${r.kind} ${r.depth}D` })))]);
     groups.push(["Arity families at t 0.5", (T.lsh_high_cap_family_table_t50 || { rows: [] }).rows.filter((r) => r.depth > 2)
@@ -948,13 +951,16 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     // Trees past the depth cap cannot load, so they and any group left empty drop out.
     const kept = groups.map(([name, items]) => [name, items.filter((p) => p.dims.length <= MAX_DEPTH)]).filter(([, items]) => items.length);
     let id = 0;
-    for (const [, items] of kept) for (const p of items) p.id = `p${id++}`;
+    for (const [, items] of kept) for (const p of items) {
+      p.id = `p${id++}`;
+      if (p.best) p.label += " (best measured)";
+    }
     return kept;
   }
   const GROUPS = presets();
   const PRESETS = GROUPS.flatMap(([, items]) => items);
-  // The deepest equal-rows tree at the lowest target, so the page opens on depth against banding in the same rows.
-  const DEFAULT = PRESETS.filter((p) => p.ladder).sort((a, b) => a.t - b.t || b.dims.length - a.dims.length)[0] || PRESETS[0];
+  // The equal-rows tree at the deepest best measured depth, lowest target on a tie, so the page opens on depth against banding in the same rows.
+  const DEFAULT = PRESETS.filter((p) => p.ladder && p.best).sort((a, b) => b.dims.length - a.dims.length || a.t - b.t)[0] || PRESETS[0];
 
   // Measured errors over the study's seed draws for each tree it ran, keyed by target and tuple.
   const measuredKey = (t, d) => `${t}|${d.join(",")}`;

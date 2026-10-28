@@ -882,7 +882,8 @@ test("pipelineToggleShowsStudyCounts", () => {
   const { $, flush, step } = boot();
   flush();
   const d = arities($, Number(depthInput($).value)), T = Number($("ex-t").value), n = C.rows(d);
-  const { r } = verifyRows().find((v) => same(v.d, d) && v.r.target === T) || {};
+  // A verify row names its rows and retrieval banding, which two ladder trees can share.
+  const r = quorumTable.rows.find((x) => x.target === T && x.rows === n && same(x.retrieval, retrievalOf(d)));
   assert.ok(r, `the study verified the default tree ${d}`);
   assert.equal($("ex-pipeline").checked, false, "pipeline off by default");
   assert.equal($("ex-quorum").checked, false, "quorum off by default");
@@ -936,7 +937,7 @@ test("pipelineCountsFollowShape", () => {
 });
 
 test("searchDepthFindsSharpestTree", () => {
-  const { $, flush } = boot();
+  const { $, flush } = boot(PINNED);
   flush();
   setDepth($, flush, 3);
   const n = C.rows(arities($, 3)), T = Number($("ex-t").value);
