@@ -301,7 +301,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>Width W</dt><dd>The span of s over which P(s) climbs from 0.05 to 0.95. Smaller is sharper.</dd>
       <dt>Sharpest</dt><dd>The smallest width W among the trees whose t̂ lies within 0.01 of t. The search tries every d0, solves d1 for t and tries every arity up to the free-arity cap at the levels above d1.</dd>
       <dt>Free-arity cap 24</dt><dd>The largest arity the study's search tries at levels 2 and up. d0 and d1 have no cap.</dd>
-      <dt>Sharpest at depth k</dt><dd>Swaps in the sharpest tree of the current depth whose rows fit within the current n at t. It covers trees of at most 10 million rows.</dd>
+      <dt>Sharpest at depth k</dt><dd>Swaps in the sharpest tree of the current depth whose rows fit within the current n at t. It covers trees of at most 10 million rows. It searches in shells. Shell A holds the trees whose largest arity above d1 is A, for A from 2 up to the free-arity cap.</dd>
+      <dt>Bounded search</dt><dd>The search stops after 30 million partial trees, so it gives the same result on every device. A stopped search says so and names the last shell it finished. Its tree is the sharpest with free arities up to that shell and may miss a sharper tree with a larger arity. A search that finishes every shell gives the sharpest tree.</dd>
       <dt>Depth cap</dt><dd id="ex-cap-note">The explorer stops at the deepest depth the study's search covers.</dd>
       <dt>Error area E</dt><dd>The area between P(s) and the ideal step at t over s from 0 to 1. The FP area lies left of t and the FN area right of it. It is a theory value.</dd>
       <dt>Expected counts (theory)</dt><dd>P(s) applied to every pair of the study corpus. E[FP] sums P(s) over the pairs below t. E[FN] sums 1 − P(s) over the pairs at or above t. E[errors] adds the two after rounding each.</dd>
@@ -447,56 +448,75 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     return { dims: options.reduce((a, b) => (off(b) < off(a) ? b : a)), matched: false };
   }
 
-  // Arities for levels 2 to depth − 1, each at least 2, with room left for a d1 of 2 (cascade_free_arity_tuples).
-  // Yielded one at a time in depth-first order, since deep trees over many rows have millions.
-  function* freeArities(depth, budget, d0, max = MAX_FREE_ARITY) {
-    const free = Math.max(depth - 2, 0), a = [1], product = [1];
-    if (!free) {
-      yield [];
-      return;
-    }
-    for (let j = 0; j >= 0;) {
-      // Larger arities only grow the product, so the first one past the budget ends this level.
-      if (++a[j] > max || d0 * product[j] * a[j] * 2 > budget) j--;
-      else if (j === free - 1) yield a.slice();
-      else {
-        product[j + 1] = product[j] * a[j];
-        a[++j] = 1;
-      }
-    }
-  }
+  const orStep = (lnp, a) => Math.log(-Math.expm1(Math.log1p(-Math.exp(lnp)) / a));
+  // Exact width ties keep the study's first found tree: by d0, then d2 upward, then d1.
+  const order = (d) => [d[0], ...d.slice(2), d[1]];
+  const earlier = (x, y) => { const a = order(x), b = order(y), i = a.findIndex((v, j) => v !== b[j]); return i >= 0 && a[i] < b[i]; };
 
-  // bestTree in steps: yields the d0 reached every SEARCH_STEP tuples, so a caller can spread a long search over frames.
+  // Sharpest tree search in shells. Shell A holds the trees whose largest free arity (levels 2 up) is exactly A, for A up to
+  // the study's cap. A shell walks levels k − 1 down to 2 carrying the inverse chains at 0.5, 0.05 and 0.95, so a node is O(1).
+  // Yields every SEARCH_STEP nodes and stops past `limit` nodes with the best so far and the last whole shell.
   const SEARCH_STEP = 256;
-  function* treeSearch(budget, depth, t, low = 1) {
+  function* treeSearch(budget, depth, t, low = 1, limit = Infinity) {
     let best = null, bestWidth = Infinity, work = 0;
-    const consider = (dims) => {
-      const n = rows(dims);
-      if (n < low || n > budget || Math.abs(threshold(dims) - t) > TOLERANCE) return;
-      const w = width(dims);
-      if (w < bestWidth) [best, bestWidth] = [dims, w];
-    };
+    const consider = (dims, w) => { if (w < bestWidth || (w === bestWidth && earlier(dims, best))) [best, bestWidth] = [dims, w]; };
     if (depth === 1) {
       // t̂ rises with the rows, so the scan ends once it passes t.
       for (let r = 1; r <= budget && threshold([r]) <= t + TOLERANCE; r++) {
-        consider([r]);
-        if (++work % SEARCH_STEP === 0) yield r;
+        if (r >= low && Math.abs(threshold([r]) - t) <= TOLERANCE) consider([r], width([r]));
       }
-      return best;
+      return { dims: best, arity: 0, complete: true };
     }
-    const twos = Array(depth - 2).fill(2);
-    for (let d0 = 2; d0 <= budget; d0++) {
-      if (++work % SEARCH_STEP === 0) yield d0;
-      const probe = bandsForThreshold(t, [d0, 1, ...twos]);
-      if (Number.isNaN(probe)) continue;
-      // The cheapest shape grows with d0, so once it overruns the budget every larger d0 does too.
-      if (d0 * Math.max(probe, 2) * 2 ** (depth - 2) > budget) break;
-      for (const free of freeArities(depth, budget, d0)) {
-        for (const dims of d1Options(t, [d0, 1, ...free])) consider(dims);
-        if (++work % SEARCH_STEP === 0) yield d0;
+    const k = depth, top = k > 2 ? MAX_FREE_ARITY : 2, twos = Array(k - 2).fill(2), a = new Array(k + 1).fill(1);
+    // Index j holds the chains, products and shell flag below level j. Index k is the root.
+    const pv = new Float64Array(k + 1), m = pv.slice(), l = pv.slice(), h = pv.slice(), orP = pv.slice(), andP = pv.slice(), P = pv.slice(), has = new Uint8Array(k + 1);
+    [pv[k], m[k], l[k], h[k], orP[k], andP[k], P[k], has[k]] = [0.5, Math.log(0.5), Math.log(0.05), Math.log(0.95), 1, 1, 1, k === 2 ? 1 : 0];
+    // AND levels among 2 to j − 1. Each holds at least 2 in any tree below level j.
+    const andBelow = [0, 0, 0];
+    for (let j = 3; j <= k; j++) andBelow[j] = andBelow[j - 1] + (isOr(j - 1) ? 0 : 1);
+    for (let A = 2; A <= top; A++) {
+      for (let d0 = 2; d0 <= budget; d0++) {
+        const probe = bandsForThreshold(t, [d0, 1, ...twos]);
+        if (Number.isNaN(probe)) continue;
+        // The cheapest shape grows with d0, so once it overruns the budget every larger d0 does too.
+        if (d0 * Math.max(probe, 2) * 2 ** (k - 2) > budget) break;
+        const p0 = Math.pow(t, d0), c = -Math.log1p(-p0), cap = (budget / d0) * (1 + 1e-9);
+        // d1 solved by floor and ceil as d1Options does, then t̂ and W from the carried chains as inverse does.
+        const leaf = (i) => {
+          const solved = pv[i] > 0 && pv[i] < 1 ? Math.log1p(-pv[i]) / Math.log1p(-p0) : NaN;
+          if (Number.isNaN(solved) || solved < 1.5) return;
+          for (let b = Math.max(2, Math.floor(solved)); b <= Math.max(2, Math.ceil(solved)); b++) {
+            const n = d0 * b * P[i];
+            if (n < low || n > budget || Math.abs(Math.exp(orStep(m[i], b) / d0) - t) > TOLERANCE) continue;
+            const w = Math.exp(orStep(h[i], b) / d0) - Math.exp(orStep(l[i], b) / d0);
+            if (w <= bestWidth) consider([d0, b, ...a.slice(2, k)], w);
+          }
+        };
+        if (++work > limit) return { dims: best, arity: A - 1, complete: false };
+        if (work % SEARCH_STEP === 0) yield { arity: A, d0 };
+        if (k === 2) { leaf(k); continue; }
+        a[k - 1] = 1;
+        for (let j = k - 1; j < k;) {
+          // The last free level takes A when no level above it has.
+          const x = (a[j] = j === 2 && !has[3] ? Math.max(a[j] + 1, A) : a[j] + 1), or = isOr(j);
+          if (x > A) { j++; continue; }
+          const q = or ? -Math.expm1(Math.log1p(-pv[j + 1]) / x) : Math.pow(pv[j + 1], 1 / x);
+          const nOr = or ? orP[j + 1] * x : orP[j + 1], nAnd = or ? andP[j + 1] : andP[j + 1] * x, nP = P[j + 1] * x;
+          // Rows any tree below can reach. Both bounds grow with x, so the first arity past the budget ends this level.
+          // d1 ≥ 2 solved / 3 and solved ≥ p1 / c, while each OR level below at most divides p by its arity.
+          if (Math.max(2 * nP * 2 ** (j - 2), (2 / 3) * ((q * nOr) / c) * nAnd * 2 ** andBelow[j]) > cap) { j++; continue; }
+          pv[j] = q; orP[j] = nOr; andP[j] = nAnd; P[j] = nP; has[j] = has[j + 1] || x === A ? 1 : 0;
+          m[j] = or ? orStep(m[j + 1], x) : m[j + 1] / x;
+          l[j] = or ? orStep(l[j + 1], x) : l[j + 1] / x;
+          h[j] = or ? orStep(h[j + 1], x) : h[j + 1] / x;
+          if (++work > limit) return { dims: best, arity: A - 1, complete: false };
+          if (work % SEARCH_STEP === 0) yield { arity: A, d0 };
+          if (j > 2) a[--j] = 1;
+          else leaf(2);
+        }
       }
     }
-    return best;
+    return { dims: best, arity: top, complete: true };
   }
 
   // Sharpest depth-k tree with low to budget rows and t̂ within the tolerance of t (enumerate_cascade_configs, best_cascade_config).
@@ -504,7 +524,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     const steps = treeSearch(budget, depth, t, low);
     let r;
     do r = steps.next(); while (!r.done);
-    return r.value;
+    return r.value.dims;
   }
 
   // Expected FP, FN and candidates over the corpus pairs [num, den, count] when a pair at s passes with accept(s) (expected_counts).
@@ -797,7 +817,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
 
   root.Cascade = {
     ROW_CAP, TOLERANCE, MAX_FREE_ARITY, isOr, rows, levels, curve, flatCurve, inverse, threshold, width, profile, bandsForThreshold,
-    errorArea, tails, solveD1, freeArities, treeSearch, bestTree, expectedCounts, spread, logPair, localSlopes, quorumCurve, pipelineCurve,
+    errorArea, tails, solveD1, treeSearch, bestTree, expectedCounts, spread, logPair, localSlopes, quorumCurve, pipelineCurve,
     quorumInverse, keptBands, verified, mulberry32, evalTree, drawRows, hash61, pairShape, drawPair, agree, sampleTree, runTrials, wilson,
   };
 })(globalThis);
@@ -890,8 +910,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   const $ = (id) => document.getElementById(id);
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   const STORE = "deep-nested-lsh-explorer-v2";
-  // Depth stops where the study's search stops.
-  const MAX_DEPTH = DATA.provenance.grid.max_depth, MAX_ARITY = 100000, SEARCH_LIMIT = 1e7, PIPE_LIMIT = 20000, SLICE_MS = 12, SAMPLES = 600, LEVEL_MS = 250, MORPH_MS = 300;
+  // Depth stops where the study's search stops. The depth search stops after SEARCH_WORK partial trees, the same on every device.
+  const MAX_DEPTH = DATA.provenance.grid.max_depth, MAX_ARITY = 100000, SEARCH_LIMIT = 1e7, SEARCH_WORK = 3e7, PIPE_LIMIT = 20000, SLICE_MS = 12, SAMPLES = 600, LEVEL_MS = 250, MORPH_MS = 300;
   const M = { l: 42, r: 12, t: 12, b: 40 };
   let W = 560, H = 340, fx, fy;
   const GRID = Array.from({ length: SAMPLES }, (_, i) => i / (SAMPLES - 1));
@@ -1178,17 +1198,22 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   function searchDepth() {
     const { n, k, T } = derived;
     if (n > SEARCH_LIMIT) return say("The search covers trees of at most 10 million rows.");
-    const mine = ++job, steps = C.treeSearch(n, k, T);
+    const mine = ++job, steps = C.treeSearch(n, k, T, 1, SEARCH_WORK);
     const tick = (now) => {
       if (mine !== job) return;
       const end = sliceDeadline(now);
       let r;
       do r = steps.next(); while (!r.done && performance.now() < end);
       if (!r.done) {
-        say(`Searching depth ${k} trees within ${n} rows. Tried d0 up to ${r.value}.`);
-        requestAnimationFrame(tick);
-      } else if (r.value) set({ dims: r.value, auto: false });
-      else say(`No depth ${k} tree within ${n} rows has t̂ within ${C.TOLERANCE} of t ${T.toFixed(2)}.`);
+        say(`Searching depth ${k} trees within ${n} rows. Free arities up to ${r.value.arity} and d0 up to ${r.value.d0}.`);
+        return requestAnimationFrame(tick);
+      }
+      const { dims, arity, complete } = r.value, allows = `The study allows ${C.MAX_FREE_ARITY}.`;
+      const bound = complete ? "" : arity >= 2 ? `Bounded search. Every tree with free arities up to ${arity} was tried. ${allows}`
+        : `Bounded search. The work cap stopped it inside the free arity 2 shell. ${allows}`;
+      // set() clears the message, so the bound follows it.
+      if (dims) set({ dims, auto: false });
+      say(dims ? bound : `No depth ${k} tree within ${n} rows has t̂ within ${C.TOLERANCE} of t ${T.toFixed(2)}. ${bound}`.trim());
     };
     requestAnimationFrame(tick);
   }
