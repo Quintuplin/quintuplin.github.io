@@ -680,7 +680,7 @@ function boot(saved, patch = (src) => src) {
     return frames.size > 0;
   };
   const flush = () => { for (let i = 0; i < 100 && step(); i++); };
-  return { $: (id) => document.getElementById(id), body, flush, step, looked };
+  return { $: (id) => document.getElementById(id), body, flush, step, looked, store };
 }
 
 const depthInput = ($) => $("ex-depth").querySelector("input");
@@ -812,6 +812,22 @@ test("savedPresetOfOtherTreeDropped", () => {
   const { $, flush } = boot({ dims: [7, 69], T: 0.5, s: 0.5, seed: 753, preset: "p0" });
   flush();
   assert.equal($("ex-preset").value, "custom", "a saved preset id whose tree differs reads as a custom tuple");
+  assert.deepEqual(arities($, 2), [7, 69], "the saved tree loads");
+});
+
+// A saved preset that still names its tree reopens as that preset.
+test("savedPresetOfSameTreeKept", () => {
+  const first = boot();
+  first.flush();
+  const select = first.$("ex-preset"), pair = select.querySelectorAll("option").find((o) => o.textContent.startsWith("(7, 69)"));
+  select.value = pair.value;
+  select.dispatch("change");
+  first.flush();
+  const saved = JSON.parse([...first.store.values()].at(-1));
+  assert.equal(saved.preset, pair.value, "the picked preset is saved");
+  const { $, flush } = boot(saved);
+  flush();
+  assert.equal($("ex-preset").value, pair.value, "the saved preset reopens selected");
   assert.deepEqual(arities($, 2), [7, 69], "the saved tree loads");
 });
 
