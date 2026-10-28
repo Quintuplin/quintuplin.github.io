@@ -993,7 +993,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       // A tree saved under a deeper cap keeps its levels up to the grid max.
       const dims = v.dims.slice(0, MAX_DEPTH), whole = dims.length === v.dims.length;
       Object.assign(state, { dims, T: v.T, s: v.s, auto: !!v.auto, flat: !!v.flat, d2: v.d2 !== false, quorum: !!v.quorum, pipeline: !!v.pipeline, seed: v.seed,
-        preset: whole && PRESETS.some((p) => p.id === v.preset) ? v.preset : "" });
+        // Preset ids are positions in the current data, so the saved one counts only while it still names this tree.
+        preset: whole && PRESETS.some((p) => p.id === v.preset && same(p.dims, dims) && targetOf(p) === v.T) ? v.preset : "" });
     } catch (e) { /* storage unavailable or malformed: keep defaults */ }
   }
   function save() {

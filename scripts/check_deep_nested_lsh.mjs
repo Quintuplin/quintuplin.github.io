@@ -803,6 +803,18 @@ test("savedDeepStateClamped", () => {
   assert.equal(Number($("ex-t").value), 0.5, "the rest of the saved state loads");
 });
 
+// Guard: preset ids are positions, so a state saved under other study data once named a different preset than its tree.
+test("savedPresetOfOtherTreeDropped", () => {
+  const first = boot();
+  first.flush();
+  const p0 = first.$("ex-preset").querySelectorAll("option").find((o) => o.value === "p0");
+  assert.ok(p0 && !p0.textContent.startsWith("(7, 69)"), "p0 is not the (7, 69) preset");
+  const { $, flush } = boot({ dims: [7, 69], T: 0.5, s: 0.5, seed: 753, preset: "p0" });
+  flush();
+  assert.equal($("ex-preset").value, "custom", "a saved preset id whose tree differs reads as a custom tuple");
+  assert.deepEqual(arities($, 2), [7, 69], "the saved tree loads");
+});
+
 // Equal-rows ladders lose expected errors with every level up to the trim depth, and every tree past depth 2 beats its banding.
 // The page opens on the equal-rows tree at the deepest best measured depth across targets.
 test("defaultReproducesStandaloneOrdering", () => {
