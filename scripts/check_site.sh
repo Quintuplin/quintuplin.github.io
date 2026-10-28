@@ -60,19 +60,31 @@ fi
 
 # The fridge view fits its canvas, leaves the wheel to the page, opens on a multi-camera config and starts as not started (#26).
 fridge=simulations/fridge-event-sim/index.html
-if command -v node >/dev/null 2>&1; then
-	node scripts/check_fridge.mjs "$site/$fridge" || err "fridge behaviour check failed"
-else
-	err "node is missing: scripts/check_fridge.mjs cannot run"
-fi
-grep -q '^#lay {[^}]*max-width: *100%' "$fridge" || err "fridge #lay select caps the config name below its full width"
+checkFridge() { node scripts/check_fridge.mjs "$site/$fridge" || err "fridge behaviour check failed"; }
 
 # The Deep Nested LSH maths matches the study reference and its explorer behaves (#31).
+# The maths check runs in the background beside the fridge and explorer checks, so the job stays under 2 minutes (#46).
+# Its output waits until it ends so the logs do not interleave.
+runDeepChecks() {
+	deep="$site/simulations/deep-nested-lsh/index.html"
+	mathsLog=$(mktemp "${TMPDIR:-/tmp}/deep-maths.XXXXXX")
+	node scripts/check_deep_nested_lsh.mjs "$deep" >"$mathsLog" 2>&1 &
+	maths=$!
+	checkFridge
+	node scripts/check_deep_nested_lsh_explorer.mjs "$deep" || err "deep nested LSH explorer check failed"
+	wait "$maths"
+	mathsStatus=$?
+	cat "$mathsLog"
+	rm -f "$mathsLog"
+	[ "$mathsStatus" -eq 0 ] || err "deep nested LSH maths check failed"
+}
 if command -v node >/dev/null 2>&1; then
-	node scripts/check_deep_nested_lsh.mjs "$site/simulations/deep-nested-lsh/index.html" || err "deep nested LSH check failed"
+	runDeepChecks
 else
-	err "node is missing: scripts/check_deep_nested_lsh.mjs cannot run"
+	err "node is missing: scripts/check_fridge.mjs cannot run"
+	err "node is missing: the deep nested LSH checks cannot run"
 fi
+grep -q '^#lay {[^}]*max-width: *100%' "$fridge" || err "fridge #lay select caps the config name below its full width"
 # Its data generator refuses a dirty study tree or a --sha other than HEAD (#33) and reads the study's depth cap (#41).
 python3 -I scripts/check_build_deep_nested_lsh_data.py || err "deep nested LSH generator check failed"
 # The outcome chip may shrink and wrap, so the FN chip stays inside the narrow root rung on phones (#31).
