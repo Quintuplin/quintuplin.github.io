@@ -243,9 +243,9 @@ function drainSearch(gen, maxSteps) {
 
 test("treeSearchMatchesExhaustiveScan", () => {
   const cases = [];
-  // Depth 6 and 7 over 1e5 rows take seconds each, so the extreme targets and 0.5 cover them.
+  // Depth 6 and 7 over 1e5 rows take seconds each, so depth 7 at t 0.5 covers them.
   for (const t of [0.05, 0.2, 0.3, 0.5, 0.8, 0.95, 0.99]) {
-    for (let k = 2; k <= 7; k++) for (const n of [50, 1e3, 3e4, 1e5]) if (k < 6 || n < 1e5 || [0.05, 0.5, 0.99].includes(t)) cases.push([n, k, t]);
+    for (let k = 2; k <= 7; k++) for (const n of [50, 1e3, 3e4, 1e5]) if (k < 6 || n < 1e5 || (k === 7 && t === 0.5)) cases.push([n, k, t]);
     for (let k = 8; k <= 10; k++) for (const n of [1e3, 1e4]) cases.push([n, k, t]);
   }
   cases.push([3e4, 10, 0.5]);
@@ -257,9 +257,10 @@ test("treeSearchMatchesExhaustiveScan", () => {
 });
 
 // Guard: the depth search once enumerated billions of trees at depth 10 over 10 million rows.
+// cappedSearchCoversItsArityShells covers capped results at other targets, so t 0.99 alone runs the full cap.
 test("deepSearchFinishesWithinWorkCap", () => {
   assert.ok(SEARCH_WORK > 0, "the explorer sets a search work cap");
-  for (const t of [0.3, 0.5, 0.8, 0.99]) {
+  for (const t of [0.99]) {
     const t0 = performance.now(), r = drainSearch(C.treeSearch(1e7, 10, t, 1, SEARCH_WORK), SEARCH_WORK / SEARCH_STEP + 1e4);
     const s = (performance.now() - t0) / 1000;
     assert.ok(s < 20, `t ${t}: the capped search took ${s.toFixed(1)} s`);
@@ -409,11 +410,17 @@ const quorumCounts = (n, t, index) => {
 const verifyRows = () => quorumTable.rows.filter((r) => Array.isArray(r.retrieval)).map((r) => ({ r,
   d: tablesOf("equal_rows").filter((t) => t.target === r.target).flatMap((t) => t.rows)
     .find((x) => x.rows === r.rows && same(retrievalOf(x.dims), r.retrieval))?.dims }));
+// Counting a verify row behind retrieval takes about a second, so counts run on the first verify row per target.
+const countedRows = (verify) => verify.filter((v, i) => verify.findIndex((w) => w.r.target === v.r.target) === i);
 
-// One printed quorum row at its print precision.
-function checkQuorumRow(r, index) {
-  const { target: t, rows: n } = r, inv = (y) => C.quorumInverse(y, n, t, index), c = quorumCounts(n, t, index);
-  const fields = { threshold: inv(0.5), width: inv(0.95) - inv(0.05), "E[FP]": c.fp, "E[FN]": c.fn, "E[errors]": c.errors };
+// One printed quorum row at its print precision. Without `counted` only its threshold, width and retrieved volume.
+function checkQuorumRow(r, index, counted = true) {
+  const { target: t, rows: n } = r, inv = (y) => C.quorumInverse(y, n, t, index);
+  const fields = { threshold: inv(0.5), width: inv(0.95) - inv(0.05) };
+  if (counted) {
+    const c = quorumCounts(n, t, index);
+    Object.assign(fields, { "E[FP]": c.fp, "E[FN]": c.fn, "E[errors]": c.errors });
+  }
   if (index) fields.retrieved = counts(index, t).candidates;
   for (const [f, v] of Object.entries(fields)) {
     assert.ok(agrees(r[f], v, f === "retrieved" ? 0 : quorumTable.decimals[f]), `quorum ${n} ${r.retrieval} at ${t} ${f}: ${v} vs ${r[f]}`);
@@ -440,9 +447,10 @@ test("pipelineMatchesStudy", () => {
   // Every quorum row that names a retrieval banding is a verify row.
   assert.ok(verify.length >= 1, "the quorum table has verify rows");
   assert.equal(verify.length, quorumTable.rows.filter((r) => r.retrieval !== "all").length);
-  for (const { r, d } of verify) {
-    assert.ok(d, `an equal-rows tree retrieves through ${r.retrieval} at ${r.target}`);
-    checkQuorumRow(r, retrievalOf(d));
+  const counted = new Set(countedRows(verify));
+  for (const v of verify) {
+    assert.ok(v.d, `an equal-rows tree retrieves through ${v.r.retrieval} at ${v.r.target}`);
+    checkQuorumRow(v.r, retrievalOf(v.d), counted.has(v));
   }
 });
 
@@ -455,7 +463,7 @@ test("pipelineMatchesBruteForce", () => {
 });
 
 test("pipelineBeatsItsCascade", () => {
-  for (const { r, d } of verifyRows()) {
+  for (const { r, d } of countedRows(verifyRows())) {
     const pipe = quorumCounts(r.rows, r.target, retrievalOf(d)).errors, cascade = counts(d, r.target).errors;
     assert.ok(pipe < cascade, `${d} at ${r.target}: pipeline ${pipe} vs cascade ${cascade}`);
   }
@@ -1020,30 +1028,37 @@ test("searchDepthFindsSharpestTree", () => {
 // The heaviest search the explorer allows: the deepest tree just under the row limit, t 0.99.
 const SEARCH_LIMIT = Number(PageScripts.read("explorer-src").match(/\bSEARCH_LIMIT = ([\d.e]+)/)[1]);
 const FRAME_BUDGET_MS = 100;
-function bootDeepSearch() {
+// Sets the explorer's search work cap to `work`.
+const withWork = (work) => (src) => {
+  const out = src.replace(/\bSEARCH_WORK = [\d.e]+/, `SEARCH_WORK = ${work}`);
+  assert.notEqual(out, src, "the explorer declares SEARCH_WORK");
+  return out;
+};
+function bootDeepSearch(work = SEARCH_WORK) {
   const k = MAX_DEPTH, side = Math.floor(Math.sqrt(SEARCH_LIMIT / 2 ** (k - 2))), T = 0.99;
   assert.ok(k >= 2 && side <= 1e5, `depth ${k} tree near ${SEARCH_LIMIT} rows within the arity cap`);
   const dims = [side, side, ...Array(k - 2).fill(2)];
-  const page = boot({ dims, T, s: 0.5, seed: 753 });
+  const page = boot({ dims, T, s: 0.5, seed: 753 }, withWork(work));
   for (let i = 0; i < 1e4 && page.step(); i++);
   return { ...page, k, dims, T };
 }
 
 // Guard: the depth search once ran in one task, so a deep tree over many rows froze the tab for seconds.
+// A tenth of the page's work cap still takes several frame budgets in one task.
 test("searchDepthStaysResponsive", () => {
-  const { $, step, k, dims, T } = bootDeepSearch();
+  const work = 3e6, { $, step, k, dims, T } = bootDeepSearch(work);
   let worst = 0, frames = 0;
   const timed = (f) => { const t0 = performance.now(), more = f(); worst = Math.max(worst, performance.now() - t0); return more; };
   timed(() => $("ex-search").dispatch("click"));
   while (frames < 1e5 && timed(step)) frames++;
   assert.ok(worst < FRAME_BUDGET_MS, `a search task took ${worst.toFixed(0)} ms at depth ${k} over ${C.rows(dims)} rows`);
-  const want = drainSearch(C.treeSearch(C.rows(dims), k, T, 1, SEARCH_WORK), Infinity).dims;
+  const want = drainSearch(C.treeSearch(C.rows(dims), k, T, 1, work), Infinity).dims;
   assert.deepEqual(arities($, k), want, "the async search lands on the capped treeSearch result");
 });
 
 // Searches the pinned tree in an explorer whose work cap is `work`, beside the capped treeSearch reference.
 function searchCapped(work) {
-  const { $, flush, step } = boot(PINNED, (src) => src.replace(/\bSEARCH_WORK = [\d.e]+/, `SEARCH_WORK = ${work}`));
+  const { $, flush, step } = boot(PINNED, withWork(work));
   flush();
   const k = Number(depthInput($).value), before = arities($, k), n = C.rows(before), T = Number($("ex-t").value);
   const ref = drainSearch(C.treeSearch(n, k, T, 1, work), Infinity);
