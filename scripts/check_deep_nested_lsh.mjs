@@ -702,8 +702,49 @@ test("runRightAfterShapeChangeUsesNewTree", () => {
   // Run lands before the frame that redraws the ladder for the new tree.
   assert.doesNotThrow(() => $("ex-one").dispatch("click"));
   const rungs = $("ex-ladder").querySelectorAll(".rung");
-  assert.equal(rungs.length, 3, "root, L0 and rows for a depth 2 tree");
+  assert.equal(rungs.length, 2, "L1 and L0 for a depth 2 tree");
   assert.ok(rungs[0].querySelector(".outcome"), "root rung shows the outcome chip");
+});
+
+// Guard: each rung once drew the fan-out of the level above it, so its tiles disagreed with its own arity.
+test("rungTilesMatchArity", () => {
+  const dims = [2, 18, 4, 3], s = 0.673, k = dims.length, p = C.levels(s, dims);
+  const { $, flush, body } = boot({ dims, T: 0.5, s, seed: 753 });
+  flush();
+  const ladder = () => $("ex-ladder").querySelectorAll(".rung");
+  // A rung's drawn tiles, the count its "+k · j on" tile hides and how many of all its tiles fired.
+  const tilesOf = (r) => {
+    const shown = r.querySelectorAll(".tile").filter((t) => !t.classList.contains("more")), more = r.querySelector(".tile.more");
+    const [, hidden = 0, on = 0] = more?.textContent.match(/^\+(\d+)(?: · (\d+) on)?$/) || [];
+    return { shown, more, hidden: Number(hidden), on: Number(on) + shown.filter((t) => t.classList.contains("on")).length };
+  };
+  assert.equal(ladder().length, k, "one rung per level");
+  const curves = body.querySelectorAll(".lvl-curve");
+  ladder().forEach((r, i) => {
+    const j = k - 1 - i, { shown, more, hidden } = tilesOf(r);
+    const [, op, level, shownP] = r.querySelector(".rung-l").textContent.match(/^(AND|OR) L(\d+)p (\S+)$/) || [];
+    assert.equal(Number(level), j, `rung ${i} is L${j}`);
+    assert.equal(op, C.isOr(j) ? "OR" : "AND", `L${j} names its operation`);
+    assert.ok(Math.abs(Number(shownP) - p[j]) < 5e-4, `L${j} p ${shownP} against ${p[j]}`);
+    assert.equal(r.querySelectorAll("input").length, 1, `L${j} holds one stepper`);
+    assert.equal(Number(r.querySelector(`[aria-label="arity d${j}"]`)?.value), dims[j], `L${j} holds the arity d${j} stepper`);
+    assert.equal(shown.length + hidden, dims[j], `L${j} tiles and +k add to d${j}`);
+    assert.equal(!!more, dims[j] > shown.length, `L${j} shows +k only when d${j} exceeds the drawn tiles`);
+    assert.equal(shown.every((t) => t.classList.contains("cell")), j === 0, "only L0 draws signature rows");
+    r.dispatch("pointerenter");
+    assert.deepEqual(curves.map((c) => c.classList.contains("hot")), curves.map((_, x) => x === j), `hovering L${j} picks out its curve`);
+    r.dispatch("pointerleave");
+  });
+  $("ex-one").dispatch("click");
+  flush();
+  const after = ladder(), fires = (j, on) => (C.isOr(j) ? on > 0 : on === dims[j]);
+  // Rung j draws the children of the first node on the rung above, so they must agree with that tile.
+  after.forEach((r, i) => {
+    if (i) assert.equal(fires(k - 1 - i, tilesOf(r).on), tilesOf(after[i - 1]).shown[0].classList.contains("on"), `L${k - 1 - i} children agree with their parent`);
+  });
+  const chip = after[0].querySelector(".outcome");
+  assert.ok(chip, "the top rung carries the outcome chip");
+  assert.equal(["TP", "FP"].includes(chip.dataset.k), fires(k - 1, tilesOf(after[0]).on), "the chip follows the root's children");
 });
 
 test("everyExplorerIdInMarkup", () => {
@@ -780,7 +821,7 @@ test("depthCappedAtGrid", () => {
     setDepth($, flush, k);
     const want = Math.min(k, MAX_DEPTH);
     assert.equal(Number(depthInput($).value), want, `depth ${k} asked`);
-    assert.equal($("ex-ladder").querySelectorAll(".rung").length, want + 1, `rungs for depth ${k} asked`);
+    assert.equal($("ex-ladder").querySelectorAll(".rung").length, want, `rungs for depth ${k} asked`);
   }
   const { $, flush } = boot();
   flush();
