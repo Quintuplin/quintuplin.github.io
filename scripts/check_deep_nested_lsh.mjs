@@ -29,6 +29,8 @@ const MAX_DEPTH = study.provenance.grid.max_depth, PAIRS = study.facts.corpus?.p
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const counts = (d, t) => C.expectedCounts((s) => C.curve(s, d), PAIRS, t);
 const tablesOf = (...kinds) => Object.values(study.tables).filter((t) => kinds.includes(t.kind));
+const SEARCH_STEP = Number(PageScripts.read("cascade-src").match(/\bSEARCH_STEP = (\d+)/)[1]);
+const SEARCH_WORK = Number(PageScripts.read("explorer-src").match(/\bSEARCH_WORK = ([\d.e]+)/)?.[1]);
 
 // Measured errors over the seed draws of the table tree with these dims at t, or null when the study ran none.
 function measuredFor(d, t) {
@@ -142,6 +144,17 @@ test("parityPinnedAtProvenanceSha", () => {
   assert.ok(parity.rows.every((r) => r.counts?.length === parity.targets.length), "every parity row carries expected counts per target");
 });
 
+// The depth cap follows the study's rule over its best measured depths: the trim depth unless a ladder does best deeper.
+test("gridCapFollowsBestDepthTable", () => {
+  const best = study.tables.lsh_best_depth_table?.rows || [];
+  assert.ok(best.length, "the page embeds the study's best-depth table");
+  const { trim_depth: trim, search_max_depth: deepest } = study.provenance.grid;
+  assert.ok(trim >= 2 && deepest >= trim, `trim depth ${trim} and search depth ${deepest}`);
+  assert.equal(MAX_DEPTH, Math.max(...best.map((r) => r["best depth"])) <= trim ? trim : deepest);
+  // The study trims its tables to the cap, so the deepest table tree sits at it.
+  assert.equal(Math.max(...tablesOf("cascade", "equal_rows").flatMap((t) => t.rows.map((r) => r.depth))), MAX_DEPTH);
+});
+
 test("reproducesPrintedTableValues", () => {
   const checks = tableChecks(study.tables);
   assert.ok(checks.length >= 1000, `only ${checks.length} checks`);
@@ -169,7 +182,10 @@ test("bestTreeMatchesTables", () => {
       const options = [Math.max(2, Math.floor(solved)), Math.max(2, Math.ceil(solved))];
       assert.ok(options.includes(d[1]), `${row.config} t ${t.target}: d1 ${d[1]} not in ${options}`);
       const [low, high] = t.kind === "cascade" ? [1, ref] : [Math.floor(ref * (1 - band)), Math.floor(ref * (1 + band))];
-      assert.deepEqual(C.bestTree(high, depth, t.target, low), d, `${t.kind} ${row.config} t ${t.target}`);
+      // The explorer's capped search finishes on every table tree.
+      const r = drainSearch(C.treeSearch(high, depth, t.target, low, SEARCH_WORK), Infinity);
+      assert.ok(r.complete, `${t.kind} ${row.config} t ${t.target} stops at the work cap`);
+      assert.deepEqual(r.dims, d, `${t.kind} ${row.config} t ${t.target}`);
       searched += 1;
     }
   }
@@ -224,8 +240,6 @@ function drainSearch(gen, maxSteps) {
     assert.ok(steps < maxSteps, `the search ran past ${maxSteps} steps`);
   }
 }
-const SEARCH_STEP = Number(PageScripts.read("cascade-src").match(/\bSEARCH_STEP = (\d+)/)[1]);
-const SEARCH_WORK = Number(PageScripts.read("explorer-src").match(/\bSEARCH_WORK = ([\d.e]+)/)?.[1]);
 
 test("treeSearchMatchesExhaustiveScan", () => {
   const cases = [];
@@ -423,7 +437,9 @@ test("pipelineMatchesStudy", () => {
     for (const [t, q] of Object.entries(r.quorum)) parity.s.forEach((s, i) => close(C.pipelineCurve(s, r.dims, +t), q.pipeline[i], `pipeline ${r.dims} at ${t} s ${s}`));
   }
   const verify = verifyRows();
-  assert.equal(verify.length, 12);
+  // Every quorum row that names a retrieval banding is a verify row.
+  assert.ok(verify.length >= 1, "the quorum table has verify rows");
+  assert.equal(verify.length, quorumTable.rows.filter((r) => r.retrieval !== "all").length);
   for (const { r, d } of verify) {
     assert.ok(d, `an equal-rows tree retrieves through ${r.retrieval} at ${r.target}`);
     checkQuorumRow(r, retrievalOf(d));
@@ -672,6 +688,8 @@ const setDepth = ($, flush, k) => { const input = depthInput($); input.value = S
 // The arities the ladder shows, d0 first.
 const arities = ($, k) => Array.from({ length: k }, (_, j) => Number($("ex-ladder").querySelector(`[aria-label="arity d${j}"]`).value));
 const shows = (text, v) => new RegExp(`(^|[^\\d.])${String(v).replace(".", "\\.")}($|[^\\d])`).test(text);
+// A saved depth 5 state for checks that need a fixed tree, so they do not move with the default.
+const PINNED = { dims: [2, 17, 7, 8, 3], T: 0.3, s: 0.5, seed: 753 };
 
 // ---- BehaviourChecks ----
 test("runRightAfterShapeChangeUsesNewTree", () => {
@@ -699,7 +717,7 @@ test("everyExplorerIdInMarkup", () => {
 });
 
 test("trialSeedReplaysTrials", () => {
-  const { $, flush, step } = boot();
+  const { $, flush, step } = boot(PINNED);
   flush();
   // Each trial dot carries a title with its counts at that s. Linear-hash runs take many frames, so run drains them.
   const dots = () => $("ex-curve").querySelectorAll("title").map((t) => t.textContent);
@@ -785,31 +803,75 @@ test("savedDeepStateClamped", () => {
   assert.equal(Number($("ex-t").value), 0.5, "the rest of the saved state loads");
 });
 
-// Equal-rows ladders lose expected errors with every level. The page opens on the deepest one against its banding.
+// Equal-rows ladders lose expected errors with every level up to the trim depth, and every tree past depth 2 beats its banding.
+// The page opens on the equal-rows tree at the deepest best measured depth across targets.
 test("defaultReproducesStandaloneOrdering", () => {
-  const ladders = tablesOf("equal_rows").sort((a, b) => a.target - b.target);
+  const ladders = tablesOf("equal_rows").sort((a, b) => a.target - b.target), trim = study.provenance.grid.trim_depth;
   assert.ok(ladders.length >= 3, "an equal-rows ladder per target");
   for (const t of ladders) {
     const rows = t.rows.slice().sort((a, b) => a.depth - b.depth), errs = rows.map((r) => counts(r.dims, t.target).errors);
-    errs.slice(1).forEach((e, i) => assert.ok(e < errs[i], `t ${t.target}: depth ${rows[i + 1].depth} ${e} vs depth ${rows[i].depth} ${errs[i]}`));
+    assert.ok(rows.some((r) => r.depth === trim), `t ${t.target} reaches depth ${trim}`);
+    errs.slice(1).forEach((e, i) => rows[i + 1].depth > trim
+      || assert.ok(e < errs[i], `t ${t.target}: depth ${rows[i + 1].depth} ${e} vs depth ${rows[i].depth} ${errs[i]}`));
+    rows.forEach((r, i) => {
+      const b = C.bestTree(C.rows(r.dims), 2, t.target), be = counts(b, t.target).errors;
+      assert.ok(r.depth < 3 || errs[i] < be, `t ${t.target}: depth ${r.depth} ${errs[i]} vs banding ${b} ${be}`);
+    });
   }
-  const low = ladders[0], tree = low.rows.filter((r) => r.depth <= MAX_DEPTH).sort((a, b) => b.depth - a.depth)[0];
-  const banding = C.bestTree(C.rows(tree.dims), 2, low.target);
-  const mine = counts(tree.dims, low.target).errors, theirs = counts(banding, low.target).errors;
+  const best = (study.tables.lsh_best_depth_table?.rows || []).filter((r) => r.sweep === "equal")
+    .sort((a, b) => b["best depth"] - a["best depth"] || a.target - b.target)[0];
+  assert.ok(best, "the best-depth table covers the equal-rows ladders");
+  const ladder = ladders.find((t) => t.target === best.target), tree = ladder.rows.find((r) => r.depth === best["best depth"]);
+  assert.ok(tree, `the t ${best.target} ladder has depth ${best["best depth"]}`);
+  const banding = C.bestTree(C.rows(tree.dims), 2, ladder.target);
+  const mine = counts(tree.dims, ladder.target).errors, theirs = counts(banding, ladder.target).errors;
   assert.ok(mine < theirs, `${tree.dims} ${mine} vs banding ${banding} ${theirs}`);
   const { $, flush } = boot();
   flush();
   assert.deepEqual(arities($, tree.dims.length), tree.dims);
-  assert.equal(Number($("ex-t").value), low.target);
+  assert.equal(Number($("ex-t").value), ladder.target);
   const text = $("ex-readout").textContent;
   for (const v of [mine, theirs]) assert.ok(shows(text, v), `readout shows expected errors ${v}: ${text}`);
   assert.ok(text.includes(`(${banding.join(", ")})`), `readout names the banding ${banding}: ${text}`);
   // Measured means over the seed draws sit beside the theory.
   for (const d of [tree.dims, banding]) {
-    const m = measuredFor(d, low.target);
+    const m = measuredFor(d, ladder.target);
     assert.ok(m, `the study measured ${d}`);
     assert.ok(shows(text, m.mean.toFixed(1)), `readout shows measured mean ${m.mean.toFixed(1)} for ${d}: ${text}`);
   }
+});
+
+// A ladder's best measured depth has the least mean errors over the seed draws, ties going to the shallower depth.
+// The equal-rows and top-budget presets mark that tree on each ladder.
+test("bestDepthTableMatchesSeedMeans", () => {
+  const best = study.tables.lsh_best_depth_table?.rows || [], TOP = study.facts.top_budget;
+  assert.ok(best.length >= 3, "the page embeds the study's best-depth table");
+  const seeds = tablesOf("seed_spread").flatMap((s) => s.rows);
+  const ladderOf = (t, sweep) => sweep === "equal" ? tablesOf("equal_rows").filter((x) => x.target === t).flatMap((x) => x.rows)
+    : tablesOf("cascade").filter((x) => x.target === t).flatMap((x) => x.rows).filter((r) => r.config.startsWith(`${sweep}_`));
+  const want = [];
+  for (const { target: t, sweep, "best depth": depth } of best) {
+    const scored = ladderOf(t, sweep).map((r) => {
+      const draws = seeds.find((x) => x.target === t && x.config === r.config)?.["errors by draw"];
+      assert.ok(draws, `the study measured ${r.config} at t ${t}`);
+      return { r, mean: draws.reduce((a, b) => a + b, 0) / draws.length };
+    });
+    assert.ok(scored.length >= 2, `t ${t} ${sweep} ladder`);
+    const pick = scored.reduce((a, b) => (b.mean < a.mean || (b.mean === a.mean && b.r.depth < a.r.depth) ? b : a));
+    assert.equal(pick.r.depth, depth, `t ${t} ${sweep}`);
+    if (sweep === "equal" || sweep === `n${TOP}`) want.push(`${t} ${pick.r.dims}`);
+  }
+  const { $, flush } = boot();
+  flush();
+  const select = $("ex-preset"), marked = [];
+  for (const o of select.querySelectorAll("option").filter((x) => /best measured/.test(x.textContent))) {
+    select.value = o.value;
+    select.dispatch("change");
+    flush();
+    const k = Number(depthInput($).value);
+    marked.push(`${Number($("ex-t").value)} ${arities($, k)}`);
+  }
+  assert.deepEqual(marked.sort(), want.sort());
 });
 
 const drain = (step) => { for (let i = 0; i < 1e5 && step(); i++); };
@@ -909,9 +971,9 @@ test("searchDepthStaysResponsive", () => {
   assert.deepEqual(arities($, k), want, "the async search lands on the capped treeSearch result");
 });
 
-// Searches the default tree in an explorer whose work cap is `work`, beside the capped treeSearch reference.
+// Searches the pinned tree in an explorer whose work cap is `work`, beside the capped treeSearch reference.
 function searchCapped(work) {
-  const { $, flush, step } = boot(undefined, (src) => src.replace(/\bSEARCH_WORK = [\d.e]+/, `SEARCH_WORK = ${work}`));
+  const { $, flush, step } = boot(PINNED, (src) => src.replace(/\bSEARCH_WORK = [\d.e]+/, `SEARCH_WORK = ${work}`));
   flush();
   const k = Number(depthInput($).value), before = arities($, k), n = C.rows(before), T = Number($("ex-t").value);
   const ref = drainSearch(C.treeSearch(n, k, T, 1, work), Infinity);

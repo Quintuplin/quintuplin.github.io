@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that the Deep Nested LSH generator pins its data to one clean study commit.
+"""Check that the Deep Nested LSH generator pins its data to one clean study commit and reads the study's depth cap.
 
 Self-contained: builds throwaway git repos, so CI needs only python3 and git.
 Usage: check_build_deep_nested_lsh_data.py
@@ -28,7 +28,35 @@ def load_generator():
     return module
 
 
-study_sha = load_generator().study_sha
+generator = load_generator()
+study_sha = generator.study_sha
+
+
+class StudyGrid(unittest.TestCase):
+    """Stands in for lsh_grid_analysis at its depth cap rule, which has no CASCADE_MAX_DEPTH."""
+
+    lga = types.SimpleNamespace(SEARCH_MAX_DEPTH=10, TRIM_DEPTH=5, CASCADE_THRESHOLD_TOLERANCE=0.01, CASCADE_MAX_FREE_ARITY=24,
+                                EQUAL_ROWS_TOLERANCE=0.05,
+                                reported_depth_cap=lambda best: 5 if max(best.values()) <= 5 else 10)
+
+    def best_table(self, depths):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = Path(tmp.name) / "lsh_best_depth_table.txt"
+        lines = ["target  sweep   best depth", "------  ------  ----------"]
+        lines += [f"{t:<6}  {s:<6}  {d:<10}" for t, s, d in depths]
+        path.write_text("\n".join(lines) + "\n")
+        return generator.read_table(path)
+
+    # Guard: the generator read lga.CASCADE_MAX_DEPTH, which the study dropped, and crashed with an AttributeError.
+    def test_grid_cap_reads_best_depth_table(self):
+        deep = self.best_table([(0.3, "equal", 6), (0.5, "equal", 9), (0.8, "n1000", 5)])
+        self.assertEqual(deep["kind"], "best_depth")
+        self.assertEqual(deep["rows"][1], {"target": 0.5, "sweep": "equal", "best depth": 9})
+        grid = generator.study_grid(self.lga, {"lsh_best_depth_table": deep})
+        self.assertEqual((grid["max_depth"], grid["search_max_depth"], grid["trim_depth"]), (10, 10, 5))
+        shallow = self.best_table([(0.3, "equal", 5), (0.5, "n250", 3)])
+        self.assertEqual(generator.study_grid(self.lga, {"lsh_best_depth_table": shallow})["max_depth"], 5)
 
 
 class StudySha(unittest.TestCase):
