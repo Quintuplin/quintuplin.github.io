@@ -20,7 +20,7 @@ import numpy as np
 SITE = Path(__file__).resolve().parent.parent
 PAGE = SITE / "simulations/deep-nested-lsh/index.html"
 FIXTURE = SITE / "scripts/fixtures/deep-nested-lsh-parity.json"
-TABLE_KINDS = ["best_depth", "cascade","equal_rows", "error_area", "high_cap_family", "algorithm", "quorum", "seed_spread"]
+TABLE_KINDS = ["best_depth", "cascade", "equal_rows", "error_area", "high_cap_family", "algorithm", "quorum", "seed_spread"]
 S_GRID = [0.0, 1e-06, 0.01] + [round(0.05 * i, 2) for i in range(1, 20)] + [0.99, 0.999999, 1.0]
 Y_GRID = [0.05, 0.5, 0.95]
 TARGETS = [0.3, 0.5, 0.8]
@@ -80,6 +80,10 @@ def study_grid(lga, tables: dict) -> dict:
     return {"max_depth": lga.reported_depth_cap(best), "search_max_depth": lga.SEARCH_MAX_DEPTH, "trim_depth": lga.TRIM_DEPTH,
             "tolerance": lga.CASCADE_THRESHOLD_TOLERANCE, "max_free_arity": lga.CASCADE_MAX_FREE_ARITY,
             "equal_rows_tolerance": lga.EQUAL_ROWS_TOLERANCE}
+
+
+def provenance(sha: str, lga, tables: dict) -> dict:
+    return {"sha": sha, "grid": study_grid(lga, tables)}
 
 
 def corpus_facts(lga, study: Path) -> dict:
@@ -243,7 +247,7 @@ def main() -> None:
     tables = read_tables(study)
     corpus = corpus_facts(lga, study)
     data = {
-        "provenance": {"sha": sha, "grid": study_grid(lga, tables)},
+        "provenance": provenance(sha, lga, tables),
         "facts": {"top_budget": lga.MAX_SIGNATURE_ROWS, "corpus": corpus},
         "tables": tables,
     }

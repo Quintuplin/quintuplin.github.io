@@ -48,15 +48,17 @@ class StudyGrid(unittest.TestCase):
         path.write_text("\n".join(lines) + "\n")
         return generator.read_table(path)
 
-    # Guard: the generator read lga.CASCADE_MAX_DEPTH, which the study dropped, and crashed with an AttributeError.
+    # Guard: main()'s provenance read lga.CASCADE_MAX_DEPTH, which the study dropped, and crashed with an AttributeError.
     def test_grid_cap_reads_best_depth_table(self):
         deep = self.best_table([(0.3, "equal", 6), (0.5, "equal", 9), (0.8, "n1000", 5)])
         self.assertEqual(deep["kind"], "best_depth")
         self.assertEqual(deep["rows"][1], {"target": 0.5, "sweep": "equal", "best depth": 9})
-        grid = generator.study_grid(self.lga, {"lsh_best_depth_table": deep})
+        prov = generator.provenance("abc1234", self.lga, {"lsh_best_depth_table": deep})
+        grid = prov["grid"]
+        self.assertEqual(prov["sha"], "abc1234")
         self.assertEqual((grid["max_depth"], grid["search_max_depth"], grid["trim_depth"]), (10, 10, 5))
         shallow = self.best_table([(0.3, "equal", 5), (0.5, "n250", 3)])
-        self.assertEqual(generator.study_grid(self.lga, {"lsh_best_depth_table": shallow})["max_depth"], 5)
+        self.assertEqual(generator.provenance("abc1234", self.lga, {"lsh_best_depth_table": shallow})["grid"]["max_depth"], 5)
 
 
 class StudySha(unittest.TestCase):
