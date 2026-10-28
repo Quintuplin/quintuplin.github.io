@@ -143,7 +143,6 @@ output { font-family: var(--mono); color: var(--ink); font-size: 13.5px; min-wid
 .lvl-curve.AND { stroke: var(--fp); } .lvl-curve.OR { stroke: var(--fn); }
 .lvl-dot { stroke: var(--surface); stroke-width: 1.5; } .lvl-dot.AND { fill: var(--fp); } .lvl-dot.OR { fill: var(--fn); }
 .tiles { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 0; padding: 3px 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--wash); width: max-content; max-width: 100%; }
-.rung.root .tiles { border-color: transparent; background: transparent; padding-left: 6px; }
 .tile { width: 24px; height: 24px; border-radius: 6px; background: var(--off); border: 1px solid var(--line); flex: none; display: grid; place-items: center;
   font: 600 10px/1 var(--mono); color: var(--muted); transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease; }
 .tile.cell { width: 16px; height: 16px; border-radius: 4px; }
@@ -153,7 +152,6 @@ output { font-family: var(--mono); color: var(--ink); font-size: 13.5px; min-wid
 .tile.pop { animation: pop 260ms cubic-bezier(.3,1.6,.5,1) both; }
 @keyframes pop { from { transform: scale(0.55); opacity: 0.4; } to { transform: scale(1); opacity: 1; } }
 .tile.more { width: auto; min-width: 24px; padding: 0 5px; font-size: 11px; border-style: dashed; background: transparent; color: var(--ink2); font-weight: 500; white-space: nowrap; }
-.tile.root { width: auto; padding: 0 10px; height: 30px; font-size: 12px; }
 .stem i { grid-column: 3; display: block; height: 10px; margin-left: 16px; border-left: 2px solid var(--axis); transition: border-color 200ms ease; }
 .stem.flow i { border-left-color: var(--on); }
 @media (prefers-reduced-motion: reduce) { .tile, .stem i, .gauge i { transition: none; } .tile.pop { animation: none; } }
@@ -287,13 +285,13 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>Cascade reading</dt><dd>Odd levels OR their children and even levels AND them. Depth 2 is standard (r, b) banding.</dd>
       <dt>(r, b) banding</dt><dd>Standard LSH with b bands of r rows each. As a tuple it is (r, b) with r = d0 and b = d1.</dd>
       <dt>Flat reading</dt><dd>Every level above the bands ORs. It collapses to two-level banding (d0, n / d0).</dd>
-      <dt>Root and rung</dt><dd>The ladder holds one rung per level with the signature rows at the bottom and the root on top. Each rung sets its level's arity and shows the children of one node. The root is the single top node.</dd>
+      <dt>Root and rung</dt><dd>The ladder holds one rung per level with L0 at the bottom and the root's level on top. Each rung sets its level's arity and draws that many children of one node. The children on L0 are signature rows. The top rung draws the children of the root. The root is the single top node and after a run its chip gives the verdict.</dd>
       <dt>Rung labels Lj</dt><dd>L0 is the level of bands, L1 the level above it and so on up to the root. The AND or OR tag beside each label names that level's operation.</dd>
       <dt>Hidden tile +k · j on</dt><dd>A rung draws only its first children. The last tile counts the k children not drawn and, after a run, the j of them that fired.</dd>
       <dt>Candidate</dt><dd>A pair whose root fires. Only candidates go on to an exact check.</dd>
       <dt>S curve P(s)</dt><dd>The candidate probability curve. P(s) is the chance that a pair of similarity s becomes a candidate.</dd>
       <dt>Per-level curves</dt><dd>Each faint curve traces one level over s. It is the curve the subtree up to that level follows. Hover or focus a rung to pick out its curve.</dd>
-      <dt>p gauges</dt><dd>The p value and bar on each rung give the chance that a node at that level fires at the current s. The rows rung shows s itself.</dd>
+      <dt>p gauges</dt><dd>The p value and bar on each rung give the chance that a node at that level fires at the current s.</dd>
       <dt>Target t</dt><dd>The Jaccard value meant to split pairs. Pairs at or above t should become candidates.</dd>
       <dt>Ideal step</dt><dd>The perfect filter at t. It is 0 below t and 1 at or above t.</dd>
       <dt>Threshold t̂</dt><dd>The s where the candidate probability P(s) crosses one half. The study solves d1 so t̂ lies within 0.01 of t.</dd>
@@ -1259,11 +1257,9 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   // The level picked out in the plot: a hovered or focused rung wins over the one a run is revealing.
   let hovered = null, flowing = null;
 
+  // Rung j draws the d_j children of one level-j node, root's level first. L0's children are signature rows.
   function rungSpec() {
-    const d = state.dims, k = d.length, out = [{ level: k - 1, count: 1, root: true }];
-    for (let j = k - 2; j >= 0; j--) out.push({ level: j, count: d[j + 1] });
-    out.push({ level: -1, count: d[0], rows: true });
-    return out;
+    return state.dims.map((count, level) => ({ level, count })).reverse();
   }
 
   // The tile column width does not depend on the tiles, so one measured rebuild settles the count.
@@ -1284,13 +1280,13 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
 
   function buildRungs(show) {
     shownCap = show;
-    rungs = rungSpec().map((spec, i, all) => {
+    rungs = rungSpec().map((spec) => {
       const row = document.createElement("div");
-      row.className = `rung${spec.root ? " root" : ""}`;
+      row.className = "rung";
       row.setAttribute("role", "group");
-      const label = document.createElement("div"), op = spec.rows ? "" : isOp(spec.level);
+      const label = document.createElement("div"), op = isOp(spec.level);
       label.className = "rung-l";
-      label.innerHTML = spec.rows ? "<span><b>rows</b></span>" : `<span><b class="op ${op}">${op}</b> L${spec.level}</span>`;
+      label.innerHTML = `<span><b class="op ${op}">${op}</b> L${spec.level}</span>`;
       const pText = document.createElement("span"), gauge = document.createElement("i"), bar = document.createElement("i");
       gauge.className = `gauge ${op}`;
       gauge.appendChild(bar);
@@ -1302,7 +1298,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       row.addEventListener("focusout", () => highlight(null));
       const arity = document.createElement("div");
       arity.className = "rung-a";
-      if (!spec.rows) arity.appendChild(arityStepper(spec.level));
+      arity.appendChild(arityStepper(spec.level));
       const cell = document.createElement("div");
       cell.className = "rung-t";
       const tiles = document.createElement("div");
@@ -1312,8 +1308,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       const cells = [];
       for (let i2 = 0; i2 < visible; i2++) {
         const t = document.createElement("span");
-        t.className = `tile${spec.rows ? " cell" : ""}${spec.root ? " root" : ""}${!spec.rows && i2 === 0 && i < all.length - 1 ? " first" : ""}`;
-        if (spec.root) t.textContent = "root";
+        t.className = `tile${spec.level === 0 ? " cell" : i2 === 0 ? " first" : ""}`;
         tiles.appendChild(t);
         cells.push(t);
       }
@@ -1344,12 +1339,12 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   function renderLadderP() {
     const d = state.dims, p = C.levels(state.s, d);
     for (const r of rungs) {
-      const { level, rows } = r.spec, prob = rows ? state.s : p[level];
+      const { level } = r.spec, prob = p[level];
       // A three digit exponent drops the decimal so "p 8e-100" still fits the 64 px label column.
       const shown = prob < 1e-3 && prob > 0 ? prob.toExponential(prob < 1e-99 ? 0 : 1) : num(prob, 3);
       r.pText.textContent = `p ${shown}`;
       r.bar.style.width = `${(100 * prob).toFixed(1)}%`;
-      r.row.setAttribute("aria-label", `${rows ? "Signature rows" : `L${level} ${isOp(level)} of ${d[level]}`}. Fires with probability ${shown} at s ${state.s.toFixed(3)}`);
+      r.row.setAttribute("aria-label", `L${level} ${isOp(level)} of ${d[level]}. Fires with probability ${shown} at s ${state.s.toFixed(3)}`);
     }
   }
 
@@ -1357,7 +1352,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     flowing = null;
     emphasise();
     for (const r of rungs) {
-      for (const t of r.cells) { t.classList.remove("on", "off", "pop"); t.style.animationDelay = ""; if (r.spec.root) t.textContent = "root"; }
+      for (const t of r.cells) { t.classList.remove("on", "off", "pop"); t.style.animationDelay = ""; }
       if (r.more) r.more.textContent = `+${r.hidden}`;
       if (r.stem) r.stem.classList.remove("flow");
       r.row.querySelector(".outcome")?.remove();
@@ -1396,19 +1391,20 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     if (C.rows(d) > C.ROW_CAP) return;
     const pair = C.drawPair(state.s, rng, PAIR.size, PAIR.vocab), s = pair.s, trial = C.sampleTree(pair, d, hashes);
     resetTiles();
-    // Rungs run root first, so walk them in reverse: rows, L0, L1 up to the root.
+    // Rungs run root first, so walk them in reverse: L0, L1 up to the root.
     const order = rungs.slice().reverse();
-    const valuesFor = (r) => (r.spec.rows ? trial.bits.subarray(0, r.spec.count) : trial.levels[r.spec.level].subarray(0, r.spec.count));
+    // Node 0 of level j has the first d_j nodes of level j − 1 as children, or the first d0 rows at level 0.
+    const valuesFor = ({ spec: { level, count } }) => (level ? trial.levels[level - 1] : trial.bits).subarray(0, count);
     // With the pipeline on a pair counts when a kept band fires and enough rows agree.
     const pipe = state.pipeline, fired = pipe ? C.verified(trial.bits, d, T) : trial.levels[d.length - 1][0] === 1;
     const instant = motion.matches;
     const finish = () => {
       const kind = outcome(fired, s, T), root = rungs[0];
-      root.cells[0].textContent = pipe ? (fired ? "accepted" : "rejected") : fired ? "candidate" : "not candidate";
+      const verdict = pipe ? (fired ? "accepted" : "rejected") : fired ? "candidate" : "not candidate";
       const chip = document.createElement("span");
       chip.className = "outcome";
       chip.dataset.k = kind;
-      chip.textContent = `${kind} ${OUTCOME[kind]}`;
+      chip.textContent = `${verdict} · ${kind} ${OUTCOME[kind]}`;
       root.row.querySelector(".tiles").appendChild(chip);
       record(s, fired ? 1 : 0, 1);
       say(`A pair at s′ ${s.toFixed(3)} against target ${T.toFixed(2)}. ${pipe ? `The pipeline ${fired ? "retrieved and verified the pair" : "dropped the pair"}` : `The root ${fired ? "fired so the pair is a candidate" : "stayed off so the pair is dropped"}`}. ${OUTCOME[kind]}.`);
@@ -1549,7 +1545,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     plot.lvl.forEach((p, j) => p.classList.toggle("hot", j === lvl));
     plot.lvlDot.forEach((c, j) => c.setAttribute("r", j === lvl ? 4.5 : 3));
     for (const r of rungs) r.row.classList.toggle("hot", lvl !== null && r.spec.level === lvl);
-    if (lvl === null || lvl < 0 || lvl >= D.k) { plot.lvlTag.style.display = "none"; return; }
+    if (lvl === null || lvl >= D.k) { plot.lvlTag.style.display = "none"; return; }
     const p = (D.profile ||= C.profile(D.d))[lvl], text = `L${lvl} ${isOp(lvl)} t ${num(p.mid, 2)} W ${num(p.width, 2)}`;
     plot.lvlText.textContent = text;
     plot.lvlBox.setAttribute("width", Math.round(text.length * 6.6 + 16));
