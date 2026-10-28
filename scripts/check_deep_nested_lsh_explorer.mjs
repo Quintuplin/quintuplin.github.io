@@ -471,11 +471,18 @@ test("searchDepthFindsSharpestTree", () => {
 const SEARCH_LIMIT = Number(PageScripts.read("explorer-src").match(/\bSEARCH_LIMIT = ([\d.e]+)/)[1]);
 const FRAME_BUDGET_MS = 100;
 // Sets the explorer's search work cap to `work`.
+const WORK_DECLARATION = /\bSEARCH_WORK = [\d.e]+/;
 const withWork = (work) => (src) => {
-  const out = src.replace(/\bSEARCH_WORK = [\d.e]+/, `SEARCH_WORK = ${work}`);
-  assert.notEqual(out, src, "the explorer declares SEARCH_WORK");
-  return out;
+  assert.match(src, WORK_DECLARATION, "the explorer declares SEARCH_WORK");
+  return src.replace(WORK_DECLARATION, `SEARCH_WORK = ${work}`);
 };
+// Guard: a page already at the requested cap once failed as if it lacked the declaration.
+test("withWorkPatchesTheDeclaration", () => {
+  const src = "const SEARCH_WORK = 30000000;";
+  assert.equal(withWork(30000000)(src), src);
+  assert.equal(withWork(5)(src), "const SEARCH_WORK = 5;");
+  assert.throws(() => withWork(5)("const SEARCH_STEP = 1;"), /declares SEARCH_WORK/);
+});
 function bootDeepSearch(work = SEARCH_WORK) {
   const k = MAX_DEPTH, side = Math.floor(Math.sqrt(SEARCH_LIMIT / 2 ** (k - 2))), T = 0.99;
   assert.ok(k >= 2 && side <= 1e5, `depth ${k} tree near ${SEARCH_LIMIT} rows within the arity cap`);
