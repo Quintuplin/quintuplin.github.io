@@ -44,4 +44,7 @@ out=$(glue 0)
 expect "a passing maths stub" "$out" "fail=0"
 out=$(stubWaits=1; glue 0)
 expect "maths output streaming before the wait" "$out" "fail=0"
+# Guard: a missing temp directory once failed the run as a maths failure. The glue needs no temp file.
+out=$(export TMPDIR="$log.missing"; glue 0)
+expect "a missing temp directory" "$out" "fail=0"
 exit "$failed"
