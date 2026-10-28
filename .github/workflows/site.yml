@@ -5,6 +5,8 @@ on: pull_request
 jobs:
   build:
     runs-on: ubuntu-latest
+    # The Actions budget allows under 2 minutes per run, so a slower run fails visibly (#46).
+    timeout-minutes: 2
     steps:
       - uses: actions/checkout@v4
       - uses: actions/jekyll-build-pages@v1
@@ -13,6 +15,6 @@ jobs:
           destination: ./_site
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 26
       - name: Check built site
         run: sh scripts/check_site.sh _site
