@@ -242,6 +242,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <div class="field-row" style="margin-top:6px">
         <label class="toggle"><input type="checkbox" id="ex-d2"> Sharpest banding within n rows (theory)</label>
         <label class="toggle"><input type="checkbox" id="ex-flat"> Flat reading</label>
+        <label class="toggle"><input type="checkbox" id="ex-quorum"> Quorum check (theory)</label>
+        <label class="toggle"><input type="checkbox" id="ex-pipeline"> Pipeline (theory)</label>
       </div>
       <div class="ex-s"><label for="ex-s">Pair similarity s</label><input type="range" id="ex-s" min="0" max="1" step="0.001"><output id="ex-s-out" for="ex-s"></output></div>
     </div>
@@ -305,12 +307,16 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>Expected counts (theory)</dt><dd>P(s) applied to every pair of the study corpus. E[FP] sums P(s) over the pairs below t. E[FN] sums 1 − P(s) over the pairs at or above t. E[errors] adds the two after rounding each.</dd>
       <dt>Measured mean ± sd</dt><dd>The errors the study counted with real MinHash signatures over several random draws of the hashes h(x) = (a x + c) mod 2<sup>61</sup> − 1. The readout gives their mean and sample standard deviation when the study ran that tree at that t.</dd>
       <dt>Sharpest banding within n rows</dt><dd>The sharpest depth 2 banding whose rows fit within the tree's n. The readout compares the tree with it. The page skips that search for trees above 10 million rows.</dd>
+      <dt>Quorum check</dt><dd>Compares a pair on all n rows and keeps it when at least ⌈t n⌉ rows agree. Its curve is the binomial tail of n rows. The readout gives its expected errors and the errors the study measured when it checked every pair this way.</dd>
+      <dt>Retrieval banding (d0, f−) and kept bands</dt><dd>The kept bands are the bands that take the first child at every AND level on the way to the root. There are f− of them with d0 rows each. A pair is retrieved when any kept band fires. The readout gives the expected number of retrieved pairs.</dd>
+      <dt>Pipeline</dt><dd>Retrieves with the kept bands and then applies the quorum check to the retrieved pairs. Its curve is Q(s) − (1 − s<sup>d0</sup>)<sup>f−</sup> P[A ≥ ⌈t n⌉]. Q(s) is the quorum check curve and A counts the agreeing rows of a pair whose kept bands all miss. With the pipeline on each trial follows it and the root reads accepted or rejected. The page computes it for trees of at most 20000 rows.</dd>
       <dt>TP and TN</dt><dd>A true positive is a pair at or above t that becomes a candidate. A true negative is a pair below t that stays out.</dd>
       <dt>FP and FN</dt><dd>A false positive is a pair below t that becomes a candidate. A false negative is a pair at or above t that does not.</dd>
       <dt>f+ and f−</dt><dd>Tail exponents. f+ is the product of the AND arities with d0. f− is the product of the OR arities. f+ f− = n.</dd>
       <dt>Measured slope</dt><dd>The local slope of a log-log tail at its far end, at s 10<sup>−6</sup> for the FP tail and at 1 − s 10<sup>−6</sup> for the FN tail. It approaches f+ and f−. The tail cards and the Measured slope captions show it.</dd>
-      <dt>Trial dots and Wilson interval</dt><dd>Run sends one random pair at s up the tree. 1000 at s and Sweep send 1000 random pairs at each s and plot a dot for the share that became candidates. Its bar is the 95% Wilson score interval for that share. The dots should sit on the curve.</dd>
-      <dt>Trial seed</dt><dd>Seeds the random pairs. Clear or a new seed drops the trial dots and restarts the pairs from the shown seed, so the same seed replays the same trials. It affects only the random trials.</dd>
+      <dt>Trial pair and realised s′</dt><dd>Two random sets of shingle ids at the corpus median set size, drawn from the corpus vocabulary. Whole ids allow only some Jaccard values, so a pair asked for at s realises the nearest one, s′. Each row hashes the pair as the study does, with h(x) = (a x + c) mod 2<sup>61</sup> − 1, and agrees when the least hash of the two sets falls on a shared id.</dd>
+      <dt>Trial dots and Wilson interval</dt><dd>Run sends one random pair at s up the tree. 1000 at s and Sweep send 1000 random pairs at each s and plot a dot at s′ for the share that became candidates. Its bar is the 95% Wilson score interval for that share. The dots should sit on the curve.</dd>
+      <dt>Trial seed</dt><dd>Seeds the row hashes and the random pairs. Clear or a new seed drops the trial dots and restarts both from the shown seed, so the same seed replays the same trials. It affects only the random trials.</dd>
       <dt>At its own threshold</dt><dd>The preset sets t to the tree's own t̂.</dd>
       <dt>Standard banding at 10000 rows</dt><dd>The study's best depth 2 (r, b) banding within 10000 rows at each target.</dd>
       <dt>Sharpest tree per depth at 10000 rows</dt><dd>The sharpest tree at each depth the study searched within 10000 rows at each target.</dd>
@@ -549,6 +555,118 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     return { fplus, fminus };
   }
 
+  // ---- Quorum: accept a pair when at least ceil(t n) of its n rows agree (lsh_grid_analysis quorum_curve) ----
+  // ln k! as math.lgamma(k + 1) gives it: exact products below 20, the Stirling series for ln Γ(x) above, tabled up to 2^16.
+  const stirling = (x) => (x - 0.5) * Math.log(x) - x + 0.5 * Math.log(2 * Math.PI) + (1 / 12 - (1 / 360 - (1 / 1260 - 1 / (1680 * x * x)) / (x * x)) / (x * x)) / x;
+  const LN_FACT = new Float64Array(65537);
+  for (let k = 1, f = 1; k < LN_FACT.length; k++) LN_FACT[k] = k < 20 ? Math.log((f *= k)) : stirling(k + 1);
+  const lnFact = (k) => (k < LN_FACT.length ? LN_FACT[k] : stirling(k + 1));
+  // Rounding first keeps 0.3 × 200 = 60.000000000000007 from asking for 61 rows.
+  const quorumNeed = (n, t) => Math.ceil(+(t * n).toFixed(9));
+
+  // Bin(n, x) terms from k = start outward by step, where they only shrink. Starting at the largest keeps small tails exact.
+  function tailSum(x, n, start, step) {
+    let term = Math.exp(lnFact(n) - lnFact(start) - lnFact(n - start) + start * Math.log(x) + (n - start) * Math.log1p(-x)), total = term, k = start;
+    const odds = x / (1 - x), end = step > 0 ? n : 0;
+    for (; k !== end && !(term <= 1e-17 * total); k += step) {
+      term *= step > 0 ? ((n - k) / (k + 1)) * odds : k / (n - k + 1) / odds;
+      total += term;
+    }
+    return total;
+  }
+
+  function binomPmf(x, m, size = m + 1) {
+    const out = new Float64Array(size), lx = Math.log(x), ly = Math.log1p(-x);
+    for (let k = 0; k <= m; k++) out[k] = Math.exp(lnFact(m) - lnFact(k) - lnFact(m - k) + k * lx + (m - k) * ly);
+    return out;
+  }
+
+  // In-place radix-2 FFT, length a power of 2. sign −1 runs forward and 1 runs the inverse without the 1 / length.
+  const TWIDDLES = new Map();
+  function fft(re, im, sign) {
+    const n = re.length;
+    if (!TWIDDLES.has(n)) TWIDDLES.set(n, [Math.cos, Math.sin].map((f) => Float64Array.from({ length: n / 2 }, (_, k) => f((2 * Math.PI * k) / n))));
+    const [cos, sin] = TWIDDLES.get(n);
+    for (let i = 1, j = 0; i < n; i++) {
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+    }
+    for (let len = 2; len <= n; len <<= 1) {
+      for (let i = 0, half = len / 2; i < n; i += len) {
+        for (let k = 0; k < half; k++) {
+          const wr = cos[(k * n) / len], wi = sign * sin[(k * n) / len], a = i + k, b = a + half;
+          const xr = re[b] * wr - im[b] * wi, xi = re[b] * wi + im[b] * wr;
+          re[b] = re[a] - xr;
+          im[b] = im[a] - xi;
+          re[a] += xr;
+          im[a] += xi;
+        }
+      }
+    }
+  }
+
+  // P[at least need of n rows agree | no kept band agrees in full] for x in (0, 1) (_unretrieved_tail). Given the miss
+  // each band's count is Bin(d0, x) below d0, so the total convolves f− such counts with Bin(n − d0 f−, x).
+  function unretrievedTail(x, [d0, bands], n, need) {
+    const size = 1 << (32 - Math.clz32(n - bands)), miss = 1 - x ** d0;
+    const re = binomPmf(x, d0, size).map((v, k) => (k < d0 ? v / miss : 0)), im = new Float64Array(size);
+    const re2 = binomPmf(x, n - d0 * bands, size), im2 = new Float64Array(size);
+    fft(re, im, -1);
+    fft(re2, im2, -1);
+    // Band spectrum to the power f− by squaring, times the rest. Real inputs give a conjugate-symmetric product.
+    for (let k = 0; k <= size / 2; k++) {
+      let pr = 1, pi = 0, br = re[k], bi = im[k], t;
+      for (let e = bands; e; e >>= 1) {
+        if (e & 1) { t = pr * br - pi * bi; pi = pr * bi + pi * br; pr = t; }
+        t = br * br - bi * bi; bi = 2 * br * bi; br = t;
+      }
+      re[k] = pr * re2[k] - pi * im2[k];
+      im[k] = pr * im2[k] + pi * re2[k];
+      if (k && 2 * k < size) { re[size - k] = re[k]; im[size - k] = -im[k]; }
+    }
+    fft(re, im, 1);
+    let sum = 0;
+    for (let k = need; k <= n - bands; k++) sum += Math.max(0, re[k] / size);
+    return sum;
+  }
+
+  // The quorum check over n rows. With index (d0, f−) it checks only the pairs a banding on the f− kept bands
+  // retrieves, so pairs that reach the quorum yet miss every kept band drop out.
+  function quorumCurve(s, n, t, index) {
+    const need = quorumNeed(n, t);
+    let out = need <= 0 ? 1 : need > n || !(s > 0) ? 0 : s >= 1 ? 1 : s * n < need ? tailSum(s, n, need, 1) : 1 - tailSum(s, n, need - 1, -1);
+    if (!index) return out;
+    const miss = (1 - s ** index[0]) ** index[1];
+    if (need <= 0) return 1 - miss;
+    // Below 1e-17 either factor leaves no pair count to correct.
+    if (out > 1e-17 && miss > 1e-17) out = Math.min(out, Math.max(0, out - miss * unretrievedTail(s, index, n, need)));
+    return out;
+  }
+  // Retrieve on the kept bands of d, then verify at quorum: P[accept] = Q(s) − (1 − s^d0)^f− P[A ≥ ceil(t n) | miss].
+  const pipelineCurve = (s, d, t) => quorumCurve(s, rows(d), t, [d[0], tails(d)[1]]);
+
+  function quorumInverse(y, n, t, index) {
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 50; i++) {
+      const mid = 0.5 * (lo + hi);
+      if (quorumCurve(mid, n, t, index) < y) lo = mid;
+      else hi = mid;
+    }
+    return 0.5 * (lo + hi);
+  }
+
+  // Leaf bands a query probes: child 0 of each AND node and every child of each OR node. There are f− of them.
+  function keptBands(d) {
+    let nodes = [0];
+    for (let j = d.length - 1; j > 0; j--) nodes = nodes.flatMap((i) => Array.from({ length: isOr(j) ? d[j] : 1 }, (_, c) => i * d[j] + c));
+    return nodes;
+  }
+  // One pair's row bits through retrieve then verify.
+  const verified = (bits, d, t) => keptBands(d).some((b) => bits.subarray(b * d[0], (b + 1) * d[0]).every(Boolean))
+    && bits.reduce((a, v) => a + v, 0) >= quorumNeed(bits.length, t);
+
   function mulberry32(seed) {
     let a = seed | 0;
     return function () {
@@ -576,26 +694,94 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     return out;
   }
 
-  // One pair: every row agrees with probability s.
-  function sampleTree(s, d, rng) {
+  // Row hashes h(x) = (a x + c) mod p, p = 2^61 − 1, as the study draws them (lsh_demo.minhash_signatures).
+  // A value v travels as v = hi 2^31 + lo with hi < 2^30 and lo < 2^31, so every step stays exact in doubles.
+  const T30 = 2 ** 30, T31 = 2 ** 31;
+  const isP = (hi, lo) => hi === T30 - 1 && lo === T31 - 1;
+
+  // Rows as [a hi, a lo, c hi, c lo] in one flat array, a in [1, p) and c in [0, p). rowsUpTo(n) grows it on demand,
+  // so row i depends only on the stream.
+  function drawRows(rng) {
+    const flat = [];
+    return (n) => {
+      while (flat.length < 4 * n) {
+        const [ah, al, ch, cl] = [T30, T31, T30, T31].map((m) => Math.floor(rng() * m));
+        if ((ah || al) && !isP(ah, al) && !isP(ch, cl)) flat.push(ah, al, ch, cl);
+      }
+      return flat;
+    };
+  }
+
+  // Exact (a x + c) mod p for row i and x < 2^22, written to out as [hi, lo]. 2^61 = 1 (mod p) folds the carries.
+  function hash61(flat, i, x, out) {
+    let hi = flat[4 * i] * x + flat[4 * i + 2], lo = flat[4 * i + 1] * x + flat[4 * i + 3];
+    const q = Math.floor(lo / T31);
+    lo -= q * T31;
+    hi += q;
+    const r = Math.floor(hi / T30);
+    hi -= r * T30;
+    lo += r;
+    if (lo >= T31) { lo -= T31; hi += 1; }
+    if (hi >= T30) { hi -= T30; lo += 1; }
+    if (isP(hi, lo)) hi = lo = 0;
+    out[0] = hi;
+    out[1] = lo;
+    return out;
+  }
+
+  // Two sets of about m ids at Jaccard s: U = round(2m / (1 + s)) distinct ids, the first I = round(s U) shared.
+  // The pair realises s' = I / U.
+  const pairShape = (s, m) => { const U = Math.round((2 * m) / (1 + s)); return { U, I: Math.round(s * U) }; };
+  // Such a pair over a vocabulary of V ids.
+  function drawPair(s, rng, m, V) {
+    const { U, I } = pairShape(s, m), ids = new Set();
+    while (ids.size < U) ids.add(Math.floor(rng() * V));
+    return { ids: [...ids], I, s: I / U };
+  }
+
+  // MinHash agreement on row i: the least hash over the union falls on a shared id.
+  const out2 = new Float64Array(2);
+  function agree(flat, pair, i) {
+    let bh = Infinity, bl = Infinity, arg = 0;
+    for (let k = 0; k < pair.ids.length; k++) {
+      hash61(flat, i, pair.ids[k], out2);
+      if (out2[0] < bh || (out2[0] === bh && out2[1] < bl)) [bh, bl, arg] = [out2[0], out2[1], k];
+    }
+    return arg < pair.I ? 1 : 0;
+  }
+
+  // One pair through every row of the tree.
+  function sampleTree(pair, d, rowsUpTo) {
     const n = rows(d);
     if (n > ROW_CAP) return null;
-    const bits = new Uint8Array(n);
-    for (let i = 0; i < n; i++) bits[i] = rng() < s ? 1 : 0;
+    const flat = rowsUpTo(n), bits = new Uint8Array(n);
+    for (let i = 0; i < n; i++) bits[i] = agree(flat, pair, i);
     return { bits, levels: evalTree(bits, d) };
   }
 
-  // Many pairs: each band agrees with probability s^d0. Short-circuit skips children that cannot change a node.
-  function runTrials(s, d, count, rng) {
-    const p0 = Math.pow(s, d[0]);
-    const node = (j) => {
-      if (j === 0) return rng() < p0;
+  // Many fresh pairs at s on the same rows. A node stops at the first child that settles it, and a band at its first miss.
+  // Given a target t the pairs go through retrieve then verify, and the row count stops once the quorum is settled.
+  function runTrials(s, d, count, rng, rowsUpTo, { size, vocab }, t) {
+    const n = rows(d), flat = rowsUpTo(n), kept = t === undefined ? null : keptBands(d), need = kept && quorumNeed(n, t);
+    let pair, hits = 0;
+    const quorum = () => {
+      let agreed = 0;
+      for (let r = 0; r < n && agreed < need && agreed + n - r >= need; r++) agreed += agree(flat, pair, r);
+      return agreed >= need;
+    };
+    const node = (j, i) => {
+      if (j === 0) {
+        for (let r = i * d[0]; r < (i + 1) * d[0]; r++) if (!agree(flat, pair, r)) return false;
+        return true;
+      }
       const or = isOr(j);
-      for (let c = 0; c < d[j]; c++) if (node(j - 1) === or) return or;
+      for (let c = 0; c < d[j]; c++) if (node(j - 1, i * d[j] + c) === or) return or;
       return !or;
     };
-    let hits = 0;
-    for (let i = 0; i < count; i++) hits += node(d.length - 1) ? 1 : 0;
+    for (let t = 0; t < count; t++) {
+      pair = drawPair(s, rng, size, vocab);
+      hits += (kept ? kept.some((b) => node(0, b)) && quorum() : node(d.length - 1, 0)) ? 1 : 0;
+    }
     return hits;
   }
 
@@ -611,8 +797,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
 
   root.Cascade = {
     ROW_CAP, TOLERANCE, MAX_FREE_ARITY, isOr, rows, levels, curve, flatCurve, inverse, threshold, width, profile, bandsForThreshold,
-    errorArea, tails, solveD1, freeArities, treeSearch, bestTree, expectedCounts, spread, logPair, localSlopes, mulberry32, evalTree, sampleTree,
-    runTrials, wilson,
+    errorArea, tails, solveD1, freeArities, treeSearch, bestTree, expectedCounts, spread, logPair, localSlopes, quorumCurve, pipelineCurve,
+    quorumInverse, keptBands, verified, mulberry32, evalTree, drawRows, hash61, pairShape, drawPair, agree, sampleTree, runTrials, wilson,
   };
 })(globalThis);
 </script>
@@ -705,11 +891,13 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   const motion = matchMedia("(prefers-reduced-motion: reduce)");
   const STORE = "deep-nested-lsh-explorer-v2";
   // Depth stops where the study's search stops.
-  const MAX_DEPTH = DATA.provenance.grid.max_depth, MAX_ARITY = 100000, SEARCH_LIMIT = 1e7, SLICE_MS = 12, SAMPLES = 600, LEVEL_MS = 250, MORPH_MS = 300;
+  const MAX_DEPTH = DATA.provenance.grid.max_depth, MAX_ARITY = 100000, SEARCH_LIMIT = 1e7, PIPE_LIMIT = 20000, SLICE_MS = 12, SAMPLES = 600, LEVEL_MS = 250, MORPH_MS = 300;
   const M = { l: 42, r: 12, t: 12, b: 40 };
   let W = 560, H = 340, fx, fy;
   const GRID = Array.from({ length: SAMPLES }, (_, i) => i / (SAMPLES - 1));
   const TOP = DATA.facts.top_budget, PAIRS = DATA.facts.corpus.pairs;
+  // Trial pairs are sets of the corpus median size over the corpus vocabulary.
+  const PAIR = { size: DATA.facts.corpus.set_median, vocab: DATA.facts.corpus.vocab };
   const byKind = (k) => Object.values(DATA.tables).filter((t) => t.kind === k).sort((a, b) => a.target - b.target);
 
   const num = (v, d = 4) => (Number.isFinite(v) ? v.toFixed(d) : "n/a");
@@ -751,19 +939,23 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   // Measured errors over the study's seed draws for each tree it ran, keyed by target and tuple.
   const measuredKey = (t, d) => `${t}|${d.join(",")}`;
   const SEEDS = byKind("seed_spread").flatMap((t) => t.rows);
+  const seedMeasured = (T, config) => {
+    const seed = SEEDS.find((x) => x.target === T && x.config === config);
+    return seed && { ...C.spread(seed["errors by draw"]), draws: seed.draws };
+  };
   const MEASURED = new Map();
   for (const t of [...byKind("cascade"), ...byKind("equal_rows")]) {
     for (const r of t.rows) {
-      const seed = SEEDS.find((x) => x.target === t.target && x.config === r.config);
-      if (seed) MEASURED.set(measuredKey(t.target, r.dims), { ...C.spread(seed["errors by draw"]), draws: seed.draws });
+      const m = seedMeasured(t.target, r.config);
+      if (m) MEASURED.set(measuredKey(t.target, r.dims), m);
     }
   }
   const theory = (d, T) => C.expectedCounts((s) => C.curve(s, d), PAIRS, T);
 
   // ---- State ----
   const targetOf = (p) => (p.t === null ? C.threshold(p.dims) : p.t);
-  const state = { dims: DEFAULT.dims.slice(), T: targetOf(DEFAULT), auto: false, s: 0.5, flat: false, d2: true, seed: 753, preset: DEFAULT.id, matched: true };
-  let derived = null, shown = null, morph = 0, job = 0, anim = 0, rng = C.mulberry32(state.seed), frame = 0, dirty = new Set();
+  const state = { dims: DEFAULT.dims.slice(), T: targetOf(DEFAULT), auto: false, s: 0.5, flat: false, d2: true, quorum: false, pipeline: false, seed: 753, preset: DEFAULT.id, matched: true };
+  let derived = null, shown = null, morph = 0, job = 0, pipeJob = 0, anim = 0, frame = 0, dirty = new Set(), rng, hashes;
   const trials = new Map();
 
   function load() {
@@ -774,14 +966,14 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       if (!(v.T > 0 && v.T < 1) || !(v.s >= 0 && v.s <= 1) || !Number.isInteger(v.seed)) return;
       // A tree saved under a deeper cap keeps its levels up to the grid max.
       const dims = v.dims.slice(0, MAX_DEPTH), whole = dims.length === v.dims.length;
-      Object.assign(state, { dims, T: v.T, s: v.s, auto: !!v.auto, flat: !!v.flat, d2: v.d2 !== false, seed: v.seed,
+      Object.assign(state, { dims, T: v.T, s: v.s, auto: !!v.auto, flat: !!v.flat, d2: v.d2 !== false, quorum: !!v.quorum, pipeline: !!v.pipeline, seed: v.seed,
         preset: whole && PRESETS.some((p) => p.id === v.preset) ? v.preset : "" });
     } catch (e) { /* storage unavailable or malformed: keep defaults */ }
   }
   function save() {
     try {
-      const { dims, T, s, auto, flat, d2, seed, preset } = state;
-      localStorage.setItem(STORE, JSON.stringify({ dims, T, s, auto, flat, d2, seed, preset }));
+      const { dims, T, s, auto, flat, d2, quorum, pipeline, seed, preset } = state;
+      localStorage.setItem(STORE, JSON.stringify({ dims, T, s, auto, flat, d2, quorum, pipeline, seed, preset }));
     } catch (e) { /* private mode or quota: the explorer works without persistence */ }
   }
 
@@ -809,7 +1001,45 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       out.best2Counts = theory(out.best2, T);
       out.best2Measured = MEASURED.get(measuredKey(T, out.best2));
     }
+    // The pipeline retrieves with the kept bands, d0 rows each, then verifies by quorum.
+    out.retrieval = [d[0], out.tails[1]];
+    out.retrieved = theory(out.retrieval, T).candidates;
+    quorumOf(out);
     return out;
+  }
+  // The quorum check alone costs milliseconds, so it follows the shape at once.
+  function quorumOf(D) {
+    if (!state.quorum || D.quorum || D.n > SEARCH_LIMIT) return;
+    const at = (s) => C.quorumCurve(s, D.n, D.T);
+    D.quorum = { ys: GRID.map(at), counts: C.expectedCounts(at, PAIRS, D.T) };
+  }
+  // Slice runners in one frame share one SLICE_MS budget, so a pipeline count beside a search or sweep keeps the frame short.
+  // Callbacks in a frame get the same timestamp. A runner past the budget still takes one step, so none stalls.
+  let sliceAt = -1, sliceEnd = 0;
+  function sliceDeadline(now) {
+    if (now !== sliceAt) { sliceAt = now; sliceEnd = performance.now() + SLICE_MS; }
+    return sliceEnd;
+  }
+  // The pipeline costs an FFT per similarity, so it fills a slice per frame under its own token, apart from trials.
+  // A newer shape or the toggle going off stops it. Finished counts are kept by rows, target and retrieval.
+  const PIPES = new Map();
+  function pipelineCounts(D) {
+    const mine = ++pipeJob, key = `${D.n}|${D.T}|${D.retrieval}`;
+    if (!state.pipeline || D.pipe || D.n > PIPE_LIMIT) return;
+    if (PIPES.has(key)) { D.pipe = PIPES.get(key); return; }
+    const xs = [...GRID, ...PAIRS.map(([a, b]) => a / b)], ys = [];
+    const tick = (now) => {
+      if (mine !== pipeJob) return;
+      const end = sliceDeadline(now);
+      do ys.push(C.quorumCurve(xs[ys.length], D.n, D.T, D.retrieval)); while (ys.length < xs.length && performance.now() < end);
+      if (ys.length < xs.length) return requestAnimationFrame(tick);
+      const by = new Map(xs.map((s, i) => [s, ys[i]]));
+      D.pipe = { ys: ys.slice(0, SAMPLES), counts: C.expectedCounts((s) => by.get(s), PAIRS, D.T) };
+      PIPES.set(key, D.pipe);
+      ["curve", "readout"].forEach((p) => dirty.add(p));
+      schedule();
+    };
+    requestAnimationFrame(tick);
   }
 
   // Patch state and redraw on the next frame. A shape or target change cancels running trials and animations.
@@ -828,17 +1058,25 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       say("");
     }
     if ("s" in patch) ["curve", "ladderP", "readout", "controls"].forEach((p) => dirty.add(p));
-    if ("flat" in patch || "d2" in patch) ["curve", "readout", "controls"].forEach((p) => dirty.add(p));
-    if ("seed" in patch) restart();
+    if ("flat" in patch || "d2" in patch || "quorum" in patch || "pipeline" in patch) ["curve", "readout", "controls"].forEach((p) => dirty.add(p));
+    if ("quorum" in patch) quorumOf(derived);
+    if (reshape || "pipeline" in patch) pipelineCounts(derived);
+    // Trials follow the pipeline when it is on, so the old dots no longer apply.
+    if ("seed" in patch || "pipeline" in patch) restart();
     save();
     schedule();
   }
-  // Drop the trial dots and restart the random stream from the shown seed, so the next run replays.
+  // The seed fixes the row hashes and the pair stream, each from its own generator.
+  function seedStreams() {
+    rng = C.mulberry32(state.seed);
+    hashes = C.drawRows(C.mulberry32(~state.seed));
+  }
+  // Drop the trial dots and restart the random streams from the shown seed, so the next run replays.
   function restart() {
     job++;
     anim++;
     trials.clear();
-    rng = C.mulberry32(state.seed);
+    seedStreams();
     resetTiles();
     say("");
     // Controls redraw so a tree over the row cap says again why trials are off.
@@ -869,6 +1107,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     $("ex-auto").checked = state.auto;
     $("ex-flat").checked = state.flat;
     $("ex-d2").checked = state.d2;
+    $("ex-quorum").checked = state.quorum;
+    $("ex-pipeline").checked = state.pipeline;
     $("ex-s").value = state.s;
     $("ex-s-out").textContent = state.s.toFixed(3);
     $("ex-seed").value = state.seed;
@@ -939,9 +1179,9 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     const { n, k, T } = derived;
     if (n > SEARCH_LIMIT) return say("The search covers trees of at most 10 million rows.");
     const mine = ++job, steps = C.treeSearch(n, k, T);
-    const tick = () => {
+    const tick = (now) => {
       if (mine !== job) return;
-      const end = performance.now() + SLICE_MS;
+      const end = sliceDeadline(now);
       let r;
       do r = steps.next(); while (!r.done && performance.now() < end);
       if (!r.done) {
@@ -1120,25 +1360,26 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   function runOne() {
     // A shape change waiting for its frame leaves the rungs of the old tree, so draw it first.
     if (frame) { cancelAnimationFrame(frame); draw(performance.now()); }
-    const d = state.dims, s = state.s, T = state.T, mine = ++anim;
-    const trial = C.sampleTree(s, d, rng);
-    if (!trial) return;
+    const d = state.dims, T = state.T, mine = ++anim;
+    if (C.rows(d) > C.ROW_CAP) return;
+    const pair = C.drawPair(state.s, rng, PAIR.size, PAIR.vocab), s = pair.s, trial = C.sampleTree(pair, d, hashes);
     resetTiles();
     // Rungs run root first, so walk them in reverse: rows, L0, L1 up to the root.
     const order = rungs.slice().reverse();
     const valuesFor = (r) => (r.spec.rows ? trial.bits.subarray(0, r.spec.count) : trial.levels[r.spec.level].subarray(0, r.spec.count));
-    const fired = trial.levels[d.length - 1][0] === 1;
+    // With the pipeline on a pair counts when a kept band fires and enough rows agree.
+    const pipe = state.pipeline, fired = pipe ? C.verified(trial.bits, d, T) : trial.levels[d.length - 1][0] === 1;
     const instant = motion.matches;
     const finish = () => {
       const kind = outcome(fired, s, T), root = rungs[0];
-      root.cells[0].textContent = fired ? "candidate" : "not candidate";
+      root.cells[0].textContent = pipe ? (fired ? "accepted" : "rejected") : fired ? "candidate" : "not candidate";
       const chip = document.createElement("span");
       chip.className = "outcome";
       chip.dataset.k = kind;
       chip.textContent = `${kind} ${OUTCOME[kind]}`;
       root.row.querySelector(".tiles").appendChild(chip);
       record(s, fired ? 1 : 0, 1);
-      say(`A pair at s ${s.toFixed(3)} against target ${T.toFixed(2)}. The root ${fired ? "fired so the pair is a candidate" : "stayed off so the pair is dropped"}. ${OUTCOME[kind]}.`);
+      say(`A pair at s′ ${s.toFixed(3)} against target ${T.toFixed(2)}. ${pipe ? `The pipeline ${fired ? "retrieved and verified the pair" : "dropped the pair"}` : `The root ${fired ? "fired so the pair is a candidate" : "stayed off so the pair is dropped"}`}. ${OUTCOME[kind]}.`);
     };
     // A deep tree still climbs in about a second.
     const ms = Math.min(LEVEL_MS, 1200 / d.length);
@@ -1170,15 +1411,18 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     schedule();
   }
 
-  // Bulk runs go in chunks per frame. A newer job or any shape change stops an older one.
+  // The Jaccard the pairs drawn at s realise.
+  const realised = (s) => { const { U, I } = C.pairShape(s, PAIR.size); return I / U; };
+  // Bulk runs fill a time slice per frame, since a linear-hash trial costs from one row to every row. A newer job or any shape change stops an older one.
   function runBatch(points, perPoint, label) {
-    const mine = ++job, d = state.dims;
+    const mine = ++job, d = state.dims, t = state.pipeline ? state.T : undefined;
     let i = 0, done = 0;
-    const chunk = Math.max(20, Math.min(perPoint, Math.floor(400000 / Math.max(1, C.rows(d) / d[0]))));
-    const tick = () => {
+    const tick = (now) => {
       if (mine !== job) return;
-      const s = points[i], take = Math.min(chunk, perPoint - done);
-      record(s, C.runTrials(s, d, take, rng), take);
+      const end = sliceDeadline(now), s = points[i];
+      let hits = 0, take = 0;
+      for (; take < perPoint - done && (!take || performance.now() < end); take++) hits += C.runTrials(s, d, 1, rng, hashes, PAIR, t);
+      record(realised(s), hits, take);
       done += take;
       if (done >= perPoint) { i++; done = 0; }
       if (i < points.length) {
@@ -1191,9 +1435,10 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     requestAnimationFrame(tick);
   }
   function summary(points) {
-    if (points.length > 1) return `Swept ${points.length} values of s. Dots show the share of candidates with 95% Wilson intervals. They should sit on the curve.`;
-    const s = points[0], t = trials.get(key(s)), [lo, hi] = C.wilson(t.k, t.n);
-    return `${t.k} of ${t.n} pairs at s ${s.toFixed(3)} became candidates. The interval ${num(lo, 3)} to ${num(hi, 3)} should hold P(s) ${num(C.curve(s, state.dims), 3)}.`;
+    if (points.length > 1) return `Swept ${points.length} values of s. Dots show the share of ${state.pipeline ? "accepted pairs" : "candidates"} at each realised s′ with 95% Wilson intervals. They should sit on the ${state.pipeline ? "pipeline " : ""}curve.`;
+    const s = realised(points[0]), t = trials.get(key(s)), [lo, hi] = C.wilson(t.k, t.n);
+    if (state.pipeline) return `${t.k} of ${t.n} pairs at s′ ${s.toFixed(3)} passed the pipeline. The interval ${num(lo, 3)} to ${num(hi, 3)} should hold its P(s′) ${num(C.pipelineCurve(s, state.dims, state.T), 3)}.`;
+    return `${t.k} of ${t.n} pairs at s′ ${s.toFixed(3)} became candidates. The interval ${num(lo, 3)} to ${num(hi, 3)} should hold P(s′) ${num(C.curve(s, state.dims), 3)}.`;
   }
 
   // ---- Curve plot ----
@@ -1223,6 +1468,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     plot.step = el("path", { style: "fill:none;stroke:var(--muted);stroke-width:1.5;stroke-dasharray:5 4" }, svg);
     plot.flat = el("path", { style: "fill:none;stroke:var(--muted);stroke-width:1.8;stroke-dasharray:2 3" }, svg);
     plot.d2 = el("path", { style: "fill:none;stroke:var(--d2);stroke-width:1.8;stroke-dasharray:7 4;opacity:0.85" }, svg);
+    plot.quorum = el("path", { style: "fill:none;stroke:var(--fn);stroke-width:1.8;stroke-dasharray:1 3;stroke-linecap:round" }, svg);
+    plot.pipe = el("path", { style: "fill:none;stroke:var(--ok);stroke-width:2" }, svg);
     plot.levels = el("g", {}, svg);
     plot.levelsFor = null;
     plot.lvl = [];
@@ -1306,6 +1553,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     plot.band.setAttribute("width", Math.max(0, fx(hi) - fx(lo)));
     plot.flat.setAttribute("d", state.flat && D.k > 1 ? line(D.flat) : "");
     plot.d2.setAttribute("d", state.d2 && D.best2 && !same(D.best2, D.d) ? line(D.best2Ys) : "");
+    plot.quorum.setAttribute("d", state.quorum && D.quorum ? line(D.quorum.ys) : "");
+    plot.pipe.setAttribute("d", state.pipeline && D.pipe ? line(D.pipe.ys) : "");
     const thr = Number.isFinite(D.thr) ? D.thr : 0.5;
     plot.thrLine.setAttribute("x1", fx(thr));
     plot.thrLine.setAttribute("x2", fx(thr));
@@ -1369,6 +1618,12 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       banding = card(`banding ${K.tuple(D.best2)} expected errors (theory)`, count(D.best2Counts.errors),
         `${parts(D.best2Counts)}. ${measured(D.best2Measured)}. ${change(D.counts.errors, D.best2Counts.errors)}`);
     }
+    const kept = `Retrieval banding ${K.tuple(D.retrieval)} retrieves ${count(D.retrieved)} pairs`;
+    let pipe = card("pipeline expected errors (theory)", "n/a", `${kept}. The page computes the pipeline for trees of at most ${PIPE_LIMIT} rows`);
+    if (D.pipe) pipe = card("pipeline expected errors (theory)", count(D.pipe.counts.errors), `${parts(D.pipe.counts)}. ${kept}. ${measured(seedMeasured(D.T, `verify_${D.n}_${D.d.join("x")}`))}`);
+    else if (D.n <= PIPE_LIMIT) pipe = card("pipeline expected errors (theory)", "Computing", kept);
+    const quorum = D.quorum ? card("quorum check expected errors (theory)", count(D.quorum.counts.errors), `${parts(D.quorum.counts)}. ${measured(seedMeasured(D.T, `full_${D.n}`))}`)
+      : card("quorum check expected errors (theory)", "n/a", "Quorum check skipped above 10 million rows");
     $("ex-readout").innerHTML = [
       card("rows n", count(D.n), `${D.k} level${D.k > 1 ? "s" : ""}. f+ × f− ${product ? "=" : "≠"} n`, product ? "" : "bad"),
       card("threshold t̂", num(D.thr, 4), (off <= C.TOLERANCE ? `within ${C.TOLERANCE} of t ${D.T.toFixed(2)}` : `${num(off, 3)} from t ${D.T.toFixed(2)}`) + flat, off <= C.TOLERANCE ? "good" : "bad"),
@@ -1376,6 +1631,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       card("error area E (theory)", num(D.area, 6), D.best2 ? `Banding E ${num(D.best2Area, 6)}. ${change(D.area, D.best2Area)}` : "No banding to compare"),
       card("expected errors (theory)", count(D.counts.errors), `${parts(D.counts)}. ${measured(D.measured)}`),
       banding,
+      state.quorum ? quorum : "",
+      state.pipeline ? pipe : "",
       card("f+ AND tail", count(fp), `slope at s 10<sup>−6</sup> ${num(D.slopes.fplus, 2)}`),
       card("f− OR tail", count(fn), `slope at 1 − s 10<sup>−6</sup> ${num(D.slopes.fminus, 2)}`),
     ].join("");
@@ -1437,7 +1694,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
 
   function init() {
     load();
-    rng = C.mulberry32(state.seed);
+    seedStreams();
     solve();
     derived = derive();
     buildPresetSelect();
@@ -1447,6 +1704,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     $("ex-auto").addEventListener("change", (e) => set({ auto: e.target.checked }, { keepPreset: !e.target.checked }));
     $("ex-flat").addEventListener("change", (e) => set({ flat: e.target.checked }));
     $("ex-d2").addEventListener("change", (e) => set({ d2: e.target.checked }));
+    $("ex-quorum").addEventListener("change", (e) => set({ quorum: e.target.checked }));
+    $("ex-pipeline").addEventListener("change", (e) => set({ pipeline: e.target.checked }));
     $("ex-s").addEventListener("input", (e) => set({ s: Number(e.target.value) }));
     $("ex-seed").addEventListener("change", (e) => { const v = Math.round(Number(e.target.value)); if (v >= 1) set({ seed: v }); e.target.value = state.seed; });
     $("ex-one").addEventListener("click", runOne);
@@ -1455,6 +1714,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     $("ex-clear").addEventListener("click", () => { restart(); schedule(); });
     $("ex-search").addEventListener("click", searchDepth);
     capNote();
+    pipelineCounts(derived);
     addEventListener("resize", () => { dirty.add("layout"); schedule(); });
     ["ladder", "curve", "readout", "tails", "controls"].forEach((p) => dirty.add(p));
     schedule();

@@ -27,6 +27,8 @@ TARGETS = [0.3, 0.5, 0.8]
 # Hand-picked shapes beside the table tuples: textbook bandings, arity 1 levels and the flat collapse pair.
 EXTRA_DIMS = [(1,), (4, 10), (7, 69), (3, 8, 2), (2, 5, 3, 4), (2, 4, 2, 3, 2), (5, 5, 4), (5, 20), (100, 1), (7, 23, 3)]
 HASH_SAMPLES = 64
+# Small trees for the brute-force pipeline: banding, depth 3 and 4, and a depth 5 tree whose kept bands sit scattered.
+BRUTE_DIMS = [(4,), (3, 5), (2, 2, 3), (2, 4, 2), (2, 2, 2, 2), (2, 2, 1, 2, 2)]
 
 
 # ---- StudyTables ----
@@ -184,6 +186,32 @@ def hash_samples(demo, vocab: int) -> list[list[str]]:
     return [[str(int(v)) for v in t] for t in zip(a, c, x, h)]
 
 
+def brute_force_pipeline(lga) -> list[dict]:
+    """P[accept] of retrieve then verify by summing every agreement pattern over n <= 16 rows.
+
+    Doc 0 is the query and doc p + 1 agrees with it on the rows set in p, so the study's own retrieval matrix
+    says which patterns a kept band retrieves."""
+    s = np.array(S_GRID)
+    out = []
+    for dims in BRUTE_DIMS:
+        n = lga.dims_total_rows(dims)
+        patterns = np.arange(2**n)
+        bits = (patterns[None, :] >> np.arange(n)[:, None]) & 1
+        retrieved = np.concatenate([
+            lga.retrieval_candidate_matrix(np.hstack([np.zeros((n, 1), dtype=np.int64), np.where(chunk, 0, 1 + np.arange(chunk.shape[1]))]),
+                                           dims, chunk.shape[1] + 1)[0, 1:]
+            for chunk in np.array_split(bits, max(1, 2**n // 256), axis=1)])
+        agree = bits.sum(axis=0)
+        curves = {}
+        for t in TARGETS:
+            accepted = np.bincount(agree[retrieved & (agree >= lga.quorum_need(n, t))], minlength=n + 1)
+            curve = sum(c * s**k * (1 - s) ** (n - k) for k, c in enumerate(accepted.tolist()))
+            assert np.allclose(curve, lga.quorum_curve(s, n, t, lga.retrieval_dims(dims)), rtol=1e-9, atol=1e-12), (dims, t)
+            curves[str(t)] = curve.tolist()
+        out.append({"dims": list(dims), "pipeline": curves})
+    return out
+
+
 def write(page: Path, fixture: Path, data: dict, parity: dict) -> None:
     html = page.read_text(encoding="utf-8")
     head = '<script type="application/json" id="sim-data">\n'
@@ -214,7 +242,8 @@ def main() -> None:
         "tables": tables,
     }
     parity = {"source": f"lsh_grid_analysis at {sha}", "s": S_GRID, "y": Y_GRID, "targets": TARGETS,
-              "rows": parity_rows(lga, tables, corpus), "hashes": hash_samples(demo, corpus["vocab"])}
+              "rows": parity_rows(lga, tables, corpus), "hashes": hash_samples(demo, corpus["vocab"]),
+              "brute": brute_force_pipeline(lga)}
     write(PAGE, FIXTURE, data, parity)
     print(f"wrote {PAGE.relative_to(SITE)} and {FIXTURE.relative_to(SITE)} from {sha}")
 

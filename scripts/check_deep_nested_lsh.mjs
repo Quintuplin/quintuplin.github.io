@@ -239,13 +239,178 @@ test("evalTreeMatchesCurve", () => {
     assert.ok(Math.abs(fplus / r.tails[0] - 1) < 1e-3, `f+ slope ${r.dims}: ${fplus}`);
     assert.ok(Math.abs(fminus / r.tails[1] - 1) < 1e-3, `f- slope ${r.dims}: ${fminus}`);
   }
-  const trials = 20000;
-  const hits = C.runTrials(0.5, [5, 20], trials, C.mulberry32(42));
-  const p = C.curve(0.5, [5, 20]);
-  assert.ok(Math.abs(hits / trials - p) < 4 * Math.sqrt(p * (1 - p) / trials), `bulk rate ${hits / trials} vs ${p}`);
-  const one = C.sampleTree(0.5, [5, 20], C.mulberry32(7));
-  assert.equal(one.bits.length, 100);
-  assert.deepEqual(one.levels, C.evalTree(one.bits, [5, 20]));
+});
+
+// ---- HashChecks: trial rows hash as the study's do, h(x) = (a x + c) mod 2^61 − 1 ----
+const P61 = (1n << 61n) - 1n;
+// A value below 2^62 as its 30 and 31 bit halves.
+const halves = (v) => [Number(BigInt(v) >> 31n), Number(BigInt(v) & 0x7fffffffn)];
+const join = (hi, lo) => (BigInt(hi) << 31n) + BigInt(lo);
+const hashOf = (a, c, x) => join(...C.hash61([...halves(a), ...halves(c)], 0, x, new Float64Array(2)));
+
+test("hash61MatchesBigInt", () => {
+  const rng = C.mulberry32(61), word = () => join(Math.floor(rng() * 2 ** 30), Math.floor(rng() * 2 ** 31));
+  const edges = [0n, 1n, P61 - 1n, P61], cases = [];
+  // a = p − 1, c = 1 and x = 1 lands on p itself, which must read 0.
+  for (const a of edges.slice(1)) for (const c of edges) for (const x of [0, 1, 2 ** 14 - 1, 2 ** 22 - 1]) cases.push([a, c, x]);
+  for (let i = 0; i < 5000; i++) cases.push([word(), word(), Math.floor(rng() * 2 ** 22)]);
+  for (const [a, c, x] of cases) assert.equal(hashOf(a, c, x), (a * BigInt(x) + c) % P61, `a ${a} c ${c} x ${x}`);
+});
+
+// Guard: trials once drew rows as coin flips at s instead of the study's linear hashes (critique S9).
+test("hashMatchesStudySamples", () => {
+  assert.ok(parity.hashes?.length >= 64, "the fixture carries the study's hash samples");
+  for (const [a, c, x, h] of parity.hashes) assert.equal(hashOf(a, c, Number(x)), BigInt(h), `a ${a} c ${c} x ${x}`);
+});
+
+// Trial pairs: two sets at the corpus median size over the corpus vocabulary.
+const PAIR = { size: study.facts.corpus.set_median, vocab: study.facts.corpus.vocab };
+const realised = (s) => { const U = Math.round((2 * PAIR.size) / (1 + s)); return { U, I: Math.round(s * U) }; };
+
+test("lazyTrialMatchesFullTree", () => {
+  const hashes = C.drawRows(C.mulberry32(5)), outcomes = new Set();
+  for (const d of [[3], [2, 3], [3, 4, 2], [2, 3, 2, 2], [2, 2, 3, 2, 2]]) {
+    for (const s of [0.3, 0.5, 0.8]) {
+      const { U, I } = realised(s);
+      for (let seed = 1; seed <= 25; seed++) {
+        const pair = C.drawPair(s, C.mulberry32(seed), PAIR.size, PAIR.vocab);
+        assert.equal(new Set(pair.ids).size, U, `${U} distinct ids at ${s}`);
+        assert.ok(pair.ids.every((x) => Number.isInteger(x) && x >= 0 && x < PAIR.vocab));
+        assert.equal(pair.s, I / U);
+        const full = C.sampleTree(pair, d, hashes), flat = hashes(C.rows(d));
+        // A row agrees when the least hash over the union falls on one of the I shared ids.
+        if (seed <= 2) {
+          full.bits.forEach((bit, i) => {
+            const h = pair.ids.map((x) => hashOf(join(flat[4 * i], flat[4 * i + 1]), join(flat[4 * i + 2], flat[4 * i + 3]), x));
+            assert.equal(bit, h.indexOf(h.reduce((a, b) => (b < a ? b : a))) < I ? 1 : 0, `row ${i} of ${d} at ${s}`);
+          });
+        }
+        assert.deepEqual(full.levels, C.evalTree(full.bits, d));
+        const root = full.levels[d.length - 1][0];
+        assert.equal(C.runTrials(s, d, 1, C.mulberry32(seed), hashes, PAIR), root, `${d} at ${s} seed ${seed}`);
+        outcomes.add(root);
+      }
+    }
+  }
+  assert.deepEqual([...outcomes].sort(), [0, 1], "both outcomes occur");
+});
+
+// Guard: the Bernoulli trials matched the curve by construction. Linear-hash trials must match it at the realised s.
+test("linearTrialsMatchCurve", () => {
+  const hashes = C.drawRows(C.mulberry32(9)), trials = 2000;
+  for (const d of [[5, 20], [7, 23, 3], [2, 17, 7, 8, 3]]) {
+    const at = [0.2, 0.5, 0.8].map((p) => C.inverse(p, d));
+    for (const s of at) {
+      const hits = C.runTrials(s, d, trials, C.mulberry32(11), hashes, PAIR), { U, I } = realised(s), p = C.curve(I / U, d);
+      assert.ok(Math.abs(hits / trials - p) < 4 * Math.sqrt(p * (1 - p) / trials), `${d} rate ${hits / trials} vs ${p} at ${I}/${U}`);
+    }
+  }
+});
+
+// ---- QuorumChecks: accept at quorum, alone or behind retrieval on the kept bands ----
+const quorumTable = study.tables.lsh_quorum_table;
+const retrievalOf = (d) => [d[0], C.tails(d)[1]];
+const quorumMemo = new Map();
+const quorumCounts = (n, t, index) => {
+  const k = `${n}|${t}|${index}`;
+  if (!quorumMemo.has(k)) quorumMemo.set(k, C.expectedCounts((s) => C.quorumCurve(s, n, t, index), PAIRS, t));
+  return quorumMemo.get(k);
+};
+// Verify rows of the quorum table with the equal-rows tree whose kept bands they retrieve through.
+const verifyRows = () => quorumTable.rows.filter((r) => Array.isArray(r.retrieval)).map((r) => ({ r,
+  d: tablesOf("equal_rows").filter((t) => t.target === r.target).flatMap((t) => t.rows)
+    .find((x) => x.rows === r.rows && same(retrievalOf(x.dims), r.retrieval))?.dims }));
+
+// One printed quorum row at its print precision.
+function checkQuorumRow(r, index) {
+  const { target: t, rows: n } = r, inv = (y) => C.quorumInverse(y, n, t, index), c = quorumCounts(n, t, index);
+  const fields = { threshold: inv(0.5), width: inv(0.95) - inv(0.05), "E[FP]": c.fp, "E[FN]": c.fn, "E[errors]": c.errors };
+  if (index) fields.retrieved = counts(index, t).candidates;
+  for (const [f, v] of Object.entries(fields)) {
+    assert.ok(agrees(r[f], v, f === "retrieved" ? 0 : quorumTable.decimals[f]), `quorum ${n} ${r.retrieval} at ${t} ${f}: ${v} vs ${r[f]}`);
+  }
+}
+
+const quorumRows = () => parity.rows.filter((r) => r.quorum);
+
+test("quorumMatchesStudy", () => {
+  assert.ok(quorumRows().length >= 50);
+  for (const r of quorumRows()) {
+    for (const [t, q] of Object.entries(r.quorum)) parity.s.forEach((s, i) => close(C.quorumCurve(s, C.rows(r.dims), +t), q.full[i], `quorum ${r.dims} at ${t} s ${s}`));
+  }
+  const all = quorumTable.rows.filter((r) => r.retrieval === "all");
+  assert.equal(all.length, 9);
+  all.forEach((r) => checkQuorumRow(r));
+});
+
+test("pipelineMatchesStudy", () => {
+  for (const r of quorumRows()) {
+    for (const [t, q] of Object.entries(r.quorum)) parity.s.forEach((s, i) => close(C.pipelineCurve(s, r.dims, +t), q.pipeline[i], `pipeline ${r.dims} at ${t} s ${s}`));
+  }
+  const verify = verifyRows();
+  assert.equal(verify.length, 12);
+  for (const { r, d } of verify) {
+    assert.ok(d, `an equal-rows tree retrieves through ${r.retrieval} at ${r.target}`);
+    checkQuorumRow(r, retrievalOf(d));
+  }
+});
+
+// Guard: the closed form drops pairs no kept band retrieves. Depth 4 and 5 trees keep bands scattered among the rows.
+test("pipelineMatchesBruteForce", () => {
+  assert.ok(parity.brute.some((b) => b.dims.length >= 4));
+  for (const b of parity.brute) {
+    for (const [t, ys] of Object.entries(b.pipeline)) parity.s.forEach((s, i) => close(C.pipelineCurve(s, b.dims, +t), ys[i], `brute ${b.dims} at ${t} s ${s}`));
+  }
+});
+
+test("pipelineBeatsItsCascade", () => {
+  for (const { r, d } of verifyRows()) {
+    const pipe = quorumCounts(r.rows, r.target, retrievalOf(d)).errors, cascade = counts(d, r.target).errors;
+    assert.ok(pipe < cascade, `${d} at ${r.target}: pipeline ${pipe} vs cascade ${cascade}`);
+  }
+});
+
+// Band i is kept when it is child 0 at every AND level above the bands.
+function keptRef(d) {
+  const out = [];
+  for (let i = 0; i < C.rows(d) / d[0]; i++) {
+    let rest = i, kept = true;
+    for (let j = 1; j < d.length; j++) {
+      if (!C.isOr(j) && rest % d[j]) kept = false;
+      rest = Math.floor(rest / d[j]);
+    }
+    if (kept) out.push(i);
+  }
+  return out;
+}
+
+test("pipelineTrialsMatchCurve", () => {
+  const shapes = [[3], [2, 3], [3, 4, 2], [2, 3, 2, 2], [2, 2, 3, 2, 2]];
+  for (const d of shapes) assert.deepEqual(C.keptBands(d), keptRef(d), `kept bands of ${d}`);
+  // One trial decides as the full tree's bits say: a kept band agrees in full and the quorum holds.
+  const hashes = C.drawRows(C.mulberry32(13)), outcomes = new Set();
+  for (const d of shapes.slice(3)) {
+    for (const t of [0.3, 0.5]) {
+      for (const s of [0.3, 0.5, 0.8]) {
+        for (let seed = 1; seed <= 25; seed++) {
+          const { bits } = C.sampleTree(C.drawPair(s, C.mulberry32(seed), PAIR.size, PAIR.vocab), d, hashes);
+          const full = (i) => bits.subarray(i * d[0], (i + 1) * d[0]).every(Boolean);
+          const want = keptRef(d).some(full) && bits.reduce((a, b) => a + b, 0) >= Math.ceil(+(t * bits.length).toFixed(9)) ? 1 : 0;
+          assert.equal(C.runTrials(s, d, 1, C.mulberry32(seed), hashes, PAIR, t), want, `${d} at t ${t} s ${s} seed ${seed}`);
+          outcomes.add(want);
+        }
+      }
+    }
+  }
+  assert.deepEqual([...outcomes].sort(), [0, 1], "both outcomes occur");
+  const trials = 2000;
+  for (const [d, t] of [[[5, 20], 0.5], [[2, 3, 2, 2], 0.3], [[3, 4, 2, 2, 2], 0.5]]) {
+    for (const y of [0.2, 0.5, 0.8]) {
+      const s = C.quorumInverse(y, C.rows(d), t, retrievalOf(d)), { U, I } = realised(s), p = C.pipelineCurve(I / U, d, t);
+      const hits = C.runTrials(s, d, trials, C.mulberry32(17), hashes, PAIR, t);
+      assert.ok(Math.abs(hits / trials - p) < 4 * Math.sqrt(p * (1 - p) / trials), `${d} at t ${t}: rate ${hits / trials} vs ${p} at ${I}/${U}`);
+    }
+  }
 });
 
 // curve() loses digits once a level nears 0 or 1, so the reference carries the hit rate and its complement in linear space.
@@ -310,15 +475,6 @@ test("profileStaysNumericAtLargestTuple", () => {
     for (const key of ["mid", "width"]) {
       assert.ok(Number.isFinite(p[key]) || Number.isNaN(p[key]), `level ${j} ${key} is ${p[key]}`);
     }
-  }
-});
-
-test("runTrialsMatchesCurveAtDepthFive", () => {
-  const d = [3, 13, 8, 8, 4], trials = 20000;
-  for (const s of [0.48, 0.5, 0.52]) {
-    const hits = C.runTrials(s, d, trials, C.mulberry32(11));
-    const p = C.curve(s, d);
-    assert.ok(Math.abs(hits / trials - p) < 4 * Math.sqrt(p * (1 - p) / trials), `depth 5 rate ${hits / trials} vs ${p} at ${s}`);
   }
 });
 
@@ -425,11 +581,11 @@ function boot(saved) {
   ctx.globalThis = ctx.window = ctx;
   ctx.Cascade = C;
   for (const id of ["chartkit-src", "explorer-src"]) vm.runInContext(PageScripts.read(id), ctx, { filename: id });
-  // Runs the frames due now. True while more are queued.
+  // Runs the frames due now, each given the frame's one timestamp as a browser does. True while more are queued.
   const step = () => {
-    const due = [...frames.values()];
+    const due = [...frames.values()], now = performance.now();
     frames.clear();
-    due.forEach((f) => f(performance.now()));
+    due.forEach((f) => f(now));
     return frames.size > 0;
   };
   const flush = () => { for (let i = 0; i < 100 && step(); i++); };
@@ -468,11 +624,11 @@ test("everyExplorerIdInMarkup", () => {
 });
 
 test("trialSeedReplaysTrials", () => {
-  const { $, flush } = boot();
+  const { $, flush, step } = boot();
   flush();
-  // Each trial dot carries a title with its counts at that s.
+  // Each trial dot carries a title with its counts at that s. Linear-hash runs take many frames, so run drains them.
   const dots = () => $("ex-curve").querySelectorAll("title").map((t) => t.textContent);
-  const run = () => { $("ex-many").dispatch("click"); flush(); return dots(); };
+  const run = () => { $("ex-many").dispatch("click"); for (let i = 0; i < 1e5 && step(); i++); return dots(); };
   // A browser fires change only when the value differs, so each seed here differs from the one before.
   const seed = (v) => { const input = $("ex-seed"); assert.notEqual(input.value, String(v)); input.value = String(v); input.dispatch("change"); };
   // At its threshold the tree fires about half the time, so two seeds almost surely differ.
@@ -484,6 +640,9 @@ test("trialSeedReplaysTrials", () => {
   const first = run();
   assert.equal(first.length, 1, "1000 at s draws one dot");
   assert.match(first[0], / of 1000 candidates/);
+  // The dot sits at the Jaccard the drawn pairs realise.
+  const { U, I } = realised(Number(at.value));
+  assert.ok(first[0].startsWith(`s ${Math.round((1000 * I) / U) / 1000}: `), `dot at ${I}/${U}: ${first[0]}`);
   $("ex-clear").dispatch("click");
   assert.deepEqual(run(), first, "Clear replays the trials from the shown seed");
   seed(7);
@@ -578,6 +737,67 @@ test("defaultReproducesStandaloneOrdering", () => {
   }
 });
 
+const drain = (step) => { for (let i = 0; i < 1e5 && step(); i++); };
+const tick = ($, id, on) => { $(id).checked = on; $(id).dispatch("change"); };
+const seedRow = (t, config) => tablesOf("seed_spread").flatMap((x) => x.rows).find((x) => x.target === t && x.config === config);
+
+test("pipelineToggleShowsStudyCounts", () => {
+  const { $, flush, step } = boot();
+  flush();
+  const d = arities($, Number(depthInput($).value)), T = Number($("ex-t").value), n = C.rows(d);
+  const { r } = verifyRows().find((v) => same(v.d, d) && v.r.target === T) || {};
+  assert.ok(r, `the study verified the default tree ${d}`);
+  assert.equal($("ex-pipeline").checked, false, "pipeline off by default");
+  assert.equal($("ex-quorum").checked, false, "quorum off by default");
+  assert.doesNotMatch($("ex-readout").textContent, /pipeline|quorum/);
+  tick($, "ex-pipeline", true);
+  drain(step);
+  let text = $("ex-readout").textContent;
+  const m = C.spread(seedRow(T, `verify_${n}_${d.join("x")}`)["errors by draw"]).mean.toFixed(1);
+  for (const v of [r["E[errors]"], r.retrieved, m]) assert.ok(shows(text, v), `pipeline card shows ${v}: ${text}`);
+  assert.match(text, /pipeline expected errors \(theory\)/);
+  tick($, "ex-quorum", true);
+  drain(step);
+  text = $("ex-readout").textContent;
+  assert.match(text, /quorum check expected errors \(theory\)/);
+  assert.ok(shows(text, quorumCounts(n, T).errors), `quorum card shows ${quorumCounts(n, T).errors}: ${text}`);
+});
+
+// Guard: a slow pipeline count for one tree must never land on the next tree.
+test("pipelineCountsFollowShape", () => {
+  const { $, flush, step } = boot();
+  flush();
+  const select = $("ex-preset"), pick = (dims) => {
+    const o = select.querySelectorAll("option").find((x) => x.textContent.startsWith("t 0.3 depth") && x.textContent.includes(`(${dims.join(", ")})`));
+    select.value = o.value;
+    select.dispatch("change");
+  };
+  const errorsOf = (d) => verifyRows().find((v) => same(v.d, d) && v.r.target === 0.3).r["E[errors]"];
+  const pipeCard = () => $("ex-readout").textContent.match(/pipeline expected errors \(theory\)(.*?)f\+ AND tail/)[1];
+  const deep = [2, 17, 7, 8, 3], banding = [6, 951];
+  pick(banding);
+  tick($, "ex-pipeline", true);
+  drain(step);
+  assert.ok(shows(pipeCard(), errorsOf(banding)), `pipeline card for ${banding}: ${pipeCard()}`);
+  // Each move leaves the deep tree's count part done. The next tree is over the row limit, then one whose count is cached.
+  const moves = [["a tree over the row limit", () => {
+    const d1 = $("ex-ladder").querySelector('[aria-label="arity d1"]');
+    d1.value = "100";
+    d1.dispatch("change");
+  }, /^n\/a/], [`the cached ${banding}`, () => pick(banding), new RegExp(`^${errorsOf(banding)}(?!\\d)`)]];
+  for (const [what, move, want] of moves) {
+    pick(deep);
+    step();
+    assert.match(pipeCard(), /^Computing/, `the ${deep} count is still running`);
+    move();
+    assert.equal(step(), false, `the ${deep} count stops after the move to ${what}`);
+    drain(step);
+    const card = pipeCard();
+    assert.match(card, want, `pipeline card for ${what}`);
+    assert.ok(!shows(card, errorsOf(deep)), `pipeline card for ${what} shows the ${deep} errors: ${card}`);
+  }
+});
+
 test("searchDepthFindsSharpestTree", () => {
   const { $, flush } = boot();
   flush();
@@ -611,6 +831,25 @@ test("searchDepthStaysResponsive", () => {
   while (frames < 1e5 && timed(step)) frames++;
   assert.ok(worst < FRAME_BUDGET_MS, `a search task took ${worst.toFixed(0)} ms at depth ${k} over ${C.rows(dims)} rows`);
   assert.deepEqual(arities($, k), C.bestTree(C.rows(dims), k, T), "the async search lands on the bestTree result");
+});
+
+// Guard: the pipeline count and a sweep once each took a full slice per frame, so frames ran twice the slice.
+const SLICE_MS = Number(PageScripts.read("explorer-src").match(/\bSLICE_MS = (\d+)/)[1]);
+test("sweepWithPipelineStaysInFrame", () => {
+  const { $, flush, step } = boot();
+  flush();
+  tick($, "ex-pipeline", true);
+  step();
+  $("ex-sweep").dispatch("click");
+  const ms = [];
+  while (ms.length < 1e4 && /Computing/.test($("ex-readout").textContent)) {
+    const t0 = performance.now();
+    step();
+    ms.push(performance.now() - t0);
+  }
+  assert.match($("ex-msg").textContent, /Sweeping/, "the sweep outlasts the pipeline count");
+  const mid = ms.sort((a, b) => a - b)[ms.length >> 1];
+  assert.ok(ms.length >= 5 && mid < 1.5 * SLICE_MS, `frames took ${mid.toFixed(1)} ms at the median over ${ms.length} frames, slice ${SLICE_MS} ms`);
 });
 
 test("searchStopsWhenTreeChanges", () => {
