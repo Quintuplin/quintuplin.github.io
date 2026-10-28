@@ -352,11 +352,19 @@ test("linearTrialsMatchCurve", () => {
 // ---- QuorumChecks: accept at quorum, alone or behind retrieval on the kept bands ----
 // Counting a verify row behind retrieval takes up to 2.5 s and longest at low targets (2 s for the deepest row at t 0.3).
 // So counts run per target on one depth 2 row and, from t 0.5 up, on one deepest row.
-const countedRows = (verify) => verify.filter((v, i) => {
-  const peers = verify.filter((w) => w.r.target === v.r.target), deepest = Math.max(...peers.map((w) => w.d?.length ?? 0));
-  const depths = v.r.target >= 0.5 ? [2, deepest] : [2];
-  return depths.some((k) => verify.indexOf(peers.find((w) => w.d?.length === k)) === i);
-});
+// Guard: a target without a depth 2 row once counted nothing below t 0.5. Each target fails without its counted rows.
+const countedRows = (verify) => {
+  const picks = new Set();
+  for (const t of new Set(verify.map((v) => v.r.target))) {
+    const peers = verify.filter((w) => w.r.target === t), deepest = Math.max(...peers.map((w) => w.d?.length ?? 0));
+    for (const k of t >= 0.5 ? [2, deepest] : [2]) {
+      const row = peers.find((w) => w.d?.length === k);
+      assert.ok(row, `the quorum table has a depth ${k} verify row to count at ${t}`);
+      picks.add(row);
+    }
+  }
+  return verify.filter((v) => picks.has(v));
+};
 
 // One printed quorum row at its print precision. Without `counted` only its threshold, width and retrieved volume.
 function checkQuorumRow(r, index, counted = true) {
