@@ -15,6 +15,6 @@ jobs:
           destination: ./_site
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 26
       - name: Check built site
         run: sh scripts/check_site.sh _site
