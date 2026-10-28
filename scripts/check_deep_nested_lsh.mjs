@@ -215,18 +215,16 @@ test("treeSearchMatchesExhaustiveScan", () => {
 });
 
 // Guard: the depth search once enumerated billions of trees at depth 10 over 10 million rows.
-// cappedSearchCoversItsArityShells covers capped results at other targets, so t 0.99 alone runs the full cap.
+// cappedSearchCoversItsArityShells covers capped results at other targets, so the full cap runs only at t 0.3, its costliest target.
 test("deepSearchFinishesWithinWorkCap", () => {
   assert.ok(SEARCH_WORK > 0, "the explorer sets a search work cap");
-  for (const t of [0.99]) {
-    const t0 = performance.now(), r = drainSearch(C.treeSearch(1e7, 10, t, 1, SEARCH_WORK), SEARCH_WORK / SEARCH_STEP + 1e4);
-    const s = (performance.now() - t0) / 1000;
-    assert.ok(s < 20, `t ${t}: the capped search took ${s.toFixed(1)} s`);
-    assert.equal(r.complete, false, `t ${t}: depth 10 over 10 million rows needs the cap`);
-    assert.ok(r.arity >= 2, `t ${t}: shells up to ${r.arity} finished`);
-    assert.equal(r.dims.length, 10);
-    assert.ok(Math.abs(C.threshold(r.dims) - t) <= C.TOLERANCE && C.rows(r.dims) <= 1e7, `t ${t}: ${r.dims}`);
-  }
+  const t = 0.3, t0 = performance.now(), r = drainSearch(C.treeSearch(1e7, 10, t, 1, SEARCH_WORK), SEARCH_WORK / SEARCH_STEP + 1e4);
+  const s = (performance.now() - t0) / 1000;
+  assert.ok(s < 20, `the capped search took ${s.toFixed(1)} s`);
+  assert.equal(r.complete, false, "depth 10 over 10 million rows needs the cap");
+  assert.ok(r.arity >= 2, `shells up to ${r.arity} finished`);
+  assert.equal(r.dims.length, 10);
+  assert.ok(Math.abs(C.threshold(r.dims) - t) <= C.TOLERANCE && C.rows(r.dims) <= 1e7, String(r.dims));
 });
 
 // A capped search is at least as sharp as the full scan over the arity shells it finished.

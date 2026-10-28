@@ -467,7 +467,7 @@ test("searchDepthFindsSharpestTree", () => {
   assert.deepEqual(arities($, 3), want);
 });
 
-// The heaviest search the explorer allows: the deepest tree just under the row limit, t 0.99.
+// The largest tree the explorer searches: the deepest one just under the row limit, here at t 0.99.
 const SEARCH_LIMIT = Number(PageScripts.read("explorer-src").match(/\bSEARCH_LIMIT = ([\d.e]+)/)[1]);
 const FRAME_BUDGET_MS = 100;
 // Sets the explorer's search work cap to `work`.
