@@ -636,6 +636,27 @@ test("runCancelledByShapeChange", () => {
   assert.doesNotMatch($("ex-msg").textContent, /Sending|A pair at/);
 });
 
+// Routes the window resize to the ladder and reads the tile column width from its data-w, so a test can change cap().
+const withResize = (src) => {
+  for (const s of ['addEventListener("resize", ', "capFor(cell.clientWidth)"]) assert.ok(src.includes(s), `the explorer holds ${s}`);
+  return src.replace('addEventListener("resize", ', '$("ex-ladder").addEventListener("resize", ')
+    .replace("capFor(cell.clientWidth)", 'capFor(Number($("ex-ladder").dataset.w || cell.clientWidth))');
+};
+// Guard: a resize that changed the tile count stopped Run and left its progress line on screen.
+test("runCancelledByResizeClearsProgress", () => {
+  const { $, flush, step } = boot({ dims: BIG, T: 0.5, s: 0.5, seed: 753 }, withResize);
+  flush();
+  $("ex-one").dispatch("click");
+  step();
+  assert.match($("ex-msg").textContent, /^Sending one pair/, "a progress line while the pair climbs");
+  $("ex-ladder").dataset.w = "200";
+  $("ex-ladder").dispatch("resize");
+  drain(step);
+  flush();
+  assert.ok(!rootChip($), "the stopped pair leaves no chip");
+  assert.doesNotMatch($("ex-msg").textContent, /Sending/);
+});
+
 test("limitNoteAboveLadder", () => {
   const html = PageScripts.markup(), at = (s) => html.indexOf(s);
   const note = html.match(/<p\b[^>]*\bid="ex-limit"[^>]*>/)?.[0];

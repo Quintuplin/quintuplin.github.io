@@ -1915,7 +1915,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   function relayout(parts) {
     if (plotWidth() !== W) { buildPlot(); parts.add("curve"); }
     if (tailWidth() !== tailW) parts.add("tails");
-    if (cap() !== shownCap) { anim++; parts.add("ladder"); }
+    // The rebuilt ladder stops a Run, so its progress line goes with it.
+    if (cap() !== shownCap) { anim++; say(""); parts.add("ladder"); }
   }
 
   function init() {
