@@ -855,14 +855,18 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     return arg < pair.I ? 1 : 0;
   }
 
-  // One pair through every row of the tree.
-  function sampleTree(pair, d, rowsUpTo) {
-    const n = rows(d);
-    if (n > ROW_CAP) return null;
-    const flat = rowsUpTo(n), bits = new Uint8Array(n);
-    for (let i = 0; i < n; i++) bits[i] = agree(flat, pair, i);
+  // One pair through every row of the tree, SAMPLE_STEP rows a step, so a big tree can share frames. Yields the rows done.
+  const SAMPLE_STEP = 4096;
+  function* sampleSteps(pair, d, rowsUpTo) {
+    const n = rows(d), bits = new Uint8Array(n);
+    for (let i = 0; i < n;) {
+      const end = Math.min(n, i + SAMPLE_STEP), flat = rowsUpTo(end);
+      for (; i < end; i++) bits[i] = agree(flat, pair, i);
+      if (i < n) yield i;
+    }
     return { bits, levels: evalTree(bits, d) };
   }
+  const sampleTree = (pair, d, rowsUpTo) => drain(sampleSteps(pair, d, rowsUpTo));
 
   // Many fresh pairs at s on the same rows. A node stops at the first child that settles it, and a band at its first miss.
   // Given a target t the pairs go through retrieve then verify, and the row count stops once the quorum is settled.
@@ -903,7 +907,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   root.Cascade = {
     ROW_CAP, TOLERANCE, MAX_FREE_ARITY, TIDY_DEPTHS, isOr, rows, levels, curve, flatCurve, inverse, threshold, width, profile, bandsForThreshold,
     errorArea, errorAreaParts, tails, solveD1, treeSearch, bestTree, nearMass, tidyLambda, tidySearch, tidyTune, expectedCounts, spread, logPair, localSlopes, quorumCurve, pipelineCurve,
-    quorumInverse, keptBands, verified, mulberry32, evalTree, drawRows, hash61, pairShape, drawPair, agree, sampleTree, runTrials, wilson,
+    quorumInverse, keptBands, verified, mulberry32, evalTree, drawRows, hash61, pairShape, drawPair, agree, sampleSteps, sampleTree, runTrials, wilson,
   };
 })(globalThis);
 </script>
