@@ -18,6 +18,7 @@
   --ok: #17744a; --ok-bg: rgba(23, 116, 74, 0.12); --open: #8c3a3a; --d2: #2a78d6;
   --fp: #1d55ad; --fp-fill: rgba(29, 85, 173, 0.14); --fn: #964310; --fn-fill: rgba(150, 67, 16, 0.13);
   --band: rgba(26, 86, 180, 0.07); --on: #0c7d52; --on-ink: #ffffff; --off: rgba(22, 24, 28, 0.07);
+  --warn: #7a4a00; --warn-bg: rgba(255, 190, 0, 0.24); --warn-line: #b07800;
   --sans: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
   --mono: ui-monospace, Menlo, Consolas, monospace;
 }
@@ -33,6 +34,7 @@
     --ok: #63d398; --ok-bg: rgba(99, 211, 152, 0.14); --open: #f0a3a3; --d2: #5a9cf0;
     --fp: #85b2ff; --fp-fill: rgba(133, 178, 255, 0.18); --fn: #ff9a52; --fn-fill: rgba(255, 154, 82, 0.18);
     --band: rgba(142, 167, 255, 0.09); --on: #2fcf8c; --on-ink: #0f1115; --off: rgba(255, 255, 255, 0.07);
+    --warn: #ffd166; --warn-bg: rgba(255, 196, 0, 0.16); --warn-line: #e0a800;
   }
 }
 :root[data-theme="dark"] {
@@ -46,6 +48,7 @@
   --ok: #63d398; --ok-bg: rgba(99, 211, 152, 0.14); --open: #f0a3a3; --d2: #5a9cf0;
   --fp: #85b2ff; --fp-fill: rgba(133, 178, 255, 0.18); --fn: #ff9a52; --fn-fill: rgba(255, 154, 82, 0.18);
   --band: rgba(142, 167, 255, 0.09); --on: #2fcf8c; --on-ink: #0f1115; --off: rgba(255, 255, 255, 0.07);
+  --warn: #ffd166; --warn-bg: rgba(255, 196, 0, 0.16); --warn-line: #e0a800;
 }
 * { box-sizing: border-box; }
 html { background: var(--bg); }
@@ -164,6 +167,8 @@ output { font-family: var(--mono); color: var(--ink); font-size: 13.5px; min-wid
 .outcome[data-k="FP"] { background: var(--fp-fill); color: var(--fp); }
 .outcome[data-k="FN"] { background: var(--fn-fill); color: var(--fn); }
 .ex-msg { font-size: 13px; color: var(--ink2); min-height: 1.6em; margin: 0; }
+/* The text opens with "Warning", so the note does not rely on its colour. */
+.ex-limit { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-line); border-left-width: 5px; border-radius: 8px; padding: 8px 12px; margin: 0; font-size: 13.5px; font-weight: 600; line-height: 1.45; }
 .readout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line); overflow: hidden; }
 @container ex (min-width: 480px) { .readout { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .ro { padding: 10px 14px; min-width: 0; box-shadow: 1px 0 0 var(--line), 0 1px 0 var(--line); }
@@ -258,12 +263,13 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     </div>
     <div class="ex-tree">
       <div class="ex-actions">
-        <button class="btn primary" id="ex-one" type="button" title="Run one pair up the tree">Run</button>
-        <button class="btn" id="ex-many" type="button" title="Run 1000 pairs at the current s">1000 at s</button>
-        <button class="btn" id="ex-sweep" type="button" title="Run 1000 pairs at each s from 0.05 to 0.95">Sweep</button>
+        <button class="btn primary" id="ex-one" type="button" title="Run one pair up the tree" aria-describedby="ex-limit">Run</button>
+        <button class="btn" id="ex-many" type="button" title="Run 1000 pairs at the current s" aria-describedby="ex-limit">1000 at s</button>
+        <button class="btn" id="ex-sweep" type="button" title="Run 1000 pairs at each s from 0.05 to 0.95" aria-describedby="ex-limit">Sweep</button>
         <button class="btn" id="ex-search" type="button" title="Swap in the sharpest tree of this depth within these rows at t">Sharpest at depth k</button>
         <button class="btn text" id="ex-clear" type="button" title="Clear the trial dots and the ladder">Clear</button>
       </div>
+      <p class="ex-limit" id="ex-limit" role="note" hidden></p>
       <div class="ladder-head">
         <div class="ladder-depth" id="ex-depth">Depth k</div>
         <p class="ladder-key">Each faint curve is one level. <span class="op AND">AND</span> levels set the FP tail. <span class="op OR">OR</span> levels set the FN tail.</p>
@@ -357,7 +363,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
 // scripts/check_deep_nested_lsh.mjs runs this script against the study reference values.
 (function (root) {
   "use strict";
-  const ROW_CAP = 100000;
+  // Batch trials stop at ROW_CAP rows. One Run pair keeps about 116 bytes a row, so RUN_ROWS keeps it near 256 MB.
+  const ROW_CAP = 100000, RUN_ROWS = 2000000;
   const TOLERANCE = 0.01;
   const MAX_FREE_ARITY = 24;
 
@@ -905,7 +912,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   }
 
   root.Cascade = {
-    ROW_CAP, TOLERANCE, MAX_FREE_ARITY, TIDY_DEPTHS, isOr, rows, levels, curve, flatCurve, inverse, threshold, width, profile, bandsForThreshold,
+    ROW_CAP, RUN_ROWS, TOLERANCE, MAX_FREE_ARITY, TIDY_DEPTHS, isOr, rows, levels, curve, flatCurve, inverse, threshold, width, profile, bandsForThreshold,
     errorArea, errorAreaParts, tails, solveD1, treeSearch, bestTree, nearMass, tidyLambda, tidySearch, tidyTune, expectedCounts, spread, logPair, localSlopes, quorumCurve, pipelineCurve,
     quorumInverse, keptBands, verified, mulberry32, evalTree, drawRows, hash61, pairShape, drawPair, agree, sampleSteps, sampleTree, runTrials, wilson,
   };
@@ -1210,7 +1217,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     seedStreams();
     resetTiles();
     say("");
-    // Controls redraw so a tree over the row cap says again why trials are off.
+    // Controls redraw, so the trial buttons and the limit note follow the restarted trials.
     ["curve", "controls"].forEach((p) => dirty.add(p));
   }
   function schedule() { if (!frame) frame = requestAnimationFrame(draw); }
@@ -1251,9 +1258,20 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     $("ex-s-out").textContent = state.s.toFixed(3);
     $("ex-seed").value = state.seed;
     $("ex-search").textContent = `Sharpest at depth ${derived.k}`;
-    const tooBig = derived.n > C.ROW_CAP;
-    for (const id of ["ex-one", "ex-many", "ex-sweep"]) $(id).disabled = tooBig;
-    if (tooBig) say(`Trials run on trees of at most ${C.ROW_CAP} rows. This tree has ${derived.n > 1e7 ? derived.n.toExponential(2) : derived.n}. The curve and readout still apply.`);
+    renderLimits();
+  }
+  // Above ROW_CAP the batch buttons are off and Run may be slow. Above RUN_ROWS one pair would not fit in memory.
+  function renderLimits() {
+    const n = derived.n, note = $("ex-limit");
+    $("ex-one").disabled = n > C.RUN_ROWS;
+    for (const id of ["ex-many", "ex-sweep"]) $(id).disabled = n > C.ROW_CAP;
+    note.innerHTML = limitText(n);
+    note.hidden = n <= C.ROW_CAP;
+  }
+  function limitText(n) {
+    if (n <= C.ROW_CAP) return "";
+    const text = `Warning. This tree has ${count(n)} rows, above the ${C.ROW_CAP} row limit for 1000 at s and Sweep, so those buttons are off. Run still sends one pair up the tree but may be slow.`;
+    return n > C.RUN_ROWS ? `${text} Run is off too above ${count(C.RUN_ROWS)} rows because one pair would need more memory than the page allows.` : text;
   }
 
   function buildPresetSelect() {
@@ -1311,11 +1329,10 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     return box;
   }
 
-  // Runs a search a slice per frame under a new job, so a newer job or any shape change stops it. Returns the job.
-  function runSliced(steps, onProgress, onDone) {
-    const mine = ++job;
+  // Runs steps a slice per frame while alive() holds. With now the first slice runs at once, so a short job ends in the call.
+  function sliced(steps, alive, onProgress, onDone, now) {
     const tick = (now) => {
-      if (mine !== job) return;
+      if (!alive()) return;
       const end = sliceDeadline(now);
       let r;
       do r = steps.next(); while (!r.done && performance.now() < end);
@@ -1325,7 +1342,13 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       }
       onDone(r.value);
     };
-    requestAnimationFrame(tick);
+    if (now === undefined) requestAnimationFrame(tick);
+    else tick(now);
+  }
+  // Runs a search a slice per frame under a new job, so a newer job or any shape change stops it. Returns the job.
+  function runSliced(steps, onProgress, onDone) {
+    const mine = ++job;
+    sliced(steps, () => mine === job, onProgress, onDone);
     return mine;
   }
 
@@ -1531,13 +1554,20 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   }
   const OUTCOME = { TP: "True positive", FP: "False positive", FN: "False negative", TN: "True negative" };
 
+  // Sends one pair through the rows a slice per frame under the animation token, so a shape change, Clear or a new Run stops it.
   function runOne() {
     // A shape change waiting for its frame leaves the rungs of the old tree, so draw it first.
     if (frame) { cancelAnimationFrame(frame); draw(performance.now()); }
-    const d = state.dims, T = state.T, mine = ++anim;
-    if (C.rows(d) > C.ROW_CAP) return;
-    const pair = C.drawPair(state.s, rng, PAIR.size, PAIR.vocab), s = pair.s, trial = C.sampleTree(pair, d, hashes);
+    const d = state.dims, T = state.T, n = C.rows(d), mine = ++anim;
+    if (n > C.RUN_ROWS) return;
+    const pair = C.drawPair(state.s, rng, PAIR.size, PAIR.vocab);
     resetTiles();
+    sliced(C.sampleSteps(pair, d, hashes), () => mine === anim,
+      (done) => say(`Sending one pair up ${n} rows. ${Math.floor((100 * done) / n)}% of the rows read.`),
+      (trial) => climb(trial, pair.s, d, T, mine), performance.now());
+  }
+  // The pair's rung by rung reveal from L0 to the root, then its outcome chip.
+  function climb(trial, s, d, T, mine) {
     // Rungs run root first, so walk them in reverse: L0, L1 up to the root.
     const order = rungs.slice().reverse();
     // Node 0 of level j has the first d_j nodes of level j − 1 as children, or the first d0 rows at level 0.

@@ -252,15 +252,17 @@ test("seedInputShowsEffectiveSeed", () => {
   assert.equal(String($("ex-seed").value), "13", "an invalid seed is refused and the box shows the current seed");
 });
 
-test("seedChangeKeepsRowCapMessage", () => {
+test("seedChangeKeepsLimitNote", () => {
   const { $, flush } = boot({ dims: [400, 400], T: 0.5, s: 0.5, seed: 753 });
   flush();
-  const why = /Trials run on trees of at most/;
-  assert.match($("ex-msg").textContent, why, "a tree over the row cap says why trials are off");
+  const why = /^Warning\. This tree has 160000 rows/;
+  assert.match($("ex-limit").textContent, why, "a tree over the row limit warns");
   enterSeed($, 754);
   flush();
-  assert.ok($("ex-one").disabled, "trials stay off");
-  assert.match($("ex-msg").textContent, why, "a seed change keeps the reason trials are off");
+  assert.ok($("ex-many").disabled && $("ex-sweep").disabled, "the batch buttons stay off");
+  assert.equal($("ex-one").disabled, false, "Run stays on");
+  assert.equal($("ex-limit").hidden, false);
+  assert.match($("ex-limit").textContent, why, "a seed change keeps the warning");
 });
 
 // Guard: the explorer once let the depth reach 13 while the study's search stops at its grid max.
@@ -591,6 +593,84 @@ test("searchStopsWhenTreeChanges", () => {
   for (let i = 0; i < 1e5 && step(); i++);
   assert.deepEqual(arities($, kept), dims.concat(2).slice(0, kept), "the stale search leaves the new tree alone");
   assert.doesNotMatch($("ex-msg").textContent, /Searching/);
+});
+
+// ---- LimitChecks: above the row limit the batch buttons are off and Run warns (#50) ----
+// The depth 9 tree (2, 36, 2, 3, 4, 3, 2, 2, 3) with one more level of 2 has 124416 rows.
+const BIG = [2, 36, 2, 3, 4, 3, 2, 2, 3, 2];
+const rootChip = ($) => $("ex-ladder").querySelectorAll(".rung")[0]?.querySelector(".outcome");
+
+// Guard: Run once turned off above the row limit, so a depth 10 tree built with the steppers could not run a trial.
+test("runAboveRowCapCompletes", () => {
+  const n = C.rows(BIG);
+  assert.ok(n > C.ROW_CAP && n <= C.RUN_ROWS && BIG.length <= MAX_DEPTH, `${n} rows lie between the limits`);
+  const { $, flush, step } = boot({ dims: BIG, T: 0.5, s: 0.5, seed: 753 });
+  flush();
+  assert.equal($("ex-one").disabled, false, "Run stays on above the row limit");
+  assert.ok($("ex-many").disabled && $("ex-sweep").disabled, "1000 at s and Sweep are off");
+  let worst = 0, frames = 0;
+  const timed = (f) => { const t0 = performance.now(), more = f(); worst = Math.max(worst, performance.now() - t0); return more; };
+  timed(() => $("ex-one").dispatch("click"));
+  assert.ok(!rootChip($), "the pair is still climbing after the click");
+  while (frames < 1e5 && timed(step)) frames++;
+  flush();
+  assert.ok(frames > 1, `the trial ran in ${frames} frames`);
+  assert.ok(worst < FRAME_BUDGET_MS, `a trial task took ${worst.toFixed(0)} ms over ${n} rows`);
+  assert.ok(rootChip($), "the root rung shows the outcome chip");
+  assert.match($("ex-msg").textContent, /^A pair at s′/);
+});
+
+test("runCancelledByShapeChange", () => {
+  const { $, flush, step } = boot({ dims: BIG, T: 0.5, s: 0.5, seed: 753 });
+  flush();
+  $("ex-one").dispatch("click");
+  step();
+  assert.match($("ex-msg").textContent, /^Sending one pair/, "a progress line while the pair climbs");
+  const d0 = $("ex-ladder").querySelector('[aria-label="arity d0"]');
+  d0.value = "3";
+  d0.dispatch("change");
+  drain(step);
+  flush();
+  assert.deepEqual(arities($, BIG.length), [3, ...BIG.slice(1)], "the ladder shows the new tree");
+  assert.ok(!rootChip($), "the stale pair leaves no chip");
+  assert.doesNotMatch($("ex-msg").textContent, /Sending|A pair at/);
+});
+
+test("limitNoteAboveLadder", () => {
+  const html = PageScripts.markup(), at = (s) => html.indexOf(s);
+  const note = html.match(/<p\b[^>]*\bid="ex-limit"[^>]*>/)?.[0];
+  assert.ok(note, "the markup holds the limit note");
+  assert.match(note, /\brole="note"/);
+  assert.ok(at('class="ex-actions"') < at('id="ex-limit"') && at('id="ex-limit"') < at('class="ladder-head"'), "the note sits under the buttons and above the ladder");
+  for (const id of ["ex-one", "ex-many", "ex-sweep"]) {
+    assert.match(html.match(new RegExp(`<button\\b[^>]*\\bid="${id}"[^>]*>`))?.[0] || "", /\baria-describedby="ex-limit"/, `${id} is described by the note`);
+  }
+  assert.match(PageScripts.html, /^\.ex-limit \{[^}]*color: var\(--warn\)/m, "the note takes the warning colour");
+});
+
+test("limitNoteText", () => {
+  const { $, flush } = boot({ dims: [400, 400], T: 0.5, s: 0.5, seed: 753 });
+  flush();
+  assert.equal($("ex-limit").hidden, false);
+  assert.equal($("ex-limit").textContent, "Warning. This tree has 160000 rows, above the 100000 row limit for 1000 at s and Sweep, so those buttons are off. Run still sends one pair up the tree but may be slow.");
+  assert.doesNotMatch($("ex-msg").textContent, /limit/, "the status line no longer carries the reason");
+  const pinned = boot(PINNED);
+  pinned.flush();
+  assert.equal(pinned.$("ex-limit").hidden, true, "a tree within the limit shows no warning");
+  assert.equal(pinned.$("ex-limit").textContent, "");
+  assert.ok(["ex-one", "ex-many", "ex-sweep"].every((id) => !pinned.$(id).disabled));
+});
+
+// One pair over this many rows would need more memory than the page allows, so Run is off too.
+test("runOffAboveRunRows", () => {
+  const dims = [100000, 100000];
+  assert.ok(C.rows(dims) > Math.max(C.RUN_ROWS, SEARCH_LIMIT));
+  const { $, flush } = boot({ dims, T: 0.5, s: 0.5, seed: 753 });
+  assert.doesNotThrow(flush);
+  assert.ok(["ex-one", "ex-many", "ex-sweep"].every((id) => $(id).disabled), "every trial button is off");
+  assert.ok($("ex-limit").textContent.endsWith(`Run is off too above ${C.RUN_ROWS} rows because one pair would need more memory than the page allows.`), $("ex-limit").textContent);
+  assert.doesNotThrow(() => $("ex-one").dispatch("click"));
+  assert.ok(!rootChip($), "no pair climbs");
 });
 
 // ---- RetuneChecks: the Re-tune button applies the tidy rule at the shown N, c and t ----

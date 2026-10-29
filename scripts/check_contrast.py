@@ -39,9 +39,9 @@ PAGES = {
     },
     "simulations/deep-nested-lsh/index.html": {
         "glass": ["ink", "muted", "accent"],
-        "card": ["ink", "ink2", "muted", "accent", "ok", "open", "fp", "fn"],
+        "card": ["ink", "ink2", "muted", "accent", "ok", "open", "fp", "fn", "warn"],
         "graphic": ["accent", "fp", "fn"],
-        "card-graphic": ["fp", "fn", "d2", "on", "axis", "ink2"],
+        "card-graphic": ["fp", "fn", "d2", "on", "axis", "ink2", "warn-line"],
     },
 }
 LIGHT = re.compile(r"(?m)^:root\s*\{")
