@@ -93,6 +93,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 output { font-family: var(--mono); color: var(--ink); font-size: 13.5px; min-width: 3.5em; }
 .toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 13.5px; color: var(--ink2); cursor: pointer; }
 .toggle input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+.ex-tidy { grid-column: 1 / -1; }
+.ex-tidy input[type="number"] { width: 6.5em; height: auto; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
 .stepper { display: flex; align-items: center; }
 .stepper button { width: 26px; height: 28px; border: 0; background: transparent; border-radius: 6px; cursor: pointer; font-size: 16px; line-height: 1; color: var(--ink2); }
 .stepper button:hover:not(:disabled) { background: var(--wash); }
@@ -225,6 +227,15 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
         <label class="toggle"><input type="checkbox" id="ex-auto"> Solve d1 for t</label>
       </div>
     </div>
+    <div class="field ex-tidy">
+      <span>Tidy rule for a dataset</span>
+      <div class="field-row">
+        <label class="toggle">Dataset size N <input type="number" id="ex-n" min="1000" max="100000" step="1" class="mono"></label>
+        <label class="toggle">Cluster size c <input type="number" id="ex-mix" min="2" max="50" step="1" class="mono"></label>
+        <span class="toggle">Near-pair mass m <output id="ex-m-out"></output></span>
+        <button class="btn primary" id="ex-retune" type="button" title="Load the tree the tidy rule picks for N, c and t">Re-tune</button>
+      </div>
+    </div>
   </div>
   <div class="ex-body">
     <div class="ex-plot">
@@ -326,6 +337,13 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>Arity families at t 0.5</dt><dd>Trees at depth 3 and up within 10000 rows matched to t 0.5, searched with arities up to 60 above d1. The families differ in where the large arities sit.</dd>
       <dt>head-heavy, even-weights and tail-heavy</dt><dd>Head-heavy puts the large arities at the low levels near the rows. Tail-heavy puts them at the high levels near the root. Even-weights keeps the arities as close to equal as the threshold allows.</dd>
       <dt>Flat reading collapse (7, 23, 3) and (7, 69)</dt><dd>Under the flat reading (7, 23, 3) collapses to the banding (7, 69). Switch on Flat reading to compare the two trees.</dd>
+      <dt>Dataset size N</dt><dd>The number of documents in the dataset to tune for. The box takes 1000 to 100000. The study corpus has 1000.</dd>
+      <dt>Cluster size c</dt><dd>Documents per cluster of near duplicates in the generated dataset the rule assumes. The box takes 2 to 50. The study corpus has 19.</dd>
+      <dt>Near-pair mass m</dt><dd>Near pairs per document in that dataset. Members of a cluster pair with each other. 5% of the documents are noise. Up to 1000 of them share one filler pool and the rest share pools of 50. Documents of one pool also count as near pairs.</dd>
+      <dt>Tidy rule (Re-tune)</dt><dd>Re-tune loads the tree a fitted rule picks for N, c and t. Among the matched trees at depths 2 to 10 within 10000 rows it takes the one with the least λ A_lo + A_hi. The study fitted it on datasets with N from 3000 to 100000 and c from 10 to 40. Outside those ranges it extrapolates. The button stays off after a tune until N, c or t changes.</dd>
+      <dt>Weight λ</dt><dd>λ = R<sup>γ</sup> with the fitted γ 0.05. R = ((N − 1)/2 − m)(1 − t)/(m t) is the ratio of non-near to near pairs per document with each spread evenly over its side of t. A larger λ weighs false positives more.</dd>
+      <dt>A_lo and A_hi</dt><dd>The two parts of the error area E. A_lo is the FP area below t. A_hi is the FN area above t.</dd>
+      <dt>Expected errors (study)</dt><dd>E[FP] + E[FN] the study computed for the rule's tree on its generated dataset of N documents with cluster size c. Re-tune shows it only for an N, c and t the study ran.</dd>
     </dl>
   </details>
 </section>
@@ -1046,8 +1064,14 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
 
   // ---- State ----
   const targetOf = (p) => (p.t === null ? C.threshold(p.dims) : p.t);
-  const state = { dims: DEFAULT.dims.slice(), T: targetOf(DEFAULT), auto: false, s: 0.5, flat: false, d2: true, quorum: false, pipeline: false, seed: 753, preset: DEFAULT.id, matched: true };
+  // N and c open on the study corpus of 1000 documents in clusters of 19.
+  const N_RANGE = [1000, 100000], C_RANGE = [2, 50];
+  const state = { dims: DEFAULT.dims.slice(), T: targetOf(DEFAULT), auto: false, s: 0.5, flat: false, d2: true, quorum: false, pipeline: false, seed: 753, preset: DEFAULT.id, matched: true, N: 1000, c: 19 };
   let derived = null, shown = null, morph = 0, job = 0, pipeJob = 0, anim = 0, frame = 0, dirty = new Set(), rng, hashes;
+  // tuning holds the job of a running tune. lastTune holds the N, c and t of the last finished one.
+  let tuning = 0, lastTune = null;
+  const tuneRunning = () => tuning > 0 && tuning === job;
+  const inRange = (v, [lo, hi]) => Number.isInteger(v) && v >= lo && v <= hi;
   const trials = new Map();
 
   function load() {
@@ -1061,12 +1085,15 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       Object.assign(state, { dims, T: v.T, s: v.s, auto: !!v.auto, flat: !!v.flat, d2: v.d2 !== false, quorum: !!v.quorum, pipeline: !!v.pipeline, seed: v.seed,
         // Preset ids are positions in the current data, so the saved one counts only while it still names this tree.
         preset: whole && PRESETS.some((p) => p.id === v.preset && same(p.dims, dims) && targetOf(p) === v.T) ? v.preset : "" });
+      // States saved before Re-tune lack N and c, so each falls back on its own.
+      if (inRange(v.N, N_RANGE)) state.N = v.N;
+      if (inRange(v.c, C_RANGE)) state.c = v.c;
     } catch (e) { /* storage unavailable or malformed: keep defaults */ }
   }
   function save() {
     try {
-      const { dims, T, s, auto, flat, d2, quorum, pipeline, seed, preset } = state;
-      localStorage.setItem(STORE, JSON.stringify({ dims, T, s, auto, flat, d2, quorum, pipeline, seed, preset }));
+      const { dims, T, s, auto, flat, d2, quorum, pipeline, seed, preset, N, c } = state;
+      localStorage.setItem(STORE, JSON.stringify({ dims, T, s, auto, flat, d2, quorum, pipeline, seed, preset, N, c }));
     } catch (e) { /* private mode or quota: the explorer works without persistence */ }
   }
 
@@ -1152,6 +1179,11 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     }
     if ("s" in patch) ["curve", "ladderP", "readout", "controls"].forEach((p) => dirty.add(p));
     if ("flat" in patch || "d2" in patch || "quorum" in patch || "pipeline" in patch) ["curve", "readout", "controls"].forEach((p) => dirty.add(p));
+    // A new dataset leaves the tree alone but stops a tune for the old one.
+    if ("N" in patch || "c" in patch) {
+      dirty.add("controls");
+      if (tuneRunning()) { job++; say(""); }
+    }
     if ("quorum" in patch) quorumOf(derived);
     if (reshape || "pipeline" in patch) pipelineCounts(derived);
     // Trials follow the pipeline when it is on, so the old dots no longer apply.
@@ -1190,14 +1222,21 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   }
   const morphing = (now) => shown && shown !== derived.ys && now - morph < MORPH_MS;
   const say = (text) => { $("ex-msg").textContent = text; };
+  const tText = (T) => T.toFixed(Math.abs(T * 100 - Math.round(T * 100)) < 1e-9 ? 2 : 4);
+  const mass = () => C.nearMass(state.N, state.c, DATA.tidy);
 
   // ---- Controls ----
   function renderControls() {
     const sel = $("ex-preset");
     sel.value = state.preset || "custom";
     $("ex-t").value = state.T;
-    $("ex-t-out").textContent = state.T.toFixed(Math.abs(state.T * 100 - Math.round(state.T * 100)) < 1e-9 ? 2 : 4);
+    $("ex-t-out").textContent = tText(state.T);
     $("ex-auto").checked = state.auto;
+    $("ex-n").value = state.N;
+    $("ex-mix").value = state.c;
+    $("ex-m-out").textContent = mass().toFixed(2);
+    // A tune at the inputs of the last one would load the same tree.
+    $("ex-retune").disabled = tuneRunning() || same(lastTune || [], [state.N, state.c, state.T]);
     $("ex-flat").checked = state.flat;
     $("ex-d2").checked = state.d2;
     $("ex-quorum").checked = state.quorum;
@@ -1266,29 +1305,63 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     return box;
   }
 
-  // Replaces the tree with the sharpest one of its depth within its rows at t.
-  // Deep searches take seconds, so it runs a slice per frame. A newer job or any shape change stops it.
-  function searchDepth() {
-    const { n, k, T } = derived;
-    if (n > SEARCH_LIMIT) return say("The search covers trees of at most 10 million rows.");
-    const mine = ++job, steps = C.treeSearch(n, k, T, 1, SEARCH_WORK);
+  // Runs a search a slice per frame under a new job, so a newer job or any shape change stops it. Returns the job.
+  function runSliced(steps, onProgress, onDone) {
+    const mine = ++job;
     const tick = (now) => {
       if (mine !== job) return;
       const end = sliceDeadline(now);
       let r;
       do r = steps.next(); while (!r.done && performance.now() < end);
       if (!r.done) {
-        say(`Searching depth ${k} trees within ${n} rows. Free arities up to ${r.value.arity} and d0 up to ${r.value.d0}.`);
+        onProgress(r.value);
         return requestAnimationFrame(tick);
       }
-      const { dims, arity, complete } = r.value, allows = `The study allows ${C.MAX_FREE_ARITY}.`;
-      const bound = complete ? "" : arity >= 2 ? `Bounded search. Every tree with free arities up to ${arity} was tried. ${allows}`
-        : `Bounded search. The work cap stopped it inside the free arity 2 shell. ${allows}`;
-      // set() clears the message, so the bound follows it.
-      if (dims) set({ dims, auto: false });
-      say(dims ? bound : `No depth ${k} tree within ${n} rows has t̂ within ${C.TOLERANCE} of t ${T.toFixed(2)}. ${bound}`.trim());
+      onDone(r.value);
     };
     requestAnimationFrame(tick);
+    return mine;
+  }
+
+  // Replaces the tree with the sharpest one of its depth within its rows at t. Deep searches take seconds.
+  function searchDepth() {
+    const { n, k, T } = derived;
+    if (n > SEARCH_LIMIT) return say("The search covers trees of at most 10 million rows.");
+    runSliced(C.treeSearch(n, k, T, 1, SEARCH_WORK),
+      (p) => say(`Searching depth ${k} trees within ${n} rows. Free arities up to ${p.arity} and d0 up to ${p.d0}.`),
+      ({ dims, arity, complete }) => {
+        const allows = `The study allows ${C.MAX_FREE_ARITY}.`;
+        const bound = complete ? "" : arity >= 2 ? `Bounded search. Every tree with free arities up to ${arity} was tried. ${allows}`
+          : `Bounded search. The work cap stopped it inside the free arity 2 shell. ${allows}`;
+        // set() clears the message, so the bound follows it.
+        if (dims) set({ dims, auto: false });
+        say(dims ? bound : `No depth ${k} tree within ${n} rows has t̂ within ${C.TOLERANCE} of t ${T.toFixed(2)}. ${bound}`.trim());
+      });
+  }
+
+  // Loads the tree the tidy rule picks for N, c and t within the top budget. The first sweep at a new t takes seconds.
+  function retune() {
+    const { N, c, T } = state, at = `N ${N} c ${c} at t ${tText(T)}`, [lo, hi] = C.TIDY_DEPTHS;
+    tuning = runSliced(C.tidySearch(N, mass(), T, TOP, DATA.tidy.gamma),
+      (p) => say(p.phase === "sweep" ? `Tuning for ${at}. Finding matched trees at depth ${p.depth} of ${hi}. ${p.tuples} so far.`
+        : `Tuning for ${at}. Scored ${p.scored} of ${p.tuples} matched trees.`),
+      (r) => {
+        tuning = 0;
+        lastTune = [N, c, T];
+        // set() clears the message, so the result follows it.
+        if (r.dims) set({ dims: r.dims, auto: false });
+        say(r.dims ? tuneText(r, N, c, T, at) : `No tree at depths ${lo} to ${hi} within ${TOP} rows has t̂ within ${C.TOLERANCE} of t for ${at}.`);
+        dirty.add("controls");
+        schedule();
+      });
+    dirty.add("controls");
+    schedule();
+  }
+  // The study's expected errors show only for a dataset and target it ran, where its pick is this tree.
+  function tuneText(r, N, c, T, at) {
+    const row = DATA.tidy.rows.find((x) => x.n === N && x.mix === c && x.t === T && same(x.dims, r.dims));
+    const measured = row ? ` Expected errors (study) ${count(row.e)}.` : "";
+    return `Tidy rule tree ${K.tuple(r.dims)} for ${at} out of ${r.tuples} matched trees within ${TOP} rows. t̂ ${num(C.threshold(r.dims), 3)} and W ${num(C.width(r.dims), 3)}.${measured}`;
   }
 
   // How much the least error area tree past the cap gains on the best within it, from the t 0.5 search at the top budget.
@@ -1804,6 +1877,15 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     $("ex-pipeline").addEventListener("change", (e) => set({ pipeline: e.target.checked }));
     $("ex-s").addEventListener("input", (e) => set({ s: Number(e.target.value) }));
     $("ex-seed").addEventListener("change", (e) => { const v = Math.round(Number(e.target.value)); if (v >= 1) set({ seed: v }); e.target.value = state.seed; });
+    // A number past its range clamps to the nearest end. A box left empty or unreadable shows the current value again.
+    for (const [id, key, range] of [["ex-n", "N", N_RANGE], ["ex-mix", "c", C_RANGE]]) {
+      $(id).addEventListener("change", (e) => {
+        const v = parseFloat(e.target.value);
+        if (Number.isFinite(v)) set({ [key]: Math.max(range[0], Math.min(range[1], Math.round(v))) });
+        e.target.value = state[key];
+      });
+    }
+    $("ex-retune").addEventListener("click", retune);
     $("ex-one").addEventListener("click", runOne);
     $("ex-many").addEventListener("click", () => runBatch([state.s], 1000, "Running"));
     $("ex-sweep").addEventListener("click", () => runBatch(Array.from({ length: 19 }, (_, i) => +(0.05 * (i + 1)).toFixed(2)), 1000, "Sweeping"));

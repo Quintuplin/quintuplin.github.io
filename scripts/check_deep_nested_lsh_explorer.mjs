@@ -118,7 +118,8 @@ function boot(saved, patch = (src) => src) {
     cancelAnimationFrame: (id) => frames.delete(id),
     addEventListener: () => {},
   });
-  // The maths is stateless, so the explorer shares this realm's copy. Inside a vm context it runs about 9 times slower.
+  // The explorer shares this realm's maths, as inside a vm context it runs about 9 times slower.
+  // Its only state is the tidy rule's cache of exact results for the last sweep, so sharing it changes no result.
   ctx.globalThis = ctx.window = ctx;
   ctx.Cascade = C;
   for (const id of ["chartkit-src", "explorer-src"]) vm.runInContext(id === "explorer-src" ? patch(PageScripts.read(id)) : PageScripts.read(id), ctx, { filename: id });
