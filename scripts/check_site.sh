@@ -63,8 +63,10 @@ fridge=simulations/fridge-event-sim/index.html
 checkFridge() { node scripts/check_fridge.mjs "$site/$fridge" || err "fridge behaviour check failed"; }
 
 # The Deep Nested LSH maths matches the study reference and its explorer behaves (#31).
+# The tidy rule parity takes as long as the rest of the maths, so it runs as its own process (#48).
 deep="$site/simulations/deep-nested-lsh/index.html"
-deepMaths() { node scripts/check_deep_nested_lsh.mjs "$deep"; }
+deepMaths() { node --test-skip-pattern='^tidy' scripts/check_deep_nested_lsh.mjs "$deep"; }
+deepTidy() { node --test-name-pattern='^tidy' scripts/check_deep_nested_lsh.mjs "$deep"; }
 deepExplorer() { node scripts/check_deep_nested_lsh_explorer.mjs "$deep"; }
 . scripts/run_deep_checks.sh
 sh scripts/check_run_deep_checks.sh || err "the background glue of runDeepChecks is broken"
