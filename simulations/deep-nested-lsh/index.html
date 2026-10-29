@@ -18,6 +18,7 @@
   --ok: #17744a; --ok-bg: rgba(23, 116, 74, 0.12); --open: #8c3a3a; --d2: #2a78d6;
   --fp: #1d55ad; --fp-fill: rgba(29, 85, 173, 0.14); --fn: #964310; --fn-fill: rgba(150, 67, 16, 0.13);
   --band: rgba(26, 86, 180, 0.07); --on: #0c7d52; --on-ink: #ffffff; --off: rgba(22, 24, 28, 0.07);
+  --warn: #7a4a00; --warn-bg: rgba(255, 190, 0, 0.24); --warn-line: #b07800;
   --sans: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
   --mono: ui-monospace, Menlo, Consolas, monospace;
 }
@@ -33,6 +34,7 @@
     --ok: #63d398; --ok-bg: rgba(99, 211, 152, 0.14); --open: #f0a3a3; --d2: #5a9cf0;
     --fp: #85b2ff; --fp-fill: rgba(133, 178, 255, 0.18); --fn: #ff9a52; --fn-fill: rgba(255, 154, 82, 0.18);
     --band: rgba(142, 167, 255, 0.09); --on: #2fcf8c; --on-ink: #0f1115; --off: rgba(255, 255, 255, 0.07);
+    --warn: #ffd166; --warn-bg: rgba(255, 196, 0, 0.16); --warn-line: #e0a800;
   }
 }
 :root[data-theme="dark"] {
@@ -46,6 +48,7 @@
   --ok: #63d398; --ok-bg: rgba(99, 211, 152, 0.14); --open: #f0a3a3; --d2: #5a9cf0;
   --fp: #85b2ff; --fp-fill: rgba(133, 178, 255, 0.18); --fn: #ff9a52; --fn-fill: rgba(255, 154, 82, 0.18);
   --band: rgba(142, 167, 255, 0.09); --on: #2fcf8c; --on-ink: #0f1115; --off: rgba(255, 255, 255, 0.07);
+  --warn: #ffd166; --warn-bg: rgba(255, 196, 0, 0.16); --warn-line: #e0a800;
 }
 * { box-sizing: border-box; }
 html { background: var(--bg); }
@@ -94,7 +97,7 @@ output { font-family: var(--mono); color: var(--ink); font-size: 13.5px; min-wid
 .toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 13.5px; color: var(--ink2); cursor: pointer; }
 .toggle input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
 .ex-tidy { grid-column: 1 / -1; }
-.ex-tidy input[type="number"] { width: 6.5em; height: auto; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.ex-tidy input[type="number"], .ex-tidy select { width: 6.5em; height: auto; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
 .stepper { display: flex; align-items: center; }
 .stepper button { width: 26px; height: 28px; border: 0; background: transparent; border-radius: 6px; cursor: pointer; font-size: 16px; line-height: 1; color: var(--ink2); }
 .stepper button:hover:not(:disabled) { background: var(--wash); }
@@ -164,6 +167,10 @@ output { font-family: var(--mono); color: var(--ink); font-size: 13.5px; min-wid
 .outcome[data-k="FP"] { background: var(--fp-fill); color: var(--fp); }
 .outcome[data-k="FN"] { background: var(--fn-fill); color: var(--fn); }
 .ex-msg { font-size: 13px; color: var(--ink2); min-height: 1.6em; margin: 0; }
+/* The text opens with "Warning", so the note does not rely on its colour. */
+.ex-limit { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-line); border-left-width: 5px; border-radius: 8px; padding: 8px 12px; margin: 0; font-size: 13.5px; font-weight: 600; line-height: 1.45; }
+/* The empty live note stays mounted so screen readers hear the warning. Out of the flow it adds no gap. */
+.ex-limit:empty { position: absolute; padding: 0; border: 0; }
 .readout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line); overflow: hidden; }
 @container ex (min-width: 480px) { .readout { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .ro { padding: 10px 14px; min-width: 0; box-shadow: 1px 0 0 var(--line), 0 1px 0 var(--line); }
@@ -230,7 +237,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     <div class="field ex-tidy">
       <span>Tidy rule for a dataset</span>
       <div class="field-row">
-        <label class="toggle">Dataset size N <input type="number" id="ex-n" min="1000" max="100000" step="1" class="mono"></label>
+        <label class="toggle">Dataset size N <select id="ex-n" class="mono"></select></label>
         <label class="toggle">Cluster size c <input type="number" id="ex-mix" min="2" max="50" step="1" class="mono"></label>
         <span class="toggle">Near-pair mass m <output id="ex-m-out"></output></span>
         <button class="btn primary" id="ex-retune" type="button" title="Load the tree the tidy rule picks for N, c and t">Re-tune</button>
@@ -258,12 +265,13 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     </div>
     <div class="ex-tree">
       <div class="ex-actions">
-        <button class="btn primary" id="ex-one" type="button" title="Run one pair up the tree">Run</button>
-        <button class="btn" id="ex-many" type="button" title="Run 1000 pairs at the current s">1000 at s</button>
-        <button class="btn" id="ex-sweep" type="button" title="Run 1000 pairs at each s from 0.05 to 0.95">Sweep</button>
+        <button class="btn primary" id="ex-one" type="button" title="Run one pair up the tree" aria-describedby="ex-limit">Run</button>
+        <button class="btn" id="ex-many" type="button" title="Run 1000 pairs at the current s" aria-describedby="ex-limit">1000 at s</button>
+        <button class="btn" id="ex-sweep" type="button" title="Run 1000 pairs at each s from 0.05 to 0.95" aria-describedby="ex-limit">Sweep</button>
         <button class="btn" id="ex-search" type="button" title="Swap in the sharpest tree of this depth within these rows at t">Sharpest at depth k</button>
         <button class="btn text" id="ex-clear" type="button" title="Clear the trial dots and the ladder">Clear</button>
       </div>
+      <p class="ex-limit" id="ex-limit" role="note" aria-live="polite"></p>
       <div class="ladder-head">
         <div class="ladder-depth" id="ex-depth">Depth k</div>
         <p class="ladder-key">Each faint curve is one level. <span class="op AND">AND</span> levels set the FP tail. <span class="op OR">OR</span> levels set the FN tail.</p>
@@ -337,10 +345,10 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>Arity families at t 0.5</dt><dd>Trees at depth 3 and up within 10000 rows matched to t 0.5, searched with arities up to 60 above d1. The families differ in where the large arities sit.</dd>
       <dt>head-heavy, even-weights and tail-heavy</dt><dd>Head-heavy puts the large arities at the low levels near the rows. Tail-heavy puts them at the high levels near the root. Even-weights keeps the arities as close to equal as the threshold allows.</dd>
       <dt>Flat reading collapse (7, 23, 3) and (7, 69)</dt><dd>Under the flat reading (7, 23, 3) collapses to the banding (7, 69). Switch on Flat reading to compare the two trees.</dd>
-      <dt>Dataset size N</dt><dd>The number of documents in the dataset to tune for. The box takes 1000 to 100000. The study corpus has 1000.</dd>
+      <dt>Dataset size N</dt><dd>The number of documents in the dataset to tune for. The list runs from 1000 to 100000 in steps of 1, 2, 3 and 5 per power of ten. It holds every N the study ran, which are 1000, 3000, 10000, 30000 and 100000. The study corpus has 1000.</dd>
       <dt>Cluster size c</dt><dd>Documents per cluster of near duplicates in the generated dataset the rule assumes. The box takes 2 to 50. The study corpus has 19.</dd>
       <dt>Near-pair mass m</dt><dd>Near pairs per document in that dataset. Members of a cluster pair with each other. 5% of the documents are noise. Up to 1000 of them share one filler pool and the rest share pools of 50. Documents of one pool also count as near pairs.</dd>
-      <dt>Tidy rule (Re-tune)</dt><dd>Re-tune loads the tree a fitted rule picks for N, c and t. Among the matched trees at depths 2 to 10 within 10000 rows it takes the one with the least λ A_lo + A_hi. The study fitted it on datasets with N from 3000 to 100000 and c from 10 to 40. Outside those ranges it extrapolates. The button stays off after a tune until N, c or t changes.</dd>
+      <dt>Tidy rule (Re-tune)</dt><dd>Re-tune loads the tree a fitted rule picks for N, c and t. Among the matched trees at depths 2 to 10 within 10000 rows it takes the one with the least λ A_lo + A_hi. The study fitted it on datasets with N from 3000 to 100000 and c from 10 to 40. Outside those ranges it extrapolates. The button stays off after a tune until N, c, t or the tree changes.</dd>
       <dt>Weight λ</dt><dd>λ = R<sup>γ</sup> with the fitted γ 0.05. R = ((N − 1)/2 − m)(1 − t)/(m t) is the ratio of non-near to near pairs per document with each spread evenly over its side of t. A larger λ weighs false positives more.</dd>
       <dt>A_lo and A_hi</dt><dd>The two parts of the error area E. A_lo is the FP area below t. A_hi is the FN area above t.</dd>
       <dt>Expected errors (study)</dt><dd>E[FP] + E[FN] the study computed for the rule's tree on its generated dataset of N documents with cluster size c. Re-tune shows it only for an N, c and t the study ran.</dd>
@@ -357,7 +365,9 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
 // scripts/check_deep_nested_lsh.mjs runs this script against the study reference values.
 (function (root) {
   "use strict";
-  const ROW_CAP = 100000;
+  // Batch trials stop at ROW_CAP rows. One Run pair at RUN_ROWS holds about 64 MB of live heap for its row table and
+  // peaks 110 to 205 MB RSS above idle across node 22 and 26, under a 256 MB budget.
+  const ROW_CAP = 100000, RUN_ROWS = 2000000;
   const TOLERANCE = 0.01;
   const MAX_FREE_ARITY = 24;
 
@@ -855,14 +865,18 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     return arg < pair.I ? 1 : 0;
   }
 
-  // One pair through every row of the tree.
-  function sampleTree(pair, d, rowsUpTo) {
-    const n = rows(d);
-    if (n > ROW_CAP) return null;
-    const flat = rowsUpTo(n), bits = new Uint8Array(n);
-    for (let i = 0; i < n; i++) bits[i] = agree(flat, pair, i);
+  // One pair through every row of the tree, SAMPLE_STEP rows a step, so a big tree can share frames. Yields the rows done.
+  const SAMPLE_STEP = 4096;
+  function* sampleSteps(pair, d, rowsUpTo) {
+    const n = rows(d), bits = new Uint8Array(n);
+    for (let i = 0; i < n;) {
+      const end = Math.min(n, i + SAMPLE_STEP), flat = rowsUpTo(end);
+      for (; i < end; i++) bits[i] = agree(flat, pair, i);
+      if (i < n) yield i;
+    }
     return { bits, levels: evalTree(bits, d) };
   }
+  const sampleTree = (pair, d, rowsUpTo) => drain(sampleSteps(pair, d, rowsUpTo));
 
   // Many fresh pairs at s on the same rows. A node stops at the first child that settles it, and a band at its first miss.
   // Given a target t the pairs go through retrieve then verify, and the row count stops once the quorum is settled.
@@ -901,9 +915,9 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   }
 
   root.Cascade = {
-    ROW_CAP, TOLERANCE, MAX_FREE_ARITY, TIDY_DEPTHS, isOr, rows, levels, curve, flatCurve, inverse, threshold, width, profile, bandsForThreshold,
+    ROW_CAP, RUN_ROWS, TOLERANCE, MAX_FREE_ARITY, TIDY_DEPTHS, isOr, rows, levels, curve, flatCurve, inverse, threshold, width, profile, bandsForThreshold,
     errorArea, errorAreaParts, tails, solveD1, treeSearch, bestTree, nearMass, tidyLambda, tidySearch, tidyTune, expectedCounts, spread, logPair, localSlopes, quorumCurve, pipelineCurve,
-    quorumInverse, keptBands, verified, mulberry32, evalTree, drawRows, hash61, pairShape, drawPair, agree, sampleTree, runTrials, wilson,
+    quorumInverse, keptBands, verified, mulberry32, evalTree, drawRows, hash61, pairShape, drawPair, agree, sampleSteps, sampleTree, runTrials, wilson,
   };
 })(globalThis);
 </script>
@@ -1065,13 +1079,18 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   // ---- State ----
   const targetOf = (p) => (p.t === null ? C.threshold(p.dims) : p.t);
   // N and c open on the study corpus of 1000 documents in clusters of 19.
-  const N_RANGE = [1000, 100000], C_RANGE = [2, 50];
+  // N takes steps of 1, 2, 3 and 5 per power of ten, which hold every N the study ran.
+  const N_OPTIONS = [1000, 2000, 3000, 5000, 10000, 20000, 30000, 50000, 100000], C_RANGE = [2, 50];
   const state = { dims: DEFAULT.dims.slice(), T: targetOf(DEFAULT), auto: false, s: 0.5, flat: false, d2: true, quorum: false, pipeline: false, seed: 753, preset: DEFAULT.id, matched: true, N: 1000, c: 19 };
   let derived = null, shown = null, morph = 0, job = 0, pipeJob = 0, anim = 0, frame = 0, dirty = new Set(), rng, hashes;
-  // tuning holds the job of a running tune. lastTune holds the N, c and t of the last finished one.
+  // tuning holds the job of a running tune. lastTune holds the tuneKey after the last finished one.
   let tuning = 0, lastTune = null;
+  // The inputs and the shown tree. The arity count encodes the depth, so a flat compare is enough.
+  const tuneKey = () => [state.N, state.c, state.T, ...state.dims];
   const tuneRunning = () => tuning > 0 && tuning === job;
   const inRange = (v, [lo, hi]) => Number.isInteger(v) && v >= lo && v <= hi;
+  // The N option nearest v on a log scale, or null when v is no positive number.
+  const nearestN = (v) => (Number.isFinite(v) && v > 0 ? N_OPTIONS.reduce((a, b) => (Math.abs(Math.log(b / v)) < Math.abs(Math.log(a / v)) ? b : a)) : null);
   const trials = new Map();
 
   function load() {
@@ -1085,8 +1104,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       Object.assign(state, { dims, T: v.T, s: v.s, auto: !!v.auto, flat: !!v.flat, d2: v.d2 !== false, quorum: !!v.quorum, pipeline: !!v.pipeline, seed: v.seed,
         // Preset ids are positions in the current data, so the saved one counts only while it still names this tree.
         preset: whole && PRESETS.some((p) => p.id === v.preset && same(p.dims, dims) && targetOf(p) === v.T) ? v.preset : "" });
-      // States saved before Re-tune lack N and c, so each falls back on its own.
-      if (inRange(v.N, N_RANGE)) state.N = v.N;
+      // States saved before Re-tune lack N and c, so each falls back on its own. An N saved before the list takes its nearest option.
+      state.N = nearestN(v.N) ?? state.N;
       if (inRange(v.c, C_RANGE)) state.c = v.c;
     } catch (e) { /* storage unavailable or malformed: keep defaults */ }
   }
@@ -1206,7 +1225,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     seedStreams();
     resetTiles();
     say("");
-    // Controls redraw so a tree over the row cap says again why trials are off.
+    // Controls redraw, so the trial buttons and the limit note follow the restarted trials.
     ["curve", "controls"].forEach((p) => dirty.add(p));
   }
   function schedule() { if (!frame) frame = requestAnimationFrame(draw); }
@@ -1237,8 +1256,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     $("ex-n").value = state.N;
     $("ex-mix").value = state.c;
     $("ex-m-out").textContent = mass().toFixed(2);
-    // A tune at the inputs of the last one would load the same tree.
-    $("ex-retune").disabled = tuneRunning() || same(lastTune || [], [state.N, state.c, state.T]);
+    // A tune at the inputs of the last one would load the tree already shown.
+    $("ex-retune").disabled = tuneRunning() || same(lastTune || [], tuneKey());
     $("ex-flat").checked = state.flat;
     $("ex-d2").checked = state.d2;
     $("ex-quorum").checked = state.quorum;
@@ -1247,9 +1266,22 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     $("ex-s-out").textContent = state.s.toFixed(3);
     $("ex-seed").value = state.seed;
     $("ex-search").textContent = `Sharpest at depth ${derived.k}`;
-    const tooBig = derived.n > C.ROW_CAP;
-    for (const id of ["ex-one", "ex-many", "ex-sweep"]) $(id).disabled = tooBig;
-    if (tooBig) say(`Trials run on trees of at most ${C.ROW_CAP} rows. This tree has ${derived.n > 1e7 ? derived.n.toExponential(2) : derived.n}. The curve and readout still apply.`);
+    renderLimits();
+  }
+  // Above ROW_CAP the batch buttons are off and Run may be slow. Above RUN_ROWS one pair would not fit in memory.
+  function renderLimits() {
+    const n = derived.n, note = $("ex-limit"), text = limitText(n);
+    $("ex-one").disabled = n > C.RUN_ROWS;
+    for (const id of ["ex-many", "ex-sweep"]) $(id).disabled = n > C.ROW_CAP;
+    // The note is a live region, so it is written only when the warning changes.
+    if (text !== shownLimit) note.innerHTML = shownLimit = text;
+  }
+  let shownLimit = "";
+  function limitText(n) {
+    if (n <= C.ROW_CAP) return "";
+    const run = n > C.RUN_ROWS ? `Run is off too above ${count(C.RUN_ROWS)} rows because one pair would need more memory than the page allows.`
+      : "Run still sends one pair up the tree but may be slow.";
+    return `Warning. This tree has ${count(n)} rows, above the ${C.ROW_CAP} row limit for 1000 at s and Sweep, so those buttons are off. ${run}`;
   }
 
   function buildPresetSelect() {
@@ -1272,6 +1304,21 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     sel.addEventListener("change", () => {
       const p = PRESETS.find((x) => x.id === sel.value);
       if (p) set({ dims: p.dims.slice(), T: targetOf(p), auto: false, preset: p.id });
+    });
+  }
+
+  function buildNSelect() {
+    const sel = $("ex-n");
+    for (const v of N_OPTIONS) {
+      const o = document.createElement("option");
+      o.value = o.textContent = String(v);
+      sel.appendChild(o);
+    }
+    // An unlisted value, such as one set by script, takes its nearest option.
+    sel.addEventListener("change", () => {
+      const v = nearestN(parseFloat(sel.value));
+      if (v) set({ N: v });
+      sel.value = state.N;
     });
   }
 
@@ -1307,11 +1354,10 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     return box;
   }
 
-  // Runs a search a slice per frame under a new job, so a newer job or any shape change stops it. Returns the job.
-  function runSliced(steps, onProgress, onDone) {
-    const mine = ++job;
+  // Runs steps a slice per frame while alive() holds. With now the first slice runs at once, so a short job ends in the call.
+  function sliced(steps, alive, onProgress, onDone, now) {
     const tick = (now) => {
-      if (mine !== job) return;
+      if (!alive()) return;
       const end = sliceDeadline(now);
       let r;
       do r = steps.next(); while (!r.done && performance.now() < end);
@@ -1321,7 +1367,13 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       }
       onDone(r.value);
     };
-    requestAnimationFrame(tick);
+    if (now === undefined) requestAnimationFrame(tick);
+    else tick(now);
+  }
+  // Runs a search a slice per frame under a new job, so a newer job or any shape change stops it. Returns the job.
+  function runSliced(steps, onProgress, onDone) {
+    const mine = ++job;
+    sliced(steps, () => mine === job, onProgress, onDone);
     return mine;
   }
 
@@ -1349,9 +1401,9 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
         : `Tuning for ${at}. Scored ${p.scored} of ${p.tuples} matched trees.`),
       (r) => {
         tuning = 0;
-        lastTune = [N, c, T];
         // set() clears the message, so the result follows it.
         if (r.dims) set({ dims: r.dims, auto: false });
+        lastTune = tuneKey();
         say(r.dims ? tuneText(r, N, c, T, at) : `No tree at depths ${lo} to ${hi} within ${TOP} rows has t̂ within ${C.TOLERANCE} of t for ${at}.`);
         dirty.add("controls");
         schedule();
@@ -1527,13 +1579,23 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   }
   const OUTCOME = { TP: "True positive", FP: "False positive", FN: "False negative", TN: "True negative" };
 
+  // The animation token of the Run whose progress line shows, until its outcome replaces it.
+  let running = 0;
+  // Sends one pair through the rows a slice per frame under the animation token, so a shape change, Clear or a new Run stops it.
   function runOne() {
+    // A refused Run leaves a climbing pair and its progress line alone.
+    if (C.rows(state.dims) > C.RUN_ROWS) return;
     // A shape change waiting for its frame leaves the rungs of the old tree, so draw it first.
     if (frame) { cancelAnimationFrame(frame); draw(performance.now()); }
-    const d = state.dims, T = state.T, mine = ++anim;
-    if (C.rows(d) > C.ROW_CAP) return;
-    const pair = C.drawPair(state.s, rng, PAIR.size, PAIR.vocab), s = pair.s, trial = C.sampleTree(pair, d, hashes);
+    const d = state.dims, T = state.T, n = C.rows(d), mine = running = ++anim;
+    const pair = C.drawPair(state.s, rng, PAIR.size, PAIR.vocab);
     resetTiles();
+    sliced(C.sampleSteps(pair, d, hashes), () => mine === anim,
+      (done) => say(`Sending one pair up ${n} rows. ${Math.floor((100 * done) / n)}% of the rows read.`),
+      (trial) => climb(trial, pair.s, d, T, mine), performance.now());
+  }
+  // The pair's rung by rung reveal from L0 to the root, then its outcome chip.
+  function climb(trial, s, d, T, mine) {
     // Rungs run root first, so walk them in reverse: L0, L1 up to the root.
     const order = rungs.slice().reverse();
     // Node 0 of level j has the first d_j nodes of level j − 1 as children, or the first d0 rows at level 0.
@@ -1550,6 +1612,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       chip.textContent = `${verdict} · ${kind} ${OUTCOME[kind]}`;
       root.row.querySelector(".tiles").appendChild(chip);
       record(s, fired ? 1 : 0, 1);
+      running = 0;
       say(`A pair at s′ ${s.toFixed(3)} against target ${T.toFixed(2)}. ${pipe ? `The pipeline ${fired ? "retrieved and verified the pair" : "dropped the pair"}` : `The root ${fired ? "fired so the pair is a candidate" : "stayed off so the pair is dropped"}`}. ${OUTCOME[kind]}.`);
     };
     // A deep tree still climbs in about a second.
@@ -1586,6 +1649,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   const realised = (s) => { const { U, I } = C.pairShape(s, PAIR.size); return I / U; };
   // Bulk runs fill a time slice per frame, since a linear-hash trial costs from one row to every row. A newer job or any shape change stops an older one.
   function runBatch(points, perPoint, label) {
+    if (C.rows(state.dims) > C.ROW_CAP) return;
     const mine = ++job, d = state.dims, t = state.pipeline ? state.T : undefined;
     let i = 0, done = 0;
     const tick = (now) => {
@@ -1860,7 +1924,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   function relayout(parts) {
     if (plotWidth() !== W) { buildPlot(); parts.add("curve"); }
     if (tailWidth() !== tailW) parts.add("tails");
-    if (cap() !== shownCap) { anim++; parts.add("ladder"); }
+    // The rebuilt ladder stops a Run, so its progress line goes with it. Other status lines stay.
+    if (cap() !== shownCap) { if (running === anim) say(""); anim++; parts.add("ladder"); }
   }
 
   function init() {
@@ -1869,6 +1934,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     solve();
     derived = derive();
     buildPresetSelect();
+    buildNSelect();
     buildPlot();
     wirePlot();
     $("ex-t").addEventListener("input", (e) => set({ T: Number(e.target.value) }));
@@ -1880,13 +1946,11 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     $("ex-s").addEventListener("input", (e) => set({ s: Number(e.target.value) }));
     $("ex-seed").addEventListener("change", (e) => { const v = Math.round(Number(e.target.value)); if (v >= 1) set({ seed: v }); e.target.value = state.seed; });
     // A number past its range clamps to the nearest end. A box left empty or unreadable shows the current value again.
-    for (const [id, key, range] of [["ex-n", "N", N_RANGE], ["ex-mix", "c", C_RANGE]]) {
-      $(id).addEventListener("change", (e) => {
-        const v = parseFloat(e.target.value);
-        if (Number.isFinite(v)) set({ [key]: Math.max(range[0], Math.min(range[1], Math.round(v))) });
-        e.target.value = state[key];
-      });
-    }
+    $("ex-mix").addEventListener("change", (e) => {
+      const v = parseFloat(e.target.value);
+      if (Number.isFinite(v)) set({ c: Math.max(C_RANGE[0], Math.min(C_RANGE[1], Math.round(v))) });
+      e.target.value = state.c;
+    });
     $("ex-retune").addEventListener("click", retune);
     $("ex-one").addEventListener("click", runOne);
     $("ex-many").addEventListener("click", () => runBatch([state.s], 1000, "Running"));

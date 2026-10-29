@@ -337,6 +337,20 @@ test("lazyTrialMatchesFullTree", () => {
   assert.deepEqual([...outcomes].sort(), [0, 1], "both outcomes occur");
 });
 
+// Run slices a big trial across frames, so the sliced draw must agree with drawing every row at once (#50).
+test("sampleStepsMatchesOneShot", () => {
+  const d = [4, 6, 5, 7, 12], n = C.rows(d), pair = C.drawPair(0.5, C.mulberry32(3), PAIR.size, PAIR.vocab);
+  const steps = C.sampleSteps(pair, d, C.drawRows(C.mulberry32(4))), done = [];
+  let r;
+  while (!(r = steps.next()).done) done.push(r.value);
+  assert.ok(done.length > 1, `${n} rows yield more than once`);
+  assert.ok(done.every((v, i) => v > (done[i - 1] || 0) && v < n), `the rows done climb below ${n}: ${done}`);
+  const flat = C.drawRows(C.mulberry32(4))(n), bits = Uint8Array.from({ length: n }, (_, i) => C.agree(flat, pair, i));
+  assert.deepEqual(r.value.bits, bits, "every row agrees as in one pass");
+  assert.deepEqual(r.value.levels, C.evalTree(bits, d));
+  assert.deepEqual(C.sampleTree(pair, d, C.drawRows(C.mulberry32(4))), r.value, "sampleTree drains the same steps");
+});
+
 // Guard: the Bernoulli trials matched the curve by construction. Linear-hash trials must match it at the realised s.
 test("linearTrialsMatchCurve", () => {
   const hashes = C.drawRows(C.mulberry32(9)), trials = 2000;

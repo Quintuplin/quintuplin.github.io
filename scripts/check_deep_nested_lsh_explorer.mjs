@@ -252,15 +252,19 @@ test("seedInputShowsEffectiveSeed", () => {
   assert.equal(String($("ex-seed").value), "13", "an invalid seed is refused and the box shows the current seed");
 });
 
-test("seedChangeKeepsRowCapMessage", () => {
+test("seedChangeKeepsLimitNote", () => {
   const { $, flush } = boot({ dims: [400, 400], T: 0.5, s: 0.5, seed: 753 });
   flush();
-  const why = /Trials run on trees of at most/;
-  assert.match($("ex-msg").textContent, why, "a tree over the row cap says why trials are off");
+  const why = /^Warning\. This tree has 160000 rows/;
+  assert.match($("ex-limit").textContent, why, "a tree over the row limit warns");
+  let writes = 0;
+  Object.defineProperty($("ex-limit"), "innerHTML", { set(v) { writes++; this.text = String(v); }, get() { return this.text; } });
   enterSeed($, 754);
   flush();
-  assert.ok($("ex-one").disabled, "trials stay off");
-  assert.match($("ex-msg").textContent, why, "a seed change keeps the reason trials are off");
+  assert.ok($("ex-many").disabled && $("ex-sweep").disabled, "the batch buttons stay off");
+  assert.equal($("ex-one").disabled, false, "Run stays on");
+  assert.match($("ex-limit").textContent, why, "a seed change keeps the warning");
+  assert.equal(writes, 0, "the live note is not rewritten, so it is not announced again");
 });
 
 // Guard: the explorer once let the depth reach 13 while the study's search stops at its grid max.
@@ -593,6 +597,121 @@ test("searchStopsWhenTreeChanges", () => {
   assert.doesNotMatch($("ex-msg").textContent, /Searching/);
 });
 
+// ---- LimitChecks: above the row limit the batch buttons are off and Run warns (#50) ----
+// The depth 9 tree (2, 36, 2, 3, 4, 3, 2, 2, 3) with one more level of 2 has 124416 rows.
+const BIG = [2, 36, 2, 3, 4, 3, 2, 2, 3, 2];
+const rootChip = ($) => $("ex-ladder").querySelectorAll(".rung")[0]?.querySelector(".outcome");
+
+// Guard: Run once turned off above the row limit, so a depth 10 tree built with the steppers could not run a trial.
+test("runAboveRowCapCompletes", () => {
+  const n = C.rows(BIG);
+  assert.ok(n > C.ROW_CAP && n <= C.RUN_ROWS && BIG.length <= MAX_DEPTH, `${n} rows lie between the limits`);
+  const { $, flush, step } = boot({ dims: BIG, T: 0.5, s: 0.5, seed: 753 });
+  flush();
+  assert.equal($("ex-one").disabled, false, "Run stays on above the row limit");
+  assert.ok($("ex-many").disabled && $("ex-sweep").disabled, "1000 at s and Sweep are off");
+  let worst = 0, frames = 0;
+  const timed = (f) => { const t0 = performance.now(), more = f(); worst = Math.max(worst, performance.now() - t0); return more; };
+  timed(() => $("ex-one").dispatch("click"));
+  assert.ok(!rootChip($), "the pair is still climbing after the click");
+  while (frames < 1e5 && timed(step)) frames++;
+  flush();
+  assert.ok(frames > 1, `the trial ran in ${frames} frames`);
+  assert.ok(worst < FRAME_BUDGET_MS, `a trial task took ${worst.toFixed(0)} ms over ${n} rows`);
+  assert.ok(rootChip($), "the root rung shows the outcome chip");
+  assert.match($("ex-msg").textContent, /^A pair at s′/);
+});
+
+test("runCancelledByShapeChange", () => {
+  const { $, flush, step } = boot({ dims: BIG, T: 0.5, s: 0.5, seed: 753 });
+  flush();
+  $("ex-one").dispatch("click");
+  step();
+  assert.match($("ex-msg").textContent, /^Sending one pair/, "a progress line while the pair climbs");
+  const d0 = $("ex-ladder").querySelector('[aria-label="arity d0"]');
+  d0.value = "3";
+  d0.dispatch("change");
+  drain(step);
+  flush();
+  assert.deepEqual(arities($, BIG.length), [3, ...BIG.slice(1)], "the ladder shows the new tree");
+  assert.ok(!rootChip($), "the stale pair leaves no chip");
+  assert.doesNotMatch($("ex-msg").textContent, /Sending|A pair at/);
+});
+
+// Routes the window resize to the ladder and reads the tile column width from its data-w, so a test can change cap().
+const withResize = (src) => {
+  for (const s of ['addEventListener("resize", ', "capFor(cell.clientWidth)"]) assert.ok(src.includes(s), `the explorer holds ${s}`);
+  return src.replace('addEventListener("resize", ', '$("ex-ladder").addEventListener("resize", ')
+    .replace("capFor(cell.clientWidth)", 'capFor(Number($("ex-ladder").dataset.w || cell.clientWidth))');
+};
+// Guard: a resize that changed the tile count stopped Run and left its progress line on screen.
+test("runCancelledByResizeClearsProgress", () => {
+  const { $, flush, step } = boot({ dims: BIG, T: 0.5, s: 0.5, seed: 753 }, withResize);
+  flush();
+  $("ex-one").dispatch("click");
+  step();
+  assert.match($("ex-msg").textContent, /^Sending one pair/, "a progress line while the pair climbs");
+  $("ex-ladder").dataset.w = "200";
+  $("ex-ladder").dispatch("resize");
+  drain(step);
+  flush();
+  assert.ok(!rootChip($), "the stopped pair leaves no chip");
+  assert.doesNotMatch($("ex-msg").textContent, /Sending/);
+});
+
+// Guard: above the row limit only the disabled attribute kept 1000 at s and Sweep from running. The fake DOM ignores it.
+test("batchOffAboveRowCap", () => {
+  const { $, flush, step } = boot({ dims: BIG, T: 0.5, s: 0.5, seed: 753 });
+  flush();
+  for (const id of ["ex-many", "ex-sweep"]) {
+    $(id).dispatch("click");
+    drain(step);
+    flush();
+    assert.equal($("ex-curve").querySelectorAll("title").length, 0, `${id} draws no trial dots`);
+    assert.doesNotMatch($("ex-msg").textContent, /Running|Sweeping|pairs/, `${id} reports no batch`);
+  }
+});
+
+test("limitNoteAboveLadder", () => {
+  const html = PageScripts.markup(), at = (s) => html.indexOf(s);
+  const note = html.match(/<p\b[^>]*\bid="ex-limit"[^>]*>/)?.[0];
+  assert.ok(note, "the markup holds the limit note");
+  assert.match(note, /\brole="note"/);
+  // Guard: the note once toggled hidden, so screen readers no longer heard why the buttons went off.
+  assert.match(note, /\baria-live="polite"/, "the note announces its warning");
+  assert.doesNotMatch(note, /\bhidden\b/, "the live note stays mounted");
+  assert.match(PageScripts.html, /^\.ex-limit:empty \{[^}]*position: absolute/m, "an empty note leaves the flex flow");
+  assert.ok(at('class="ex-actions"') < at('id="ex-limit"') && at('id="ex-limit"') < at('class="ladder-head"'), "the note sits under the buttons and above the ladder");
+  for (const id of ["ex-one", "ex-many", "ex-sweep"]) {
+    assert.match(html.match(new RegExp(`<button\\b[^>]*\\bid="${id}"[^>]*>`))?.[0] || "", /\baria-describedby="ex-limit"/, `${id} is described by the note`);
+  }
+  assert.match(PageScripts.html, /^\.ex-limit \{[^}]*color: var\(--warn\)/m, "the note takes the warning colour");
+});
+
+test("limitNoteText", () => {
+  const { $, flush } = boot({ dims: [400, 400], T: 0.5, s: 0.5, seed: 753 });
+  flush();
+  assert.equal($("ex-limit").textContent, "Warning. This tree has 160000 rows, above the 100000 row limit for 1000 at s and Sweep, so those buttons are off. Run still sends one pair up the tree but may be slow.");
+  assert.doesNotMatch($("ex-msg").textContent, /limit/, "the status line no longer carries the reason");
+  const pinned = boot(PINNED);
+  pinned.flush();
+  assert.equal(pinned.$("ex-limit").textContent, "", "a tree within the limit leaves the note empty, so it shows nothing");
+  assert.ok(["ex-one", "ex-many", "ex-sweep"].every((id) => !pinned.$(id).disabled));
+});
+
+// One pair over this many rows would need more memory than the page allows, so Run is off too.
+test("runOffAboveRunRows", () => {
+  const dims = [100000, 100000];
+  assert.ok(C.rows(dims) > Math.max(C.RUN_ROWS, SEARCH_LIMIT));
+  const { $, flush } = boot({ dims, T: 0.5, s: 0.5, seed: 753 });
+  assert.doesNotThrow(flush);
+  assert.ok(["ex-one", "ex-many", "ex-sweep"].every((id) => $(id).disabled), "every trial button is off");
+  assert.ok($("ex-limit").textContent.endsWith(`Run is off too above ${C.RUN_ROWS} rows because one pair would need more memory than the page allows.`), $("ex-limit").textContent);
+  assert.doesNotMatch($("ex-limit").textContent, /Run still sends/, "the note does not promise a Run that is off");
+  assert.doesNotThrow(() => $("ex-one").dispatch("click"));
+  assert.ok(!rootChip($), "no pair climbs");
+});
+
 // ---- RetuneChecks: the Re-tune button applies the tidy rule at the shown N, c and t ----
 const TIDY = study.tidy, TOP = study.facts.top_budget;
 const enter = ($, id, v) => { const input = $(id); input.value = String(v); input.dispatch("change"); };
@@ -612,6 +731,18 @@ test("retuneLocksAfterTune", () => {
   drain(step);
   flush();
   assert.equal($("ex-retune").disabled, true, "a second tune at the same N, c and t would change nothing");
+});
+
+// Guard: a resize that changed the tile count once cleared any status line, so a finished tune lost its result.
+test("resizeKeepsRetuneResult", () => {
+  const { $, flush, step } = boot(PINNED, withResize);
+  flush();
+  retune($, flush, step);
+  assert.match($("ex-msg").textContent, /^Tidy rule tree/);
+  $("ex-ladder").dataset.w = "200";
+  $("ex-ladder").dispatch("resize");
+  flush();
+  assert.match($("ex-msg").textContent, /^Tidy rule tree/, "the tune result outlives the resize");
 });
 
 test("retuneUnlocksOnInputChange", () => {
@@ -730,7 +861,7 @@ test("retuneInputsPersistValidated", () => {
   assert.equal(String($("ex-n").value), "1000", "N opens at the study's corpus");
   assert.equal(String($("ex-mix").value), "19");
   assert.equal($("ex-m-out").textContent, m(1000, 19), "m follows N and c");
-  for (const [id, v, want] of [["ex-n", 12345.6, 12346], ["ex-n", 10, 1000], ["ex-n", 1e7, 100000], ["ex-n", "x", 100000],
+  for (const [id, v, want] of [["ex-n", 12345.6, 10000], ["ex-n", 10, 1000], ["ex-n", 1e7, 100000], ["ex-n", "x", 100000],
     ["ex-mix", 1, 2], ["ex-mix", 99, 50], ["ex-mix", 7.4, 7]]) {
     enter($, id, v);
     flush();
@@ -746,6 +877,77 @@ test("retuneInputsPersistValidated", () => {
   bad.flush();
   assert.deepEqual([bad.$("ex-n").value, bad.$("ex-mix").value].map(Number), [1000, 19], "invalid saved values fall back");
   assert.deepEqual(arities(bad.$, PINNED.dims.length), PINNED.dims, "the rest of the saved state loads");
+});
+
+// Guard: N was a number box that stepped by one across 1000 to 100000 (#51).
+test("nPickerOptions", () => {
+  assert.match(PageScripts.markup(), /<select id="ex-n"/, "N is a drop-down");
+  const { $, flush, step } = boot(PINNED);
+  flush();
+  const options = $("ex-n").querySelectorAll("option").map((o) => Number(o.value));
+  assert.equal(options[0], 1000);
+  assert.equal(options.at(-1), 100000);
+  assert.ok(options.every((v, i) => !i || v > options[i - 1]), `ascending: ${options}`);
+  for (const lo of [1000, 10000]) assert.ok(options.filter((v) => v >= lo && v < 10 * lo).length >= 3, `at least 3 options from ${lo}: ${options}`);
+  for (const n of new Set(TIDY.rows.map((r) => r.n))) assert.ok(options.includes(n), `the study's N ${n} is an option`);
+  retune($, flush, step);
+  assert.equal($("ex-retune").disabled, true);
+  enter($, "ex-n", 3000);
+  flush();
+  assert.equal(String($("ex-n").value), "3000");
+  assert.equal($("ex-retune").disabled, false, "picking another N unlocks Re-tune");
+});
+
+// The arity d0 box on the ladder set to v.
+const setD0 = ($, v) => { const input = $("ex-ladder").querySelector('[aria-label="arity d0"]'); input.value = String(v); input.dispatch("change"); };
+
+// Guard: Re-tune stayed off after a hand edit of the tree, so the rule's tree came back only by nudging t (#52).
+test("retuneUnlocksOnTreeEdit", () => {
+  const { $, flush, step } = boot(PINNED);
+  flush();
+  retune($, flush, step);
+  const d = ruleTuple(1000, 19, 0.3), locked = () => { flush(); return $("ex-retune").disabled; };
+  assert.deepEqual(arities($, d.length), d);
+  assert.equal(locked(), true);
+  setD0($, d[0] + 1);
+  assert.equal(locked(), false, "an arity edit unlocks Re-tune");
+  setD0($, d[0]);
+  assert.equal(locked(), true, "the tuned tree set again by hand locks it");
+  setD0($, d[0] + 1);
+  flush();
+  retune($, flush, step);
+  assert.deepEqual(arities($, d.length), d, "Re-tune reloads the rule's tree");
+  assert.equal(locked(), true);
+});
+
+test("retuneUnlocksOnPresetAndDepth", () => {
+  const select = ($) => $("ex-preset"), d = ruleTuple(1000, 19, 0.3);
+  for (const change of [
+    ($, flush) => {
+      const o = select($).querySelectorAll("option").find((x) => x.textContent.startsWith("t 0.3 "));
+      assert.ok(o, "a preset at t 0.3");
+      select($).value = o.value;
+      select($).dispatch("change");
+      flush();
+    },
+    ($, flush) => setDepth($, flush, d.length === MAX_DEPTH ? d.length - 1 : d.length + 1),
+  ]) {
+    const { $, flush, step } = boot(PINNED);
+    flush();
+    retune($, flush, step);
+    assert.equal($("ex-retune").disabled, true);
+    change($, flush);
+    assert.equal(Number($("ex-t").value), 0.3, "t stays at the tuned target");
+    assert.equal($("ex-retune").disabled, false, "a new tree unlocks Re-tune");
+  }
+});
+
+test("savedOffListNMapsToNearest", () => {
+  for (const [N, want] of [[12345, 10000], [70000, 50000]]) {
+    const { $, flush } = boot({ ...PINNED, N });
+    flush();
+    assert.equal(String($("ex-n").value), String(want), `a saved N of ${N} shows ${want}`);
+  }
 });
 
 test("retuneTermsDefined", () => {
