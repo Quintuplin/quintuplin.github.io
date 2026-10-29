@@ -1645,6 +1645,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   const realised = (s) => { const { U, I } = C.pairShape(s, PAIR.size); return I / U; };
   // Bulk runs fill a time slice per frame, since a linear-hash trial costs from one row to every row. A newer job or any shape change stops an older one.
   function runBatch(points, perPoint, label) {
+    if (C.rows(state.dims) > C.ROW_CAP) return;
     const mine = ++job, d = state.dims, t = state.pipeline ? state.T : undefined;
     let i = 0, done = 0;
     const tick = (now) => {

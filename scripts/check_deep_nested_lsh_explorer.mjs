@@ -659,6 +659,19 @@ test("runCancelledByResizeClearsProgress", () => {
   assert.doesNotMatch($("ex-msg").textContent, /Sending/);
 });
 
+// Guard: above the row limit only the disabled attribute kept 1000 at s and Sweep from running. The fake DOM ignores it.
+test("batchOffAboveRowCap", () => {
+  const { $, flush, step } = boot({ dims: BIG, T: 0.5, s: 0.5, seed: 753 });
+  flush();
+  for (const id of ["ex-many", "ex-sweep"]) {
+    $(id).dispatch("click");
+    drain(step);
+    flush();
+    assert.equal($("ex-curve").querySelectorAll("title").length, 0, `${id} draws no trial dots`);
+    assert.doesNotMatch($("ex-msg").textContent, /Running|Sweeping|pairs/, `${id} reports no batch`);
+  }
+});
+
 test("limitNoteAboveLadder", () => {
   const html = PageScripts.markup(), at = (s) => html.indexOf(s);
   const note = html.match(/<p\b[^>]*\bid="ex-limit"[^>]*>/)?.[0];
