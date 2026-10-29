@@ -405,9 +405,14 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     return sum;
   }
 
-  function errorArea(d, target, samples = 3001) {
+  // [A_lo, A_hi]: the false-positive area below t and the false-negative area above it (cascade_error_area_parts).
+  function errorAreaParts(d, target, samples = 3001) {
     const left = target > 0 ? trapezoid(0, target, samples, (s) => curve(s, d)) : 0;
     const right = target < 1 ? trapezoid(target, 1, samples, (s) => 1 - curve(s, d)) : 0;
+    return [left, right];
+  }
+  function errorArea(d, target, samples = 3001) {
+    const [left, right] = errorAreaParts(d, target, samples);
     return left + right;
   }
 
@@ -455,14 +460,17 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   // Sharpest tree search in shells. Shell A holds the trees whose largest free arity (levels 2 up) is exactly A, for A up to
   // the study's cap. A shell walks levels k − 1 down to 2 carrying the inverse chains at 0.5, 0.05 and 0.95, so a node is O(1).
   // Yields every SEARCH_STEP nodes and stops past `limit` nodes with the best so far and the last whole shell.
+  // visit(dims, w) sees every matched tree in the order found, as the tidy rule scores them all.
   const SEARCH_STEP = 256;
-  function* treeSearch(budget, depth, t, low = 1, limit = Infinity) {
+  function* treeSearch(budget, depth, t, low = 1, limit = Infinity, visit = null) {
     let best = null, bestWidth = Infinity, work = 0;
     const consider = (dims, w) => { if (w < bestWidth || (w === bestWidth && earlier(dims, best))) [best, bestWidth] = [dims, w]; };
     if (depth === 1) {
       // t̂ rises with the rows, so the scan ends once it passes t.
       for (let r = 1; r <= budget && threshold([r]) <= t + TOLERANCE; r++) {
-        if (r >= low && Math.abs(threshold([r]) - t) <= TOLERANCE) consider([r], width([r]));
+        if (r < low || Math.abs(threshold([r]) - t) > TOLERANCE) continue;
+        if (visit) visit([r], width([r]));
+        consider([r], width([r]));
       }
       return { dims: best, arity: 0, complete: true };
     }
@@ -488,6 +496,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
             const n = d0 * b * P[i];
             if (n < low || n > budget || Math.abs(Math.exp(orStep(m[i], b) / d0) - t) > TOLERANCE) continue;
             const w = Math.exp(orStep(h[i], b) / d0) - Math.exp(orStep(l[i], b) / d0);
+            if (visit) visit([d0, b, ...a.slice(2, k)], w);
             if (w <= bestWidth) consider([d0, b, ...a.slice(2, k)], w);
           }
         };
@@ -520,11 +529,70 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
 
   // Sharpest depth-k tree with low to budget rows and t̂ within the tolerance of t (enumerate_cascade_configs, best_cascade_config).
   function bestTree(budget, depth, t, low = 1) {
-    const steps = treeSearch(budget, depth, t, low);
+    return drain(treeSearch(budget, depth, t, low)).dims;
+  }
+  // Runs a search to its end and returns its result.
+  function drain(steps) {
     let r;
     do r = steps.next(); while (!r.done);
-    return r.value.dims;
+    return r.value;
   }
+
+  // ---- TidyRule: KAlambda picks d = argmin over the matched trees M of λ A_lo + A_hi with λ = R^γ (tidy_rule/rules.py) ----
+  // The rule searches depths MIN_DEPTH to SEARCH_MAX_DEPTH (tidy_rule/depths.py).
+  const TIDY_DEPTHS = [2, 10], AREA_SAMPLES = 3001, COARSE = 300, SCORE_STEP = 16;
+  // m: near pairs per document of the generated corpus (near_mass). Noise documents past the filler cap form groups.
+  function nearMass(n, c, { noise, noise_group: group, filler_cap: cap }) {
+    const k = Math.trunc(n * noise), f = Math.min(cap, k);
+    return ((n - k) * (c - 1) / 2 + f * (f - 1) / 2 + (k - f) * (group - 1) / 2) / n;
+  }
+  // λ = R^γ with R the non-near over near pairs per document, each spread over its side of t (design_ratio).
+  const tidyLambda = (n, m, t, gamma) => ((((n - 1) / 2 - m) * (1 - t)) / (m * t)) ** gamma;
+  // np.linspace(a, b, AREA_SAMPLES) at i as trapezoid samples it.
+  const areaSample = (a, b, i) => (i === AREA_SAMPLES - 1 ? b : i * ((b - a) / (AREA_SAMPLES - 1)) + a);
+  // P rises with s, so left sums over coarse intervals bound A_lo from below and right sums bound A_hi.
+  // Terms add from t outward, where they are largest, and the scan stops once they pass ub.
+  function tidyExceeds(d, key, lam, ub) {
+    const { L, R } = key;
+    for (let j = COARSE - 1, q = 0, s = 0; q < COARSE; j--, q++) {
+      s += lam * (L[j + 1] - L[j]) * curve(L[j], d) + (R[q + 1] - R[q]) * (1 - curve(R[q + 1], d));
+      if (s > ub) return true;
+    }
+    return false;
+  }
+  // Matched trees and their exact parts for the last (t, B), so a new N or c rescores without a new sweep.
+  let tidyKey = null;
+  function* tidySweep(t, B) {
+    if (tidyKey?.t === t && tidyKey.B === B) return tidyKey;
+    const M = [], W = [];
+    for (let k = TIDY_DEPTHS[0]; k <= TIDY_DEPTHS[1]; k++) {
+      const steps = treeSearch(B, k, t, 1, Infinity, (d, w) => { M.push(d); W.push(w); });
+      while (!steps.next().done) yield { phase: "sweep", depth: k, tuples: M.length };
+    }
+    const coarse = (a, b) => Array.from({ length: COARSE + 1 }, (_, j) => areaSample(a, b, (j * (AREA_SAMPLES - 1)) / COARSE));
+    tidyKey = { t, B, M, order: M.map((_, i) => i).sort((x, y) => W[x] - W[y]), parts: [], L: coarse(0, t), R: coarse(t, 1) };
+    return tidyKey;
+  }
+  // Narrow trees score low, so scoring by width finds a tight bound early and most trees fall to the coarse sums.
+  // Ties go to the lower A_lo and then the first found, as the study's area hull keeps them.
+  function* tidySearch(N, m, t, B, gamma) {
+    const key = yield* tidySweep(t, B), { M, order, parts } = key, lam = tidyLambda(N, m, t, gamma);
+    let ub = Infinity, best = -1, bestS = Infinity, bestLo = Infinity, bestHi = Infinity;
+    parts.forEach(([lo, hi]) => { ub = Math.min(ub, lam * lo + hi); });
+    for (let n = 0; n < order.length; n++) {
+      const i = order[n];
+      if (n % SCORE_STEP === SCORE_STEP - 1) yield { phase: "score", scored: n, tuples: M.length };
+      if (!parts[i]) {
+        if (tidyExceeds(M[i], key, lam, ub * (1 + 1e-9))) continue;
+        parts[i] = errorAreaParts(M[i], t, AREA_SAMPLES);
+      }
+      const [lo, hi] = parts[i], s = lam * lo + hi;
+      ub = Math.min(ub, s);
+      if (s < bestS || (s === bestS && (lo < bestLo || (lo === bestLo && i < best)))) [best, bestS, bestLo, bestHi] = [i, s, lo, hi];
+    }
+    return { dims: best < 0 ? null : M[best], tuples: M.length, lo: bestLo, hi: bestHi, lambda: lam };
+  }
+  const tidyTune = (N, m, t, B, gamma) => drain(tidySearch(N, m, t, B, gamma));
 
   // Expected FP, FN and candidates over the corpus pairs [num, den, count] when a pair at s passes with accept(s) (expected_counts).
   // E[errors] sums the rounded parts as the study tables print them.
@@ -815,8 +883,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   }
 
   root.Cascade = {
-    ROW_CAP, TOLERANCE, MAX_FREE_ARITY, isOr, rows, levels, curve, flatCurve, inverse, threshold, width, profile, bandsForThreshold,
-    errorArea, tails, solveD1, treeSearch, bestTree, expectedCounts, spread, logPair, localSlopes, quorumCurve, pipelineCurve,
+    ROW_CAP, TOLERANCE, MAX_FREE_ARITY, TIDY_DEPTHS, isOr, rows, levels, curve, flatCurve, inverse, threshold, width, profile, bandsForThreshold,
+    errorArea, errorAreaParts, tails, solveD1, treeSearch, bestTree, nearMass, tidyLambda, tidySearch, tidyTune, expectedCounts, spread, logPair, localSlopes, quorumCurve, pipelineCurve,
     quorumInverse, keptBands, verified, mulberry32, evalTree, drawRows, hash61, pairShape, drawPair, agree, sampleTree, runTrials, wilson,
   };
 })(globalThis);

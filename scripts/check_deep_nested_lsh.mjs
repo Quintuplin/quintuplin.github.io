@@ -557,6 +557,7 @@ test("tidyDataMatchesFixture", () => {
   const { rows, ...consts } = tidy, { rows: pageRows, ...pageConsts } = study.tidy || {};
   assert.equal(consts.rule, "KAlambda");
   assert.deepEqual(pageConsts, consts, "the page embeds the fixture's rule constants");
+  assert.deepEqual(C.TIDY_DEPTHS, consts.depths, "the page rule searches the study's depths");
   const top = rows.filter((r) => r.b === TOP).map(({ n, mix, m, t, dims, e }) => ({ n, mix, m, t, dims, e }));
   assert.ok(top.length >= 70, `only ${top.length} rows at ${TOP} rows`);
   assert.deepEqual(pageRows, top, `the page embeds the rows at ${TOP} rows`);
