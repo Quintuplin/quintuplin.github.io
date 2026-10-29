@@ -365,7 +365,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
 // scripts/check_deep_nested_lsh.mjs runs this script against the study reference values.
 (function (root) {
   "use strict";
-  // Batch trials stop at ROW_CAP rows. One Run pair keeps about 116 bytes a row, so RUN_ROWS keeps it near 256 MB.
+  // Batch trials stop at ROW_CAP rows. One Run pair at RUN_ROWS measured 62.8 MB live heap and about 110 MB peak RSS
+  // above idle (node 22).
   const ROW_CAP = 100000, RUN_ROWS = 2000000;
   const TOLERANCE = 0.01;
   const MAX_FREE_ARITY = 24;
