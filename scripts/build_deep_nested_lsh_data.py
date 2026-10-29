@@ -12,6 +12,7 @@ import math
 import re
 import subprocess
 import sys
+import types
 from fractions import Fraction
 from pathlib import Path
 
@@ -224,6 +225,27 @@ def brute_force_pipeline(lga) -> list[dict]:
     return out
 
 
+# ---- TidyRule ----
+TIDY_RULE = "KAlambda"
+
+
+def tidy_data(result: dict, corpus) -> dict:
+    """The page twins the KAlambda rule only, so it refuses a result that picked another rule or failed its cache check."""
+    if result["pick"]["elegant"] != TIDY_RULE or not result["cache_check"]["passed"]:
+        sys.exit(f"tidy_rule.json picks {result['pick']['elegant']} with cache check {result['cache_check']['passed']}, not a checked {TIDY_RULE}")
+    rule = next(c for c in result["candidates"] if c["name"] == TIDY_RULE)
+    return {"rule": TIDY_RULE, "gamma": rule["constants"]["gamma"], "noise": corpus.NOISE, "noise_group": corpus.NOISE_GROUP,
+            "filler_cap": corpus.FILLER_NOISE_DOCS, "depths": [corpus.MIN_DEPTH, corpus.SEARCH_MAX_DEPTH]}
+
+
+def tidy_rows(cells: list[dict], b: int | None = None) -> list[dict]:
+    """Every cell with the rule's pick and sweep size, or for the page only the cells at budget b without the budget."""
+    if b is None:
+        return [{**{k: c[k] for k in ("dataset", "n", "mix", "m", "t", "b")}, **{k: c["rules"][TIDY_RULE][k] for k in ("dims", "e", "work")}}
+                for c in cells]
+    return [{**{k: c[k] for k in ("n", "mix", "m", "t")}, **{k: c["rules"][TIDY_RULE][k] for k in ("dims", "e")}} for c in cells if c["b"] == b]
+
+
 def write(page: Path, fixture: Path, data: dict, parity: dict) -> None:
     html = page.read_text(encoding="utf-8")
     head = '<script type="application/json" id="sim-data">\n'
@@ -243,17 +265,22 @@ def main() -> None:
     sys.path.insert(0, str(study))
     import lsh_demo as demo
     import lsh_grid_analysis as lga
+    from tidy_rule import depths
 
     tables = read_tables(study)
     corpus = corpus_facts(lga, study)
+    result = json.loads((study / "tidy_rule/results/tidy_rule.json").read_text(encoding="utf-8"))
+    tidy = tidy_data(result, types.SimpleNamespace(NOISE=depths.NOISE, NOISE_GROUP=depths.NOISE_GROUP, MIN_DEPTH=depths.MIN_DEPTH,
+                                                   FILLER_NOISE_DOCS=depths.make_corpus.FILLER_NOISE_DOCS, SEARCH_MAX_DEPTH=depths.SEARCH_MAX_DEPTH))
     data = {
         "provenance": provenance(sha, lga, tables),
         "facts": {"top_budget": lga.MAX_SIGNATURE_ROWS, "corpus": corpus},
         "tables": tables,
+        "tidy": {**tidy, "rows": tidy_rows(result["cells"], lga.MAX_SIGNATURE_ROWS)},
     }
     parity = {"source": f"lsh_grid_analysis at {sha}", "s": S_GRID, "y": Y_GRID, "targets": TARGETS,
               "rows": parity_rows(lga, tables, corpus), "hashes": hash_samples(demo, corpus["vocab"]),
-              "brute": brute_force_pipeline(lga)}
+              "brute": brute_force_pipeline(lga), "tidy": {**tidy, "rows": tidy_rows(result["cells"])}}
     write(PAGE, FIXTURE, data, parity)
     print(f"wrote {PAGE.relative_to(SITE)} and {FIXTURE.relative_to(SITE)} from {sha}")
 

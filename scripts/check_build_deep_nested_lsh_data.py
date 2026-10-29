@@ -61,6 +61,37 @@ class StudyGrid(unittest.TestCase):
         self.assertEqual(generator.provenance("abc1234", self.lga, {"lsh_best_depth_table": shallow})["grid"]["max_depth"], 5)
 
 
+class TidyRule(unittest.TestCase):
+    """Stands in for the tidy rule study's result file and corpus constants."""
+
+    corpus = types.SimpleNamespace(NOISE=0.05, NOISE_GROUP=50, FILLER_NOISE_DOCS=1000, MIN_DEPTH=2, SEARCH_MAX_DEPTH=10)
+
+    @staticmethod
+    def result(elegant="KAlambda", passed=True):
+        return {"pick": {"elegant": elegant}, "cache_check": {"passed": passed},
+                "candidates": [{"name": "KA", "constants": {"gamma": 0.9}}, {"name": "KAlambda", "constants": {"gamma": 0.05}}]}
+
+    def test_tidy_data_reads_rule_constants(self):
+        self.assertEqual(generator.tidy_data(self.result(), self.corpus),
+                         {"rule": "KAlambda", "gamma": 0.05, "noise": 0.05, "noise_group": 50, "filler_cap": 1000, "depths": [2, 10]})
+
+    # The page twins KAlambda only, so another pick or an unchecked cache must not ship under its name.
+    def test_tidy_refuses_other_rule(self):
+        for result in (self.result(elegant="F1"), self.result(passed=False)):
+            with self.assertRaises(SystemExit):
+                generator.tidy_data(result, self.corpus)
+
+    def test_tidy_rows_keep_top_budget(self):
+        cell = lambda b, t: {"dataset": "n3000_c10", "n": 3000, "mix": 10, "m": 8.0, "t": t, "b": b, "role": "fit", "group": "fit",
+                             "rules": {"KA": {"dims": [9], "e": 9.0, "work": 9},
+                                       "KAlambda": {"k": 2, "dims": [5, 20], "e": 12.5, "rho": 1.0, "work": 33}}}
+        cells = [cell(1000, 0.3), cell(10000, 0.3), cell(100000, 0.5)]
+        full = generator.tidy_rows(cells)
+        self.assertEqual(len(full), 3)
+        self.assertEqual(full[0], {"dataset": "n3000_c10", "n": 3000, "mix": 10, "m": 8.0, "t": 0.3, "b": 1000, "dims": [5, 20], "e": 12.5, "work": 33})
+        self.assertEqual(generator.tidy_rows(cells, 10000), [{"n": 3000, "mix": 10, "m": 8.0, "t": 0.3, "dims": [5, 20], "e": 12.5}])
+
+
 class StudySha(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()

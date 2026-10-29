@@ -15,22 +15,27 @@ waitFor() {
 		i=$((i + 1))
 	done
 }
-# With stubWaits=1 the maths stub stays running after its line until the explorer stub has seen that line in the log.
-# So a glue that holds back maths output until the maths check ends fails.
+# With stubWaits=1 the maths and tidy stubs stay running after their line until the explorer stub has seen both lines in the log.
+# So a glue that holds back either output until its check ends fails.
 deepMaths() {
 	echo "maths stub exits $stubStatus"
 	if [ "$stubWaits" = 1 ]; then waitFor test -e "$seen" || return 1; fi
 	return "$stubStatus"
 }
+deepTidy() {
+	echo "tidy stub exits $tidyStatus"
+	if [ "$stubWaits" = 1 ]; then waitFor test -e "$seen" || return 1; fi
+	return "$tidyStatus"
+}
 deepExplorer() {
 	[ "$stubWaits" = 1 ] || return 0
-	waitFor grep -qF '[maths] maths stub' "$log" && : >"$seen"
+	waitFor grep -qF '[maths] maths stub' "$log" && waitFor grep -qF '[tidy] tidy stub' "$log" && : >"$seen"
 }
 
-# Prints the glue's output and verdict with a maths stub that exits $1.
+# Prints the glue's output and verdict with a maths stub that exits $1 and a tidy stub that exits $2, else 0.
 glue() {
 	(
-		stubStatus=$1 fail=0
+		stubStatus=$1 tidyStatus=${2:-0} fail=0
 		err() { echo "FAIL: $*"; fail=1; }
 		runDeepChecks
 		echo "fail=$fail"
@@ -49,10 +54,14 @@ out=$(glue 1)
 expect "a failing maths stub" "$out" "[maths] maths stub exits 1"
 expect "a failing maths stub" "$out" "FAIL: deep nested LSH maths check failed"
 expect "a failing maths stub" "$out" "fail=1"
+out=$(glue 0 1)
+expect "a failing tidy stub" "$out" "[tidy] tidy stub exits 1"
+expect "a failing tidy stub" "$out" "FAIL: deep nested LSH tidy check failed"
+expect "a failing tidy stub" "$out" "fail=1"
 out=$(glue 0)
-expect "a passing maths stub" "$out" "fail=0"
+expect "passing stubs" "$out" "fail=0"
 out=$(stubWaits=1; glue 0)
-expect "maths output streaming while the maths check runs" "$out" "fail=0"
+expect "maths and tidy output streaming while their checks run" "$out" "fail=0"
 # Guard: a missing temp directory once failed the run as a maths failure. The glue needs no temp file.
 out=$(export TMPDIR="$log.missing"; glue 0)
 expect "a missing temp directory" "$out" "fail=0"
