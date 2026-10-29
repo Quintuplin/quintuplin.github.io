@@ -591,3 +591,133 @@ test("searchStopsWhenTreeChanges", () => {
   assert.deepEqual(arities($, kept), dims.concat(2).slice(0, kept), "the stale search leaves the new tree alone");
   assert.doesNotMatch($("ex-msg").textContent, /Searching/);
 });
+
+// ---- RetuneChecks: the Re-tune button applies the tidy rule at the shown N, c and t ----
+const TIDY = study.tidy, TOP = study.facts.top_budget;
+const enter = ($, id, v) => { const input = $(id); input.value = String(v); input.dispatch("change"); };
+const target = ($, t) => { const input = $("ex-t"); input.value = String(t); input.dispatch("input"); };
+const retune = ($, flush, step) => { $("ex-retune").dispatch("click"); drain(step); flush(); };
+// The rule's tuple for this dataset and target within the top budget.
+const ruleTuple = (N, c, t) => C.tidyTune(N, C.nearMass(N, c, TIDY), t, TOP, TIDY.gamma).dims;
+const tidyRow = (n, mix, t) => TIDY?.rows.find((r) => r.n === n && r.mix === mix && r.t === t);
+
+test("retuneLocksAfterTune", () => {
+  const { $, flush, step } = boot(PINNED);
+  flush();
+  assert.equal($("ex-retune").disabled, false, "a fresh page can tune");
+  $("ex-retune").dispatch("click");
+  step();
+  assert.equal($("ex-retune").disabled, true, "the button waits while the rule runs");
+  drain(step);
+  flush();
+  assert.equal($("ex-retune").disabled, true, "a second tune at the same N, c and t would change nothing");
+});
+
+test("retuneUnlocksOnInputChange", () => {
+  const { $, flush, step } = boot(PINNED);
+  flush();
+  retune($, flush, step);
+  const locked = () => { flush(); return $("ex-retune").disabled; };
+  for (const [change, back] of [
+    [() => enter($, "ex-n", 2000), () => enter($, "ex-n", 1000)],
+    [() => enter($, "ex-mix", 10), () => enter($, "ex-mix", 19)],
+    [() => target($, 0.31), () => target($, 0.3)],
+  ]) {
+    change();
+    assert.equal(locked(), false, "a new input unlocks the button");
+    back();
+    assert.equal(locked(), true, "the tuned inputs lock it again");
+  }
+});
+
+test("retuneLoadsRuleTuple", () => {
+  assert.ok(TIDY, "the page embeds the tidy rule");
+  for (const r of [tidyRow(1000, 19, 0.3), tidyRow(30000, 40, 0.5)]) {
+    assert.ok(r, "a study row to tune for");
+    const { $, flush, step } = boot(PINNED);
+    flush();
+    enter($, "ex-n", r.n);
+    enter($, "ex-mix", r.mix);
+    target($, r.t);
+    flush();
+    retune($, flush, step);
+    const k = r.dims.length;
+    assert.equal(Number(depthInput($).value), k, `N ${r.n} c ${r.mix} t ${r.t} loads a depth ${k} tree`);
+    assert.deepEqual(arities($, k), r.dims, "the tree the study's rule picks");
+    assert.deepEqual(ruleTuple(r.n, r.mix, r.t), r.dims, "the page rule agrees");
+    assert.equal($("ex-auto").checked, false, "a tuned tree is set by hand");
+    assert.equal($("ex-preset").value, "custom");
+  }
+});
+
+test("retuneShowsCountsOnlyWhenMeasured", () => {
+  const r = tidyRow(1000, 19, 0.3);
+  assert.ok(r, "the study measured N 1000 c 19 at t 0.3");
+  for (const [N, t, measured] of [[1000, 0.3, true], [1000, 0.33, false], [2000, 0.3, false]]) {
+    const { $, flush, step } = boot(PINNED);
+    flush();
+    enter($, "ex-n", N);
+    target($, t);
+    flush();
+    retune($, flush, step);
+    const msg = $("ex-msg").textContent, d = ruleTuple(N, 19, t);
+    assert.ok(msg.includes(`(${d.join(", ")})`), `the message names the tuple: ${msg}`);
+    assert.equal(/Expected errors \(study\)/.test(msg), measured, `N ${N} t ${t}: ${msg}`);
+    if (measured) assert.ok(shows(msg, Math.round(r.e)), `the study's ${Math.round(r.e)} expected errors: ${msg}`);
+  }
+});
+
+// Guard: the rule scores every matched tree, so a cold run at t 0.95 must still yield to the frame.
+test("retuneStaysResponsive", () => {
+  const T = 0.95, { $, flush, step } = boot({ ...PINNED, T });
+  flush();
+  let worst = 0, frames = 0;
+  const timed = (f) => { const t0 = performance.now(), more = f(); worst = Math.max(worst, performance.now() - t0); return more; };
+  timed(() => $("ex-retune").dispatch("click"));
+  while (frames < 1e5 && timed(step)) frames++;
+  flush();
+  assert.ok(frames >= 3, `the tune ran in ${frames} frames`);
+  assert.ok(worst < FRAME_BUDGET_MS, `a tune task took ${worst.toFixed(0)} ms at t ${T}`);
+  const d = ruleTuple(1000, 19, T);
+  assert.deepEqual(arities($, d.length), d);
+});
+
+test("retuneInputsPersistValidated", () => {
+  const { $, flush, store } = boot(PINNED);
+  flush();
+  const m = (N, c) => C.nearMass(N, c, TIDY).toFixed(2);
+  assert.equal(String($("ex-n").value), "1000", "N opens at the study's corpus");
+  assert.equal(String($("ex-mix").value), "19");
+  assert.equal($("ex-m-out").textContent, m(1000, 19), "m follows N and c");
+  for (const [id, v, want] of [["ex-n", 12345.6, 12346], ["ex-n", 10, 1000], ["ex-n", 1e7, 100000], ["ex-n", "x", 100000],
+    ["ex-mix", 1, 2], ["ex-mix", 99, 50], ["ex-mix", 7.4, 7]]) {
+    enter($, id, v);
+    flush();
+    assert.equal(String($(id).value), String(want), `${id} ${v} shows ${want}`);
+  }
+  assert.equal($("ex-m-out").textContent, m(100000, 7));
+  const saved = JSON.parse([...store.values()].at(-1));
+  assert.deepEqual([saved.N, saved.c], [100000, 7], "N and c are saved");
+  const again = boot(saved);
+  again.flush();
+  assert.deepEqual([again.$("ex-n").value, again.$("ex-mix").value].map(Number), [100000, 7], "the saved N and c reopen");
+  const bad = boot({ ...PINNED, N: 5, c: 3.5 });
+  bad.flush();
+  assert.deepEqual([bad.$("ex-n").value, bad.$("ex-mix").value].map(Number), [1000, 19], "invalid saved values fall back");
+  assert.deepEqual(arities(bad.$, PINNED.dims.length), PINNED.dims, "the rest of the saved state loads");
+});
+
+test("retuneTermsDefined", () => {
+  const terms = PageScripts.markup().match(/<details class="terms"[\s\S]*?<\/details>/)?.[0] || "";
+  const defined = new Map([...terms.matchAll(/<dt>([\s\S]*?)<\/dt>\s*<dd>([\s\S]*?)<\/dd>/g)].map((m) => [m[1], m[2]]));
+  for (const t of ["Dataset size N", "Cluster size c", "Near-pair mass m", "Tidy rule (Re-tune)", "Weight λ", "A_lo and A_hi", "Expected errors (study)"]) {
+    assert.ok(defined.get(t)?.length > 20, `the terms define ${t}`);
+  }
+  const rule = defined.get("Tidy rule (Re-tune)");
+  assert.match(rule, /3000[\s\S]*100000/, "the rule names its fitted N range");
+  assert.match(rule, /\b10\b[\s\S]*\b40\b/, "the rule names its fitted c range");
+});
+
+test("pageNamesNoPrivateRepo", () => {
+  assert.doesNotMatch(PageScripts.html, /superLSH|COMPSCI|compsci-753/i);
+});

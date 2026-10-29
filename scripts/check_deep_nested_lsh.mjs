@@ -529,3 +529,89 @@ test("profileStaysNumericAtLargestTuple", () => {
     }
   }
 });
+
+// ---- TidyChecks: the tidy rule twin against the study's tidy table. CI runs them apart with --test-name-pattern '^tidy' ----
+const tidy = parity.tidy, TOP = study.facts.top_budget;
+// Fixture rows within the top budget by (t, B), so each sweep is enumerated once and serves every row of its key.
+function tidyKeys() {
+  const by = new Map();
+  for (const r of tidy.rows.filter((x) => x.b <= TOP)) {
+    const k = `${r.t}|${r.b}`;
+    by.set(k, [...(by.get(k) || []), r]);
+  }
+  return by;
+}
+// Every matched tree at the rule's depths within b rows at t, in the order the depth search finds them.
+function matchedTrees(t, b) {
+  const out = [], [lo, hi] = tidy.depths;
+  for (let k = lo; k <= hi; k++) drainSearch(C.treeSearch(b, k, t, 1, Infinity, (d) => out.push(d)), Infinity);
+  return out;
+}
+
+test("tidyMixMatchesStudy", () => {
+  assert.equal(tidy?.rows.length, 450, "the fixture carries every cell of the tidy table");
+  for (const r of tidy.rows) assert.equal(C.nearMass(r.n, r.mix, tidy), r.m, `${r.dataset} m`);
+});
+
+test("tidyDataMatchesFixture", () => {
+  const { rows, ...consts } = tidy, { rows: pageRows, ...pageConsts } = study.tidy || {};
+  assert.equal(consts.rule, "KAlambda");
+  assert.deepEqual(pageConsts, consts, "the page embeds the fixture's rule constants");
+  const top = rows.filter((r) => r.b === TOP).map(({ n, mix, m, t, dims, e }) => ({ n, mix, m, t, dims, e }));
+  assert.ok(top.length >= 70, `only ${top.length} rows at ${TOP} rows`);
+  assert.deepEqual(pageRows, top, `the page embeds the rows at ${TOP} rows`);
+});
+
+test("tidySweepCountsMatchStudyWork", () => {
+  const keys = tidyKeys();
+  assert.equal(keys.size, 24, "6 targets by 4 budgets");
+  for (const rs of keys.values()) {
+    const { t, b } = rs[0];
+    assert.ok(rs.every((r) => r.work === rs[0].work), `t ${t} B ${b} rows share one sweep`);
+    assert.equal(matchedTrees(t, b).length, rs[0].work, `matched trees at t ${t} within ${b} rows`);
+  }
+});
+
+test("tidyTuneMatchesStudyRows", () => {
+  const bad = [];
+  let n = 0;
+  for (const rs of tidyKeys().values()) {
+    for (const r of rs) {
+      const got = C.tidyTune(r.n, r.m, r.t, r.b, tidy.gamma);
+      if (!same(got.dims, r.dims) || got.tuples !== r.work) bad.push({ dataset: r.dataset, t: r.t, b: r.b, got, want: r.dims });
+      n++;
+    }
+  }
+  assert.equal(n, 300);
+  assert.deepEqual(bad, []);
+});
+
+// The pruned search against scoring every matched tree, on the study rows and on mixes and targets past them.
+test("tidyPruneMatchesFullScan", () => {
+  const cases = [...tidyKeys().values()].flat().filter((r) => r.b <= 1000);
+  for (const t of [0.05, 0.3, 0.95]) {
+    for (const [n, mix] of [[1000, 2], [1000, 50], [100000, 2], [100000, 50]]) cases.push({ n, mix, m: C.nearMass(n, mix, tidy), t, b: 1000 });
+  }
+  const sweeps = new Map();
+  for (const r of cases) {
+    const k = `${r.t}|${r.b}`;
+    if (!sweeps.has(k)) {
+      const M = matchedTrees(r.t, r.b);
+      sweeps.set(k, { M, parts: M.map((d) => C.errorAreaParts(d, r.t)) });
+    }
+    const { M, parts } = sweeps.get(k), lam = C.tidyLambda(r.n, r.m, r.t, tidy.gamma);
+    assert.ok(M.length, `matched trees at t ${r.t} within ${r.b} rows`);
+    // Least λ A_lo + A_hi, ties to the lower A_lo and then the first found.
+    let best = 0;
+    parts.forEach(([lo, hi], i) => {
+      const s = lam * lo + hi, b = lam * parts[best][0] + parts[best][1];
+      if (s < b || (s === b && lo < parts[best][0])) best = i;
+    });
+    assert.deepEqual(C.tidyTune(r.n, r.m, r.t, r.b, tidy.gamma).dims, M[best], `N ${r.n} c ${r.mix} t ${r.t} B ${r.b}`);
+    if (r.dims) assert.deepEqual(M[best], r.dims, `${r.dataset} t ${r.t} B ${r.b} full scan`);
+  }
+  for (const [d, t] of [[[2, 14, 4, 2], 0.3], [[5, 20], 0.5], [[2, 4, 2, 3, 2, 2, 2, 2, 2, 2], 0.8]]) {
+    const [lo, hi] = C.errorAreaParts(d, t);
+    close(lo + hi, C.errorArea(d, t), `parts of ${d} at ${t} add to the error area`);
+  }
+});
