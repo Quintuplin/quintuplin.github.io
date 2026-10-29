@@ -1583,10 +1583,11 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   let running = 0;
   // Sends one pair through the rows a slice per frame under the animation token, so a shape change, Clear or a new Run stops it.
   function runOne() {
+    // A refused Run leaves a climbing pair and its progress line alone.
+    if (C.rows(state.dims) > C.RUN_ROWS) return;
     // A shape change waiting for its frame leaves the rungs of the old tree, so draw it first.
     if (frame) { cancelAnimationFrame(frame); draw(performance.now()); }
     const d = state.dims, T = state.T, n = C.rows(d), mine = running = ++anim;
-    if (n > C.RUN_ROWS) return;
     const pair = C.drawPair(state.s, rng, PAIR.size, PAIR.vocab);
     resetTiles();
     sliced(C.sampleSteps(pair, d, hashes), () => mine === anim,
