@@ -669,6 +669,7 @@ test("runOffAboveRunRows", () => {
   assert.doesNotThrow(flush);
   assert.ok(["ex-one", "ex-many", "ex-sweep"].every((id) => $(id).disabled), "every trial button is off");
   assert.ok($("ex-limit").textContent.endsWith(`Run is off too above ${C.RUN_ROWS} rows because one pair would need more memory than the page allows.`), $("ex-limit").textContent);
+  assert.doesNotMatch($("ex-limit").textContent, /Run still sends/, "the note does not promise a Run that is off");
   assert.doesNotThrow(() => $("ex-one").dispatch("click"));
   assert.ok(!rootChip($), "no pair climbs");
 });

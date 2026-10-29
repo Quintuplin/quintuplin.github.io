@@ -1275,8 +1275,9 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   }
   function limitText(n) {
     if (n <= C.ROW_CAP) return "";
-    const text = `Warning. This tree has ${count(n)} rows, above the ${C.ROW_CAP} row limit for 1000 at s and Sweep, so those buttons are off. Run still sends one pair up the tree but may be slow.`;
-    return n > C.RUN_ROWS ? `${text} Run is off too above ${count(C.RUN_ROWS)} rows because one pair would need more memory than the page allows.` : text;
+    const run = n > C.RUN_ROWS ? `Run is off too above ${count(C.RUN_ROWS)} rows because one pair would need more memory than the page allows.`
+      : "Run still sends one pair up the tree but may be slow.";
+    return `Warning. This tree has ${count(n)} rows, above the ${C.ROW_CAP} row limit for 1000 at s and Sweep, so those buttons are off. ${run}`;
   }
 
   function buildPresetSelect() {
