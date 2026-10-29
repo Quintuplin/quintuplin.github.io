@@ -654,6 +654,23 @@ test("retuneCancelsOnInputChange", () => {
   }
 });
 
+// An entry that rounds or clamps to the tuned value is no change, so the tune lands.
+test("retuneKeepsRunningOnSameValue", () => {
+  for (const [id, v] of [["ex-n", 1000.4], ["ex-n", 500], ["ex-mix", 19.2]]) {
+    const { $, flush, step } = boot(PINNED);
+    flush();
+    $("ex-retune").dispatch("click");
+    step();
+    assert.match($("ex-msg").textContent, /Tuning/, "the tune is still running");
+    enter($, id, v);
+    drain(step);
+    flush();
+    const d = ruleTuple(1000, 19, 0.3);
+    assert.deepEqual(arities($, d.length), d, `${id} ${v} keeps N 1000 c 19, so the rule's tree loads`);
+    assert.match($("ex-msg").textContent, /Tidy rule tree/);
+  }
+});
+
 test("retuneLoadsRuleTuple", () => {
   assert.ok(TIDY, "the page embeds the tidy rule");
   for (const r of [tidyRow(1000, 19, 0.3), tidyRow(30000, 40, 0.5)]) {

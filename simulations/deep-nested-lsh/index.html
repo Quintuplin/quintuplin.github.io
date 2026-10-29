@@ -1165,6 +1165,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   // Patch state and redraw on the next frame. A shape or target change cancels running trials and animations.
   function set(patch, opts = {}) {
     const reshape = "dims" in patch || "T" in patch || "auto" in patch;
+    // An entry that rounds or clamps to the stored value is no new dataset.
+    const newData = ("N" in patch && patch.N !== state.N) || ("c" in patch && patch.c !== state.c);
     Object.assign(state, patch);
     if (reshape) {
       if (!opts.keepPreset) state.preset = patch.preset !== undefined ? patch.preset : "";
@@ -1182,7 +1184,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     // A new dataset leaves the tree alone but stops a tune for the old one.
     if ("N" in patch || "c" in patch) {
       dirty.add("controls");
-      if (tuneRunning()) { job++; say(""); }
+      if (newData && tuneRunning()) { job++; say(""); }
     }
     if ("quorum" in patch) quorumOf(derived);
     if (reshape || "pipeline" in patch) pipelineCounts(derived);
