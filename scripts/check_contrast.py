@@ -18,7 +18,8 @@ TEXT, GRAPHIC = 4.5, 3.0
 
 # Tokens drawn on the bare sheet (glass) and on inner cards (card). Graphics cover
 # strokes, focus rings and large text, and are checked on both. Card graphics, such as
-# legend swatches, appear only on cards.
+# legend swatches, appear only on cards. Tinted maps a text token to the translucent
+# fill it sits on inside a card, such as a warning note.
 PAGES = {
     "css/main.css": {"glass": ["ink", "muted", "accent"]},
     "studies/subagent-crew-study/index.html": {
@@ -42,6 +43,7 @@ PAGES = {
         "card": ["ink", "ink2", "muted", "accent", "ok", "open", "fp", "fn", "warn"],
         "graphic": ["accent", "fp", "fn"],
         "card-graphic": ["fp", "fn", "d2", "on", "axis", "ink2", "warn-line"],
+        "tinted": {"warn": "warn-bg"},
     },
 }
 LIGHT = re.compile(r"(?m)^:root\s*\{")
@@ -102,7 +104,8 @@ def check_mode(page, mode, tokens, roles):
     errors = []
     if "glass" not in tokens:
         return [f"{page} {mode}: no --glass token"]
-    missing = sorted({name for names in roles.values() for name in names} - tokens.keys())
+    named = {name for names in roles.values() for name in names} | set(roles.get("tinted", {}).values())
+    missing = sorted(named - tokens.keys())
     errors += [f"{page} {mode}: token --{name} missing" for name in missing]
     for px in WORST_PIXELS:
         layers = {"glass": over(colour(tokens["glass"]), px)}
@@ -111,6 +114,10 @@ def check_mode(page, mode, tokens, roles):
         checks = [(role, name, TEXT) for role in ("glass", "card") for name in roles.get(role, [])]
         checks += [(role, name, GRAPHIC) for role in layers for name in roles.get("graphic", [])]
         checks += [("card", name, GRAPHIC) for name in roles.get("card-graphic", [])]
+        for name, fill in roles.get("tinted", {}).items():
+            if "card" in layers and fill not in missing:
+                layers[f"--{fill} on card"] = over(colour(tokens[fill]), layers["card"])
+                checks.append((f"--{fill} on card", name, TEXT))
         for role, name, need in checks:
             if role not in layers:
                 errors.append(f"{page} {mode}: no --surface for card tokens")
