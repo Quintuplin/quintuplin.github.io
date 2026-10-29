@@ -130,9 +130,18 @@ def check_mode(page, mode, tokens, roles):
     return errors
 
 
+def tinted_self_test(root):
+    """Return an error unless the tinted role fails a dark --warn-bg raised to 0.6 alpha (2.5:1)."""
+    page = "simulations/deep-nested-lsh/index.html"
+    text = (root / page).read_text(encoding="utf-8")
+    tokens = {**block(text, LIGHT), **block(text, DARK), "warn-bg": "rgba(255, 196, 0, 0.6)"}
+    caught = any("--warn " in e and "--warn-bg on card" in e for e in check_mode(page, "dark", tokens, PAGES[page]))
+    return [] if caught else [f"{page}: the tinted role passed --warn on a 0.6 alpha dark --warn-bg"]
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
-    errors = []
+    errors = tinted_self_test(root)
     if hashlib.sha256((root / "assets/bg.jpg").read_bytes()).hexdigest() != BG_SHA256:
         errors.append("assets/bg.jpg changed: re-pin worst pixels and BG_SHA256")
     for page, roles in PAGES.items():
