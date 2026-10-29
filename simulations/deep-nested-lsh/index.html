@@ -169,6 +169,8 @@ output { font-family: var(--mono); color: var(--ink); font-size: 13.5px; min-wid
 .ex-msg { font-size: 13px; color: var(--ink2); min-height: 1.6em; margin: 0; }
 /* The text opens with "Warning", so the note does not rely on its colour. */
 .ex-limit { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-line); border-left-width: 5px; border-radius: 8px; padding: 8px 12px; margin: 0; font-size: 13.5px; font-weight: 600; line-height: 1.45; }
+/* The empty live note stays mounted so screen readers hear the warning. Out of the flow it adds no gap. */
+.ex-limit:empty { position: absolute; padding: 0; border: 0; }
 .readout { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line); overflow: hidden; }
 @container ex (min-width: 480px) { .readout { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .ro { padding: 10px 14px; min-width: 0; box-shadow: 1px 0 0 var(--line), 0 1px 0 var(--line); }
@@ -269,7 +271,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
         <button class="btn" id="ex-search" type="button" title="Swap in the sharpest tree of this depth within these rows at t">Sharpest at depth k</button>
         <button class="btn text" id="ex-clear" type="button" title="Clear the trial dots and the ladder">Clear</button>
       </div>
-      <p class="ex-limit" id="ex-limit" role="note" hidden></p>
+      <p class="ex-limit" id="ex-limit" role="note" aria-live="polite"></p>
       <div class="ladder-head">
         <div class="ladder-depth" id="ex-depth">Depth k</div>
         <p class="ladder-key">Each faint curve is one level. <span class="op AND">AND</span> levels set the FP tail. <span class="op OR">OR</span> levels set the FN tail.</p>
@@ -1267,12 +1269,13 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   }
   // Above ROW_CAP the batch buttons are off and Run may be slow. Above RUN_ROWS one pair would not fit in memory.
   function renderLimits() {
-    const n = derived.n, note = $("ex-limit");
+    const n = derived.n, note = $("ex-limit"), text = limitText(n);
     $("ex-one").disabled = n > C.RUN_ROWS;
     for (const id of ["ex-many", "ex-sweep"]) $(id).disabled = n > C.ROW_CAP;
-    note.innerHTML = limitText(n);
-    note.hidden = n <= C.ROW_CAP;
+    // The note is a live region, so it is written only when the warning changes.
+    if (text !== shownLimit) note.innerHTML = shownLimit = text;
   }
+  let shownLimit = "";
   function limitText(n) {
     if (n <= C.ROW_CAP) return "";
     const run = n > C.RUN_ROWS ? `Run is off too above ${count(C.RUN_ROWS)} rows because one pair would need more memory than the page allows.`

@@ -257,12 +257,14 @@ test("seedChangeKeepsLimitNote", () => {
   flush();
   const why = /^Warning\. This tree has 160000 rows/;
   assert.match($("ex-limit").textContent, why, "a tree over the row limit warns");
+  let writes = 0;
+  Object.defineProperty($("ex-limit"), "innerHTML", { set(v) { writes++; this.text = String(v); }, get() { return this.text; } });
   enterSeed($, 754);
   flush();
   assert.ok($("ex-many").disabled && $("ex-sweep").disabled, "the batch buttons stay off");
   assert.equal($("ex-one").disabled, false, "Run stays on");
-  assert.equal($("ex-limit").hidden, false);
   assert.match($("ex-limit").textContent, why, "a seed change keeps the warning");
+  assert.equal(writes, 0, "the live note is not rewritten, so it is not announced again");
 });
 
 // Guard: the explorer once let the depth reach 13 while the study's search stops at its grid max.
@@ -662,6 +664,10 @@ test("limitNoteAboveLadder", () => {
   const note = html.match(/<p\b[^>]*\bid="ex-limit"[^>]*>/)?.[0];
   assert.ok(note, "the markup holds the limit note");
   assert.match(note, /\brole="note"/);
+  // Guard: the note once toggled hidden, so screen readers no longer heard why the buttons went off.
+  assert.match(note, /\baria-live="polite"/, "the note announces its warning");
+  assert.doesNotMatch(note, /\bhidden\b/, "the live note stays mounted");
+  assert.match(PageScripts.html, /^\.ex-limit:empty \{[^}]*position: absolute/m, "an empty note leaves the flex flow");
   assert.ok(at('class="ex-actions"') < at('id="ex-limit"') && at('id="ex-limit"') < at('class="ladder-head"'), "the note sits under the buttons and above the ladder");
   for (const id of ["ex-one", "ex-many", "ex-sweep"]) {
     assert.match(html.match(new RegExp(`<button\\b[^>]*\\bid="${id}"[^>]*>`))?.[0] || "", /\baria-describedby="ex-limit"/, `${id} is described by the note`);
@@ -672,13 +678,11 @@ test("limitNoteAboveLadder", () => {
 test("limitNoteText", () => {
   const { $, flush } = boot({ dims: [400, 400], T: 0.5, s: 0.5, seed: 753 });
   flush();
-  assert.equal($("ex-limit").hidden, false);
   assert.equal($("ex-limit").textContent, "Warning. This tree has 160000 rows, above the 100000 row limit for 1000 at s and Sweep, so those buttons are off. Run still sends one pair up the tree but may be slow.");
   assert.doesNotMatch($("ex-msg").textContent, /limit/, "the status line no longer carries the reason");
   const pinned = boot(PINNED);
   pinned.flush();
-  assert.equal(pinned.$("ex-limit").hidden, true, "a tree within the limit shows no warning");
-  assert.equal(pinned.$("ex-limit").textContent, "");
+  assert.equal(pinned.$("ex-limit").textContent, "", "a tree within the limit leaves the note empty, so it shows nothing");
   assert.ok(["ex-one", "ex-many", "ex-sweep"].every((id) => !pinned.$(id).disabled));
 });
 
