@@ -631,6 +631,29 @@ test("retuneUnlocksOnInputChange", () => {
   }
 });
 
+// A tune started for the old inputs must not land after a change, also when the inputs come back (A to B to A).
+test("retuneCancelsOnInputChange", () => {
+  for (const changes of [
+    [($) => enter($, "ex-n", 2000)],
+    [($) => enter($, "ex-n", 2000), ($) => enter($, "ex-n", 1000)],
+    [($) => enter($, "ex-mix", 10)],
+    [($) => target($, 0.31), ($) => target($, 0.3)],
+  ]) {
+    const { $, flush, step } = boot(PINNED);
+    flush();
+    const before = arities($, PINNED.dims.length);
+    $("ex-retune").dispatch("click");
+    step();
+    assert.match($("ex-msg").textContent, /Tuning/, "the tune is still running");
+    for (const change of changes) change($);
+    drain(step);
+    flush();
+    assert.deepEqual(arities($, PINNED.dims.length), before, "the stale tune leaves the tree alone");
+    assert.doesNotMatch($("ex-msg").textContent, /Tidy rule tree|Tuning/);
+    assert.equal($("ex-retune").disabled, false, "the cancelled tune can run again");
+  }
+});
+
 test("retuneLoadsRuleTuple", () => {
   assert.ok(TIDY, "the page embeds the tidy rule");
   for (const r of [tidyRow(1000, 19, 0.3), tidyRow(30000, 40, 0.5)]) {
