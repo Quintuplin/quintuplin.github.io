@@ -346,7 +346,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>Dataset size N</dt><dd>The number of documents in the dataset to tune for. The list runs from 1000 to 100000 in steps of 1, 2, 3 and 5 per power of ten. It holds every N the study ran, which are 1000, 3000, 10000, 30000 and 100000. The study corpus has 1000.</dd>
       <dt>Cluster size c</dt><dd>Documents per cluster of near duplicates in the generated dataset the rule assumes. The box takes 2 to 50. The study corpus has 19.</dd>
       <dt>Near-pair mass m</dt><dd>Near pairs per document in that dataset. Members of a cluster pair with each other. 5% of the documents are noise. Up to 1000 of them share one filler pool and the rest share pools of 50. Documents of one pool also count as near pairs.</dd>
-      <dt>Tidy rule (Re-tune)</dt><dd>Re-tune loads the tree a fitted rule picks for N, c and t. Among the matched trees at depths 2 to 10 within 10000 rows it takes the one with the least λ A_lo + A_hi. The study fitted it on datasets with N from 3000 to 100000 and c from 10 to 40. Outside those ranges it extrapolates. The button stays off after a tune until N, c or t changes.</dd>
+      <dt>Tidy rule (Re-tune)</dt><dd>Re-tune loads the tree a fitted rule picks for N, c and t. Among the matched trees at depths 2 to 10 within 10000 rows it takes the one with the least λ A_lo + A_hi. The study fitted it on datasets with N from 3000 to 100000 and c from 10 to 40. Outside those ranges it extrapolates. The button stays off after a tune until N, c, t or the tree changes.</dd>
       <dt>Weight λ</dt><dd>λ = R<sup>γ</sup> with the fitted γ 0.05. R = ((N − 1)/2 − m)(1 − t)/(m t) is the ratio of non-near to near pairs per document with each spread evenly over its side of t. A larger λ weighs false positives more.</dd>
       <dt>A_lo and A_hi</dt><dd>The two parts of the error area E. A_lo is the FP area below t. A_hi is the FN area above t.</dd>
       <dt>Expected errors (study)</dt><dd>E[FP] + E[FN] the study computed for the rule's tree on its generated dataset of N documents with cluster size c. Re-tune shows it only for an N, c and t the study ran.</dd>
@@ -1080,8 +1080,10 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   const N_OPTIONS = [1000, 2000, 3000, 5000, 10000, 20000, 30000, 50000, 100000], C_RANGE = [2, 50];
   const state = { dims: DEFAULT.dims.slice(), T: targetOf(DEFAULT), auto: false, s: 0.5, flat: false, d2: true, quorum: false, pipeline: false, seed: 753, preset: DEFAULT.id, matched: true, N: 1000, c: 19 };
   let derived = null, shown = null, morph = 0, job = 0, pipeJob = 0, anim = 0, frame = 0, dirty = new Set(), rng, hashes;
-  // tuning holds the job of a running tune. lastTune holds the N, c and t of the last finished one.
+  // tuning holds the job of a running tune. lastTune holds the tuneKey after the last finished one.
   let tuning = 0, lastTune = null;
+  // The inputs and the shown tree. The arity count encodes the depth, so a flat compare is enough.
+  const tuneKey = () => [state.N, state.c, state.T, ...state.dims];
   const tuneRunning = () => tuning > 0 && tuning === job;
   const inRange = (v, [lo, hi]) => Number.isInteger(v) && v >= lo && v <= hi;
   // The N option nearest v on a log scale, or null when v is no positive number.
@@ -1251,8 +1253,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     $("ex-n").value = state.N;
     $("ex-mix").value = state.c;
     $("ex-m-out").textContent = mass().toFixed(2);
-    // A tune at the inputs of the last one would load the same tree.
-    $("ex-retune").disabled = tuneRunning() || same(lastTune || [], [state.N, state.c, state.T]);
+    // A tune at the inputs of the last one would load the tree already shown.
+    $("ex-retune").disabled = tuneRunning() || same(lastTune || [], tuneKey());
     $("ex-flat").checked = state.flat;
     $("ex-d2").checked = state.d2;
     $("ex-quorum").checked = state.quorum;
@@ -1394,9 +1396,9 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
         : `Tuning for ${at}. Scored ${p.scored} of ${p.tuples} matched trees.`),
       (r) => {
         tuning = 0;
-        lastTune = [N, c, T];
         // set() clears the message, so the result follows it.
         if (r.dims) set({ dims: r.dims, auto: false });
+        lastTune = tuneKey();
         say(r.dims ? tuneText(r, N, c, T, at) : `No tree at depths ${lo} to ${hi} within ${TOP} rows has t̂ within ${C.TOLERANCE} of t for ${at}.`);
         dirty.add("controls");
         schedule();

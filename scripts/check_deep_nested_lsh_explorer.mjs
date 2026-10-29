@@ -847,6 +847,50 @@ test("nPickerOptions", () => {
   assert.equal($("ex-retune").disabled, false, "picking another N unlocks Re-tune");
 });
 
+// The arity d0 box on the ladder set to v.
+const setD0 = ($, v) => { const input = $("ex-ladder").querySelector('[aria-label="arity d0"]'); input.value = String(v); input.dispatch("change"); };
+
+// Guard: Re-tune stayed off after a hand edit of the tree, so the rule's tree came back only by nudging t (#52).
+test("retuneUnlocksOnTreeEdit", () => {
+  const { $, flush, step } = boot(PINNED);
+  flush();
+  retune($, flush, step);
+  const d = ruleTuple(1000, 19, 0.3), locked = () => { flush(); return $("ex-retune").disabled; };
+  assert.deepEqual(arities($, d.length), d);
+  assert.equal(locked(), true);
+  setD0($, d[0] + 1);
+  assert.equal(locked(), false, "an arity edit unlocks Re-tune");
+  setD0($, d[0]);
+  assert.equal(locked(), true, "the tuned tree set again by hand locks it");
+  setD0($, d[0] + 1);
+  flush();
+  retune($, flush, step);
+  assert.deepEqual(arities($, d.length), d, "Re-tune reloads the rule's tree");
+  assert.equal(locked(), true);
+});
+
+test("retuneUnlocksOnPresetAndDepth", () => {
+  const select = ($) => $("ex-preset"), d = ruleTuple(1000, 19, 0.3);
+  for (const change of [
+    ($, flush) => {
+      const o = select($).querySelectorAll("option").find((x) => x.textContent.startsWith("t 0.3 "));
+      assert.ok(o, "a preset at t 0.3");
+      select($).value = o.value;
+      select($).dispatch("change");
+      flush();
+    },
+    ($, flush) => setDepth($, flush, d.length === MAX_DEPTH ? d.length - 1 : d.length + 1),
+  ]) {
+    const { $, flush, step } = boot(PINNED);
+    flush();
+    retune($, flush, step);
+    assert.equal($("ex-retune").disabled, true);
+    change($, flush);
+    assert.equal(Number($("ex-t").value), 0.3, "t stays at the tuned target");
+    assert.equal($("ex-retune").disabled, false, "a new tree unlocks Re-tune");
+  }
+});
+
 test("savedOffListNMapsToNearest", () => {
   for (const [N, want] of [[12345, 10000], [70000, 50000]]) {
     const { $, flush } = boot({ ...PINNED, N });
