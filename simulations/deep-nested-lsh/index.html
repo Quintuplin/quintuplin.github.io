@@ -1579,11 +1579,13 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   }
   const OUTCOME = { TP: "True positive", FP: "False positive", FN: "False negative", TN: "True negative" };
 
+  // The animation token of the Run whose progress line shows, until its outcome replaces it.
+  let running = 0;
   // Sends one pair through the rows a slice per frame under the animation token, so a shape change, Clear or a new Run stops it.
   function runOne() {
     // A shape change waiting for its frame leaves the rungs of the old tree, so draw it first.
     if (frame) { cancelAnimationFrame(frame); draw(performance.now()); }
-    const d = state.dims, T = state.T, n = C.rows(d), mine = ++anim;
+    const d = state.dims, T = state.T, n = C.rows(d), mine = running = ++anim;
     if (n > C.RUN_ROWS) return;
     const pair = C.drawPair(state.s, rng, PAIR.size, PAIR.vocab);
     resetTiles();
@@ -1609,6 +1611,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       chip.textContent = `${verdict} · ${kind} ${OUTCOME[kind]}`;
       root.row.querySelector(".tiles").appendChild(chip);
       record(s, fired ? 1 : 0, 1);
+      running = 0;
       say(`A pair at s′ ${s.toFixed(3)} against target ${T.toFixed(2)}. ${pipe ? `The pipeline ${fired ? "retrieved and verified the pair" : "dropped the pair"}` : `The root ${fired ? "fired so the pair is a candidate" : "stayed off so the pair is dropped"}`}. ${OUTCOME[kind]}.`);
     };
     // A deep tree still climbs in about a second.
@@ -1920,8 +1923,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   function relayout(parts) {
     if (plotWidth() !== W) { buildPlot(); parts.add("curve"); }
     if (tailWidth() !== tailW) parts.add("tails");
-    // The rebuilt ladder stops a Run, so its progress line goes with it.
-    if (cap() !== shownCap) { anim++; say(""); parts.add("ladder"); }
+    // The rebuilt ladder stops a Run, so its progress line goes with it. Other status lines stay.
+    if (cap() !== shownCap) { if (running === anim) say(""); anim++; parts.add("ladder"); }
   }
 
   function init() {

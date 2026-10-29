@@ -733,6 +733,18 @@ test("retuneLocksAfterTune", () => {
   assert.equal($("ex-retune").disabled, true, "a second tune at the same N, c and t would change nothing");
 });
 
+// Guard: a resize that changed the tile count once cleared any status line, so a finished tune lost its result.
+test("resizeKeepsRetuneResult", () => {
+  const { $, flush, step } = boot(PINNED, withResize);
+  flush();
+  retune($, flush, step);
+  assert.match($("ex-msg").textContent, /^Tidy rule tree/);
+  $("ex-ladder").dataset.w = "200";
+  $("ex-ladder").dispatch("resize");
+  flush();
+  assert.match($("ex-msg").textContent, /^Tidy rule tree/, "the tune result outlives the resize");
+});
+
 test("retuneUnlocksOnInputChange", () => {
   const { $, flush, step } = boot(PINNED);
   flush();
