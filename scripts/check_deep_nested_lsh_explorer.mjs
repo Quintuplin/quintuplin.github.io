@@ -810,7 +810,7 @@ test("retuneInputsPersistValidated", () => {
   assert.equal(String($("ex-n").value), "1000", "N opens at the study's corpus");
   assert.equal(String($("ex-mix").value), "19");
   assert.equal($("ex-m-out").textContent, m(1000, 19), "m follows N and c");
-  for (const [id, v, want] of [["ex-n", 12345.6, 12346], ["ex-n", 10, 1000], ["ex-n", 1e7, 100000], ["ex-n", "x", 100000],
+  for (const [id, v, want] of [["ex-n", 12345.6, 10000], ["ex-n", 10, 1000], ["ex-n", 1e7, 100000], ["ex-n", "x", 100000],
     ["ex-mix", 1, 2], ["ex-mix", 99, 50], ["ex-mix", 7.4, 7]]) {
     enter($, id, v);
     flush();
@@ -826,6 +826,33 @@ test("retuneInputsPersistValidated", () => {
   bad.flush();
   assert.deepEqual([bad.$("ex-n").value, bad.$("ex-mix").value].map(Number), [1000, 19], "invalid saved values fall back");
   assert.deepEqual(arities(bad.$, PINNED.dims.length), PINNED.dims, "the rest of the saved state loads");
+});
+
+// Guard: N was a number box that stepped by one across 1000 to 100000 (#51).
+test("nPickerOptions", () => {
+  assert.match(PageScripts.markup(), /<select id="ex-n"/, "N is a drop-down");
+  const { $, flush, step } = boot(PINNED);
+  flush();
+  const options = $("ex-n").querySelectorAll("option").map((o) => Number(o.value));
+  assert.equal(options[0], 1000);
+  assert.equal(options.at(-1), 100000);
+  assert.ok(options.every((v, i) => !i || v > options[i - 1]), `ascending: ${options}`);
+  for (const lo of [1000, 10000]) assert.ok(options.filter((v) => v >= lo && v < 10 * lo).length >= 3, `at least 3 options from ${lo}: ${options}`);
+  for (const n of new Set(TIDY.rows.map((r) => r.n))) assert.ok(options.includes(n), `the study's N ${n} is an option`);
+  retune($, flush, step);
+  assert.equal($("ex-retune").disabled, true);
+  enter($, "ex-n", 3000);
+  flush();
+  assert.equal(String($("ex-n").value), "3000");
+  assert.equal($("ex-retune").disabled, false, "picking another N unlocks Re-tune");
+});
+
+test("savedOffListNMapsToNearest", () => {
+  for (const [N, want] of [[12345, 10000], [70000, 50000]]) {
+    const { $, flush } = boot({ ...PINNED, N });
+    flush();
+    assert.equal(String($("ex-n").value), String(want), `a saved N of ${N} shows ${want}`);
+  }
 });
 
 test("retuneTermsDefined", () => {
