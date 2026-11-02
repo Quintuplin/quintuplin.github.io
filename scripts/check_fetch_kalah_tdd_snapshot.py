@@ -92,30 +92,30 @@ class Fetch(unittest.TestCase):
                         "--out", str(self.out), *extra])
         return json.loads((self.out / "MANIFEST.json").read_text()), json.loads((self.out / "facts.json").read_text())
 
-    def assertRefuses(self, *extra):
-        with self.assertRaises(SystemExit):
+    def assertRefuses(self, reason, *extra):
+        with self.assertRaisesRegex(SystemExit, reason):
             self.fetch(*extra)
         self.assertFalse(self.out.exists(), "a refused fetch wrote a snapshot")
 
     def test_refuses_dirty_tree(self):
         (self.study / "harness/collect.sh").write_text("edited\n")
-        self.assertRefuses()
-        self.assertRefuses("--sha", self.head[:7])
+        self.assertRefuses("uncommitted")
+        self.assertRefuses("uncommitted", "--sha", self.head[:7])
         self.git(self.study, "checkout", "--", "harness/collect.sh")
         (self.study / "untracked.txt").write_text("new\n")
-        self.assertRefuses()
+        self.assertRefuses("uncommitted")
         (self.study / "untracked.txt").unlink()
         # The methods doc lives in another repo, so its own edits refuse too.
         self.doc.write_text("edited\n")
-        self.assertRefuses()
+        self.assertRefuses("uncommitted")
 
     def test_refuses_foreign_sha(self):
-        self.assertRefuses("--sha", "0000000")
+        self.assertRefuses("is not .* HEAD", "--sha", "0000000")
         old = self.head
         (self.study / "docs/SPEC.md").write_text("# Newer spec\n")
         self.git(self.study, *COMMIT, "newer", "docs/SPEC.md")
         # An older commit is foreign too: the checkout must stand at the pinned commit.
-        self.assertRefuses("--sha", old[:7])
+        self.assertRefuses("is not .* HEAD", "--sha", old[:7])
 
     def test_drops_host_paths(self):
         _, facts = self.fetch()
@@ -131,7 +131,7 @@ class Fetch(unittest.TestCase):
     def test_host_path_pattern_follows_render(self):
         (self.study / "harness/report/render.py").write_text(fixture("render.py").decode().replace("|Cryptomator", ""))
         self.git(self.study, *COMMIT, "narrower", "harness/report/render.py")
-        self.assertRefuses()
+        self.assertRefuses("HOST_PATH differs")
 
     def test_manifest_matches(self):
         manifest, _ = self.fetch()
@@ -143,7 +143,7 @@ class Fetch(unittest.TestCase):
         for path in copied:
             data = fixture(SOURCES[path])
             self.assertEqual((self.out / path).read_bytes(), data, path)
-            self.assertEqual(files[path], {"bytes": len(data), "sha256": sha256(data), "published_sha256": files[path]["published_sha256"]})
+            self.assertEqual((files[path]["bytes"], files[path]["sha256"]), (len(data), sha256(data)), path)
         self.assertEqual(files["runs/full-1/report.html"]["published_sha256"], sha256(fixture("report.html")))
         self.assertEqual(files["runs/full-1/methods/classic.html"]["published_sha256"],
                          sha256((self.published / "methods/classic.html").read_bytes()))
@@ -154,7 +154,7 @@ class Fetch(unittest.TestCase):
 
     def test_refuses_missing_published_copy(self):
         (self.published / "methods/classic.html").unlink()
-        self.assertRefuses()
+        self.assertRefuses("backup .* lacks")
 
     def test_extracts_facts(self):
         _, facts = self.fetch()
