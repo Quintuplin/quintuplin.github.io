@@ -3,8 +3,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  PageScripts, C, study, MAX_DEPTH, PAIRS, SEARCH_WORK, same, counts, tablesOf, drainSearch, PAIR, realised,
-  quorumTable, retrievalOf, quorumCounts, verifyRows,
+  PageScripts, C, study, MAX_DEPTH, PAIRS, SEARCH_WORK, HIST_PATH, same, counts, tablesOf, drainSearch, PAIR, realised,
+  quorumTable, retrievalOf, quorumCounts, verifyRows, histogramFor,
 } from "./deep_nested_lsh_support.mjs";
 
 const parity = JSON.parse(readFileSync(new URL("fixtures/deep-nested-lsh-parity.json", import.meta.url), "utf8"));
@@ -544,7 +544,7 @@ test("profileStaysNumericAtLargestTuple", () => {
   }
 });
 
-// ---- TidyChecks: the tidy rule twin against the study's tidy table. CI runs them apart with --test-name-pattern '^tidy' ----
+// ---- TidyChecks: the F1 tidy rule and the λ fit against the study's tidy table. CI runs them apart with --test-name-pattern '^tidy' ----
 const tidy = parity.tidy, TOP = study.facts.top_budget;
 // Fixture rows within the top budget by (t, B), so each sweep is enumerated once and serves every row of its key.
 function tidyKeys() {
@@ -569,9 +569,20 @@ test("tidyMixMatchesStudy", () => {
 
 test("tidyDataMatchesFixture", () => {
   const { rows, ...consts } = tidy, { rows: pageRows, ...pageConsts } = study.tidy || {};
-  assert.equal(consts.rule, "KAlambda");
+  assert.equal(consts.rule, "KAlambda", "the λ fit twins KAlambda");
+  assert.equal(consts.pick, "F1", "the study's tidy rule is F1");
   assert.deepEqual(pageConsts, consts, "the page embeds the fixture's rule constants");
   assert.deepEqual(C.TIDY_DEPTHS, consts.depths, "the page rule searches the study's depths");
+  assert.equal(JSON.parse(readFileSync(HIST_PATH, "utf8")).sha, study.provenance.sha, "the histograms come from the page data's study commit");
+  assert.equal(consts.datasets.length, 13, "the corpus and 12 generated datasets");
+  for (const [n, c] of consts.datasets) assert.ok(histogramFor(n, c)?.length, `a pair histogram for N ${n} c ${c}`);
+  assert.deepEqual(new Set(consts.datasets.map(String)), new Set(rows.map((r) => `${r.n},${r.mix}`)), "every study dataset has a histogram");
+  // The fit's excess over F1 at each budget is the geometric mean of their expected errors over the fixture rows.
+  assert.deepEqual(consts.excess.map(([b]) => b), [...new Set(rows.map((r) => r.b))].sort((x, y) => x - y));
+  for (const [b, x] of consts.excess) {
+    const at = rows.filter((r) => r.b === b);
+    close(Math.exp(at.reduce((a, r) => a + Math.log(r.e / r.f1.e), 0) / at.length) - 1, x, `excess at ${b} rows`);
+  }
   const top = rows.filter((r) => r.b === TOP).map(({ n, mix, m, t, dims, e }) => ({ n, mix, m, t, dims, e }));
   assert.ok(top.length >= 70, `only ${top.length} rows at ${TOP} rows`);
   assert.deepEqual(pageRows, top, `the page embeds the rows at ${TOP} rows`);
@@ -587,12 +598,58 @@ test("tidySweepCountsMatchStudyWork", () => {
   }
 });
 
-test("tidyTuneMatchesStudyRows", () => {
+// Fixture rows within the top budget in (t, B) order, so one sweep and one binned histogram serve each run of rows.
+const f1Rows = (keep) => tidy.rows.filter((r) => r.b <= TOP && keep(r)).sort((x, y) => x.t - y.t || x.b - y.b);
+function f1Mismatches(rows) {
+  const bad = [];
+  for (const r of rows) {
+    const got = C.f1Tune(r.t, r.b, histogramFor(r.n, r.mix));
+    if (!same(got.dims, r.f1.dims) || !(Math.abs(got.e - r.f1.e) <= 1e-9 * r.f1.e) || got.tuples !== r.f1.work) {
+      bad.push({ dataset: r.dataset, t: r.t, b: r.b, got: [got.dims, got.e, got.tuples], want: [r.f1.dims, r.f1.e, r.f1.work] });
+    }
+  }
+  return bad;
+}
+
+// Every cell to 1000 rows, and at the top budget the largest generated dataset and the corpus, so CI stays short.
+test("tidyF1MatchesStudy", () => {
+  const rows = f1Rows((r) => r.b <= 1000 || (r.n === 100000 && r.mix === 40) || r.n === study.facts.corpus.docs);
+  assert.equal(rows.length, 159);
+  assert.ok(rows.some((r) => !same(r.dims, r.f1.dims)), "F1 and the λ fit pick different trees on some cells");
+  assert.deepEqual(f1Mismatches(rows), []);
+});
+
+// Every cell at the top budget. CI skips it for time; run it by name.
+test("tidyFullF1MatchesStudy", () => {
+  const rows = f1Rows((r) => r.b === TOP);
+  assert.equal(rows.length, 75);
+  assert.deepEqual(f1Mismatches(rows), []);
+});
+
+// The pruned F1 against the exact errors of every matched tree, at targets past the study's.
+test("tidyF1PruneMatchesFullScan", () => {
+  for (const t of [0.05, 0.95]) {
+    const M = matchedTrees(t, 1000);
+    for (const [n, c] of [[1000, 19], [10000, 40]]) {
+      const pairs = histogramFor(n, c);
+      let best = -1, bestE = Infinity;
+      M.forEach((d, i) => {
+        const { fp, fn } = C.expectedCounts((s) => C.curve(s, d), pairs, t);
+        if (fp + fn < bestE) [best, bestE] = [i, fp + fn];
+      });
+      const got = C.f1Tune(t, 1000, pairs);
+      assert.deepEqual(got.dims, M[best], `N ${n} c ${c} t ${t}`);
+      close(got.e, bestE, `N ${n} c ${c} t ${t} expected errors`);
+    }
+  }
+});
+
+test("tidyFitMatchesStudyRows", () => {
   const bad = [];
   let n = 0;
   for (const rs of tidyKeys().values()) {
     for (const r of rs) {
-      const got = C.tidyTune(r.n, r.m, r.t, r.b, tidy.gamma);
+      const got = C.fitTune(r.n, r.m, r.t, r.b, tidy.gamma);
       if (!same(got.dims, r.dims) || got.tuples !== r.work) bad.push({ dataset: r.dataset, t: r.t, b: r.b, got, want: r.dims });
       n++;
     }
@@ -602,7 +659,7 @@ test("tidyTuneMatchesStudyRows", () => {
 });
 
 // The pruned search against scoring every matched tree, on the study rows and on mixes and targets past them.
-test("tidyPruneMatchesFullScan", () => {
+test("tidyFitPruneMatchesFullScan", () => {
   const cases = [...tidyKeys().values()].flat().filter((r) => r.b <= 1000);
   for (const t of [0.05, 0.3, 0.95]) {
     for (const [n, mix] of [[1000, 2], [1000, 50], [100000, 2], [100000, 50]]) cases.push({ n, mix, m: C.nearMass(n, mix, tidy), t, b: 1000 });
@@ -622,7 +679,7 @@ test("tidyPruneMatchesFullScan", () => {
       const s = lam * lo + hi, b = lam * parts[best][0] + parts[best][1];
       if (s < b || (s === b && lo < parts[best][0])) best = i;
     });
-    assert.deepEqual(C.tidyTune(r.n, r.m, r.t, r.b, tidy.gamma).dims, M[best], `N ${r.n} c ${r.mix} t ${r.t} B ${r.b}`);
+    assert.deepEqual(C.fitTune(r.n, r.m, r.t, r.b, tidy.gamma).dims, M[best], `N ${r.n} c ${r.mix} t ${r.t} B ${r.b}`);
     if (r.dims) assert.deepEqual(M[best], r.dims, `${r.dataset} t ${r.t} B ${r.b} full scan`);
   }
   for (const [d, t] of [[[2, 14, 4, 2], 0.3], [[5, 20], 0.5], [[2, 4, 2, 3, 2, 2, 2, 2, 2, 2], 0.8]]) {
