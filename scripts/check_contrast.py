@@ -45,7 +45,16 @@ PAGES = {
         "card-graphic": ["fp", "fn", "d2", "on", "axis", "ink2", "warn-line"],
         "tinted": {"warn": "warn-bg"},
     },
+    # Source SVGs and th cells put --ink2 (an alias of --muted) on --wash, so tinted checks that pair.
+    "studies/kalah-tdd-study/study.css": {
+        "glass": ["ink", "muted", "accent"],
+        "card": ["ink", "muted", "accent", "s1", "s2", "s3", "s4", "good", "warn", "serious", "open"],
+        "graphic": ["s1", "s2", "s3", "s4", "axis", "gold", "silver", "bronze"],
+        "tinted": {"muted": "wash"},
+    },
 }
+# Pages whose [data-theme="dark"] block must exist, so the theme toggle cannot drift from the media block.
+FORCED_REQUIRED = {"studies/kalah-tdd-study/study.css"}
 LIGHT = re.compile(r"(?m)^:root\s*\{")
 DARK = re.compile(r"@media\s*\(prefers-color-scheme:\s*dark\)\s*\{")
 FORCED_DARK = re.compile(r'(?m)^:root\[data-theme="dark"\]\s*\{')
@@ -145,13 +154,18 @@ def main():
     if hashlib.sha256((root / "assets/bg.jpg").read_bytes()).hexdigest() != BG_SHA256:
         errors.append("assets/bg.jpg changed: re-pin worst pixels and BG_SHA256")
     for page, roles in PAGES.items():
+        if not (root / page).is_file():
+            errors.append(f"{page}: file missing")
+            continue
         text = (root / page).read_text(encoding="utf-8")
         light, dark = block(text, LIGHT), block(text, DARK)
         if light is None or dark is None:
             errors.append(f"{page}: missing the light :root block or the dark media block")
             continue
         forced = block(text, FORCED_DARK)
-        if forced is not None and forced != dark:
+        if forced is None and page in FORCED_REQUIRED:
+            errors.append(f"{page}: missing the [data-theme=\"dark\"] block")
+        elif forced is not None and forced != dark:
             errors.append(f"{page}: [data-theme=\"dark\"] tokens differ from the dark media block")
         try:
             errors += check_mode(page, "light", light, roles)
