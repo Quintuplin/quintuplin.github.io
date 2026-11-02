@@ -84,6 +84,8 @@ python3 -I scripts/check_build_deep_nested_lsh_data.py || err "deep nested LSH g
 python3 -I scripts/check_fetch_kalah_tdd_snapshot.py || err "Kalah TDD snapshot fetcher check failed"
 # Study flowcharts list every node, edge and loop in their text version, escape text and take colours from study.css (#57).
 python3 -I scripts/check_kalah_tdd_flow.py || err "Kalah TDD flowchart check failed"
+# The study pages match a fresh build, rewrite every old report link, keep ids unique and leak no host path (#59).
+python3 -I scripts/check_build_kalah_tdd_study.py || err "Kalah TDD study page build check failed"
 # Jekyll skips underscore folders, so the snapshot stays off the site and its sitemap (#56).
 [ ! -e "$site/_snapshots" ] || err "_snapshots is published"
 ! grep -q '_snapshots' "$site/sitemap.xml" 2>/dev/null || err "sitemap.xml lists _snapshots"
