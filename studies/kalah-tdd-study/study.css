@@ -1,0 +1,293 @@
+/* Kalah TDD study pages (#55). Glass tokens match css/main.css and the crew study; scripts/check_contrast.py
+   checks them in both modes and requires the two dark blocks to match.
+   Expected page shape: .sheet > nav.site-bar, a.skip, div.study > header.study-head, nav.pager, details.toc, main, nav.pager.
+   Source fragments keep their class names; the render and showcase token names are aliased below. */
+:root{
+  color-scheme:light;
+  --bg:#2B3A4A; --surface:rgba(255,255,255,.78); --ink:#15202B; --muted:#4A5866; --line:#D8DEE5;
+  --accent:#185E78; --accent-soft:#E3F0F5; --wash:#EEF2F5;
+  --s1:#1F6E8C; --s2:#9A6200; --s3:#A23B72; --s4:#3F7D4E;
+  --good:#2F6B3E; --warn:#8A5A00; --serious:#B8403A; --open:#4A5866;
+  --gold:#8A6500; --silver:#5E6369; --bronze:#9A4A22; --axis:#6B7785;
+  --glass:rgba(252,251,247,.86); --glass-solid:rgba(252,251,247,.97); --glass-border:rgba(255,255,255,.55);
+  --glass-shadow:0 10px 40px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.6);
+  /* Render and showcase names. They follow the mode because var() resolves after the dark blocks apply. */
+  --page:var(--bg); --sheet:var(--glass-solid); --ink2:var(--muted); --grid:var(--line); --border:var(--line);
+  --link:var(--accent); --rule:var(--line);
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --serif:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:24px; --space-6:32px; --space-7:48px;
+  --radius:6px; --radius-sheet:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0F1419; --surface:rgba(24,33,42,.80); --ink:#E4EAF0; --muted:#97A5B4; --line:#2A3743;
+    --accent:#6BB8D6; --accent-soft:#1A2F3A; --wash:#1F2A35;
+    --s1:#6BB8D6; --s2:#E9B85C; --s3:#E58BBB; --s4:#8CCB9A;
+    --good:#9FD9AE; --warn:#EBC57A; --serious:#EE8A84; --open:#B3C0CC;
+    --gold:#E0B43A; --silver:#C0C3C7; --bronze:#D9935A; --axis:#7D8B99;
+    --glass:rgba(18,23,30,.86); --glass-solid:rgba(18,23,30,.97); --glass-border:rgba(255,255,255,.10);
+    --glass-shadow:0 12px 48px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0F1419; --surface:rgba(24,33,42,.80); --ink:#E4EAF0; --muted:#97A5B4; --line:#2A3743;
+  --accent:#6BB8D6; --accent-soft:#1A2F3A; --wash:#1F2A35;
+  --s1:#6BB8D6; --s2:#E9B85C; --s3:#E58BBB; --s4:#8CCB9A;
+  --good:#9FD9AE; --warn:#EBC57A; --serious:#EE8A84; --open:#B3C0CC;
+  --gold:#E0B43A; --silver:#C0C3C7; --bronze:#D9935A; --axis:#7D8B99;
+  --glass:rgba(18,23,30,.86); --glass-solid:rgba(18,23,30,.97); --glass-border:rgba(255,255,255,.10);
+  --glass-shadow:0 12px 48px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
+}
+
+/* Base */
+*{box-sizing:border-box}
+[hidden]{display:none}
+html{scroll-behavior:smooth;background:var(--bg)}
+@media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}}
+body{margin:0;color:var(--ink);font:16px/1.6 var(--sans);font-variant-numeric:tabular-nums;
+  padding:var(--space-7) max(20px, env(safe-area-inset-right, 0px)) var(--space-7) max(20px, env(safe-area-inset-left, 0px))}
+.backdrop{position:fixed;inset:0;z-index:-1;background:url("/assets/bg.jpg") center / cover no-repeat}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .backdrop{filter:brightness(.6) saturate(.9)}}
+:root[data-theme="dark"] .backdrop{filter:brightness(.6) saturate(.9)}
+.sheet{max-width:1180px;margin:0 auto;padding:28px 40px 40px;background:var(--glass);
+  -webkit-backdrop-filter:blur(10px) saturate(120%);backdrop-filter:blur(10px) saturate(120%);
+  border:1px solid var(--glass-border);border-radius:var(--radius-sheet);box-shadow:var(--glass-shadow)}
+@media (prefers-reduced-transparency: reduce){.sheet{background:var(--glass-solid);-webkit-backdrop-filter:none;backdrop-filter:none}}
+.sheet > .site-bar{padding-bottom:12px;margin-bottom:var(--space-6)}
+h1,h2,h3,h4,h5,h6{font-family:var(--serif);font-weight:600;line-height:1.25;text-wrap:balance;overflow-wrap:anywhere;margin:0}
+h1{font-size:2rem}
+h2{font-size:1.5rem;margin-top:var(--space-7);padding-top:var(--space-5);border-top:1px solid var(--line)}
+h3{font-size:1.2rem;margin-top:var(--space-6)}
+h4{font-size:1rem;margin-top:var(--space-5)}
+h5,h6{font-size:.875rem;margin-top:var(--space-4);color:var(--muted)}
+p,ul,ol,dl,pre,table{margin:var(--space-3) 0 0}
+p,li,summary,td,th{overflow-wrap:anywhere}
+main :where(p,ul,ol,dl,pre,blockquote){max-width:72ch}
+a{color:var(--accent);text-underline-offset:2px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+code{font-family:var(--mono);font-size:.875em;background:var(--wash);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+pre{font:14px/1.6 var(--mono);overflow-x:auto;white-space:pre-wrap;background:var(--wash);padding:var(--space-3);border-radius:var(--radius)}
+img{max-width:100%;height:auto}
+.skip{position:absolute;left:var(--space-4);top:-100px;z-index:10;padding:var(--space-3) var(--space-4);
+  background:var(--sheet);color:var(--accent);border:2px solid var(--accent);border-radius:var(--radius)}
+.skip:focus{top:var(--space-4)}
+
+/* Layout: contents rail beside one reading column; below 900px the rail folds into a disclosure under the top pager. */
+/* The 1fr row takes the slack when the rail is taller than a short page, so header and pager stay together. */
+.study{display:grid;grid-template-columns:230px minmax(0,1fr);grid-template-rows:auto auto 1fr auto;column-gap:var(--space-7);
+  grid-template-areas:"toc head" "toc ptop" "toc main" "toc pbot"}
+.study-head{grid-area:head}
+.study > .pager:first-of-type{grid-area:ptop}
+.study > .pager:last-of-type{grid-area:pbot}
+.study > main{grid-area:main;min-width:0}
+.study > .toc{grid-area:toc}
+@media (max-width:1100px){.study{grid-template-columns:200px minmax(0,1fr);column-gap:var(--space-6)}}
+@media (max-width:899.98px){
+  .study{grid-template-columns:minmax(0,1fr);grid-template-rows:none;grid-template-areas:"head" "ptop" "toc" "main" "pbot"}
+}
+@media (max-width:600px){
+  body{padding:var(--space-4) 10px}
+  .sheet{padding:var(--space-4);border-radius:10px}
+  h1{font-size:1.6rem}
+  h2{font-size:1.3rem}
+}
+
+/* Header */
+.study-head{display:flex;flex-direction:column;gap:var(--space-2)}
+.eyebrow{font:500 12px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
+.lede{font-size:1.1rem;margin:0}
+.prov{font:13px/1.5 var(--mono);color:var(--muted);margin:0;overflow-wrap:anywhere}
+
+/* Pager: Previous, Contents, Next */
+.pager{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-areas:"prev home next";
+  gap:var(--space-3);margin:var(--space-5) 0}
+.pager a{min-height:44px;display:flex;flex-direction:column;justify-content:center;gap:2px;padding:var(--space-2) var(--space-4);
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);text-decoration:none;color:var(--ink)}
+.pager a:hover{border-color:var(--accent)}
+.pager a > span{font:500 11.5px/1.3 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.pager a > b{font-weight:600;color:var(--accent)}
+.pager [rel="prev"]{grid-area:prev}
+.pager [rel="next"]{grid-area:next;text-align:right;align-items:flex-end}
+.pager .pager-home{grid-area:home;align-items:center}
+@media (max-width:600px){.pager{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"prev next" "home home"}}
+
+/* Contents rail. Works as a closed disclosure without JS; the inline opener opens it at 900px and up. */
+.toc{align-self:start;position:sticky;top:calc(env(safe-area-inset-top, 0px) + var(--space-5));
+  max-height:calc(100vh - var(--space-7));overflow-y:auto;font-size:14px}
+.toc > summary{min-height:44px;display:flex;align-items:center;gap:var(--space-2);cursor:pointer;
+  font:500 12px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.toc .part{font:500 11.5px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:var(--space-4) 0 var(--space-1)}
+.toc ol{list-style:none;margin:0;padding:0;border-left:2px solid var(--line)}
+.toc ol ol{border-left:0;padding-left:var(--space-3);font-size:13px}
+/* Inset focus ring, because the rail scrolls and would clip an outer one. */
+.toc a{display:block;min-height:24px;padding:3px 0 3px var(--space-3);color:var(--muted);text-decoration:none;outline-offset:-2px}
+.toc a:hover,.toc a:focus-visible{color:var(--accent)}
+.toc a[aria-current="page"]{color:var(--accent);font-weight:600;border-left:2px solid var(--accent);margin-left:-2px}
+@media (max-width:899.98px){
+  .toc{position:static;max-height:none;overflow:visible;padding:0 var(--space-4) var(--space-2);
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+}
+
+/* Cards: one look for showcase and report boxes */
+.kpi,.tile,.award,.design,.entry,.qtable,.answer:target,details:not(.toc),figure,.table-scroll,.callout{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+:is(.award,.design,.callout,figure) > :is(h3,h4){margin-top:0}
+.kpis,.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:var(--space-3);margin:var(--space-4) 0}
+.kpi,.tile{padding:var(--space-3) 14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpi b,.tile b{font:500 1.375rem/1.3 var(--mono);overflow-wrap:anywhere}
+.kpi span,.sub{font-size:14px;color:var(--muted);line-height:1.45}
+.awards,div.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:14px;margin:var(--space-4) 0}
+.award,.design{padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-2);min-width:0}
+.award p{margin:0;font-size:14px;color:var(--muted)}
+.award ol,.medals{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.medals{flex-direction:row;flex-wrap:wrap;gap:var(--space-2)}
+.medals li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:6px 12px;
+  border:1px solid var(--line);border-radius:999px;background:var(--surface)}
+.medal{font:600 11px/1.4 var(--mono);text-transform:uppercase;letter-spacing:.06em;padding:1px 6px;border:2px solid var(--m);border-radius:4px}
+[data-medal="gold"]{--m:var(--gold)}
+[data-medal="silver"]{--m:var(--silver)}
+[data-medal="bronze"]{--m:var(--bronze)}
+.icon{width:22px;height:22px;flex:none;fill:none;stroke:var(--m);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.icon.lg{width:48px;height:48px}
+.icon.sm{width:20px;height:20px}
+.won{display:flex;gap:4px;min-height:22px}
+/* The plate keeps the medal icon on a checked surface; the soft accent banner alone is not checked. */
+.winner{display:flex;gap:var(--space-4);align-items:center;padding:var(--space-4);margin:var(--space-5) 0;background:var(--accent-soft);border-radius:var(--radius)}
+.winner p{margin:0}
+.winner .icon{background:var(--sheet);border-radius:50%;padding:5px}
+.figs{margin:auto 0 0;padding-top:var(--space-2);border-top:1px solid var(--line);font-size:14px}
+.figs div{display:flex;justify-content:space-between;gap:var(--space-3)}
+.figs dt{color:var(--muted)}
+.figs dd{margin:0;font-family:var(--mono);text-align:right}
+.muted,.rule,.val,.blurb{color:var(--muted)}
+.rule{font-size:14px;margin:0}
+.award li .val{display:block;font-size:14px}
+pre.steps{font:14px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;padding:14px var(--space-4);
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+.steps span{display:block}
+.steps .hd{font-weight:600;color:var(--accent);margin-top:6px}
+.steps .st{padding-left:2ch}
+dl.terms{display:grid;grid-template-columns:max-content 1fr;gap:6px var(--space-4)}
+dl.terms dt{font-weight:600}
+dl.terms dd{margin:0;color:var(--muted)}
+ul.notes{padding-left:1.2em;color:var(--muted)}
+@media (max-width:600px){dl.terms{grid-template-columns:1fr;gap:0} dl.terms dd{margin-bottom:var(--space-2)}}
+
+/* Chips, tags and callouts. Chips always carry text; the dot repeats it in colour. */
+.chip{display:inline-flex;align-items:center;gap:6px;font:12px/1 var(--mono);padding:4px 10px;border:1px solid var(--line);
+  border-radius:999px;background:var(--surface);color:var(--ink);white-space:nowrap}
+.chip i,.seg{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.chip[tabindex]{cursor:help}
+[data-k="good"] > i,.seg[data-k="good"]{background:var(--good)}
+[data-k="warn"] > i,.seg[data-k="warn"]{background:var(--warn)}
+[data-k="serious"] > i,.seg[data-k="serious"]{background:var(--serious)}
+[data-k="open"] > i,.seg[data-k="open"]{background:var(--open)}
+[data-k="gold"] > i{background:var(--gold)}
+[data-k="silver"] > i{background:var(--silver)}
+[data-k="bronze"] > i{background:var(--bronze)}
+[data-k="hollow"] > i,.qbar .seg[data-k="hollow"]{background:transparent;box-shadow:inset 0 0 0 2px var(--muted)}
+/* Claim tags (recomputed, verified, unchecked) and source status tags share one small pill. */
+.tag{display:inline-block;font:11px/1 var(--mono);padding:3px 7px;border:1px solid var(--line);border-radius:999px;
+  background:var(--wash);color:var(--muted);white-space:nowrap;vertical-align:1px}
+.callout{padding:var(--space-3) var(--space-4);margin:var(--space-4) 0;border-left:4px solid var(--warn)}
+.callout > :first-child{margin-top:0}
+.callout .eyebrow{color:var(--warn)}
+
+/* Questions */
+.qbar{display:flex;gap:2px;height:12px;margin:var(--space-3) 0 var(--space-2);max-width:72ch}
+.qbar .seg{height:12px;width:auto;border-radius:3px}
+.qlegend{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-bottom:14px}
+.cnt{font-weight:600;margin-left:-8px;font-size:13px}
+.qtable table{width:100%}
+.qtable td.num{color:var(--muted);width:2.5em;white-space:nowrap}
+.qtable td.q{font-weight:600}
+.qtable td.st{width:1%;white-space:nowrap}
+.answer{margin:14px 0;padding:2px 0 2px var(--space-3);border-left:3px solid var(--line);scroll-margin-top:var(--space-5)}
+.answer:target{border-left:3px solid var(--accent)}
+.answer .aq{font-weight:600}
+.src{display:block;font-size:13px;color:var(--muted);margin-top:var(--space-1)}
+.qchart{display:block;min-height:24px;line-height:24px;font-size:13px}
+main li a,.src a,.record-link{display:inline-block;min-height:24px;padding:2px 0}
+
+/* Folds and record lists. Folds keep their "N rows and M columns" summary. */
+details:not(.toc){margin:var(--space-3) 0;padding:0 14px}
+details:not(.toc) > summary{min-height:44px;display:flex;align-items:center;cursor:pointer;margin:0 -14px;padding:var(--space-2) 14px;
+  font-weight:600;font-size:14px}
+details[open]:not(.toc){padding-bottom:var(--space-3)}
+.record{padding:0 0 6px}
+.shaped{margin:var(--space-4) 0}
+details > .shaped{margin:0;padding:0 0 10px}
+.entry{margin:0 0 var(--space-3);padding:var(--space-2) var(--space-3);border-left:3px solid var(--accent)}
+.entry p{margin:var(--space-1) 0}
+.nowrap{white-space:nowrap}
+.brk{overflow-wrap:anywhere}
+
+/* Tables. The wrapper is a focusable labelled region that scrolls on its own; the page never scrolls sideways. */
+.table-scroll{overflow-x:auto;margin:var(--space-4) 0}
+.table-scroll:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+table{border-collapse:collapse;font-size:.875rem;line-height:1.5;width:100%}
+.table-scroll > table{margin:0}
+caption{caption-side:top;text-align:left;font-weight:600;font-size:14px;color:var(--muted);padding:var(--space-1) var(--space-3)}
+th,td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+th{background:var(--wash);color:var(--muted);font-weight:600}
+.table-scroll th:first-child,.table-scroll td:first-child{position:sticky;left:0;z-index:1;background:var(--sheet)}
+.table-scroll thead th:first-child{background:var(--wash)}
+@media (max-width:640px){
+  .qtable thead,.cols thead{display:none}
+  .qtable tr,.qtable td,.cols,.cols tbody,.cols tr,.cols td{display:block;width:auto !important}
+  .qtable tr{padding:var(--space-2) 4px;border-bottom:1px solid var(--line)}
+  .qtable td,.cols td{border:0;padding:3px var(--space-2);position:static}
+  .qtable td.num,.qtable td.q{display:inline}
+  .cols tr{border:1px solid var(--line);border-radius:var(--radius);margin:0 0 6px;padding:2px 0}
+  .cols td:first-child{font-weight:600}
+  .cols td + td::before{content:attr(data-th) ": ";color:var(--muted);font-weight:600}
+}
+
+/* Figures. Source SVGs draw with the aliased tokens; .plot and the series classes come from render.py. */
+figure{margin:var(--space-5) 0;padding:var(--space-4);min-width:0;display:flex;flex-direction:column;gap:var(--space-2)}
+figure h3,figcaption h3{margin:0;font-size:1rem}
+figcaption{font-size:14px;color:var(--muted)}
+.fig-n{font:500 12px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
+.fig-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--space-2) var(--space-4);font-size:14px}
+.diagram,.plot{overflow-x:auto}
+.diagram svg{display:block;max-width:100%;height:auto;margin:0 auto}
+.plot svg{display:block;width:100%;max-width:40rem;height:auto}
+.plot text{fill:var(--muted);font-size:12px}
+.plot .lbl{fill:var(--ink);font-weight:600}
+.plot .grid{stroke:var(--line)}
+.plot .axis{stroke:var(--axis)}
+.mk{stroke-width:1.5}
+line.mk{stroke-width:2.5}
+line.ci{stroke-width:1.5}
+.s1{fill:var(--s1);stroke:var(--s1)}
+.s2{fill:var(--s2);stroke:var(--s2)}
+.s3{fill:var(--s3);stroke:var(--s3)}
+.s4{fill:var(--s4);stroke:var(--s4)}
+.ref{fill:var(--ink);stroke:var(--ink)}
+.hollow{fill:var(--surface)}
+.ring{fill:none}
+.refline{stroke:var(--muted);stroke-width:1.5;stroke-dasharray:4 3}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:0;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend svg{width:14px;height:14px}
+
+/* Flowcharts from the site flow module: S stages are plain boxes, L stages add a loop-back arrow. */
+/* Inside a .diagram wrapper a flow keeps readable labels and scrolls; the text version covers narrow screens. */
+svg.flow{display:block;width:100%;height:auto;font-family:var(--sans)}
+.diagram svg.flow{min-width:640px}
+.flow .lane{fill:var(--wash);opacity:.6}
+.flow .node{fill:var(--surface);stroke:var(--axis);stroke-width:1.5}
+.flow .edge,.flow .loop{fill:none;stroke:var(--axis);stroke-width:1.5}
+.flow .head{fill:var(--axis)}
+.flow text{fill:var(--ink);font-size:13px}
+.flow .note{fill:var(--muted)}
+
+/* Forced colours drop fills, so shapes that rely on fills get borders. */
+@media (forced-colors: active){
+  .winner,.chip i,.seg,.tag,.skip{border:1px solid CanvasText}
+  .toc a[aria-current="page"]{border-left-color:Highlight}
+}
