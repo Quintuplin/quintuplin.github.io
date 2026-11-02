@@ -73,7 +73,7 @@ def published_copy(published: Path, path: str) -> Path | None:
     return published / "methods" / Path(path).name if path.startswith(METHODS + "/") else None
 
 
-def manifest(sha: str, files: dict[str, bytes], facts: bytes, published: Path, doc: bytes, doc_sha: str) -> dict:
+def manifest(sha: str, files: dict[str, bytes], facts: bytes, published: Path, doc: dict) -> dict:
     entries = {}
     for path, data in files.items():
         copy = published_copy(published, path)
@@ -84,7 +84,7 @@ def manifest(sha: str, files: dict[str, bytes], facts: bytes, published: Path, d
     entries["facts.json"] = {"bytes": len(facts), "sha256": sha256(facts), "published_sha256": None}
     return {"source": "Quintuplin/tdd-experiment", "sha": sha,
             "published": f"{published.parent.parent.name}/{published.parent.name}/{published.name}",
-            "doc": {"path": "tdd-methodologies.md", "sha": doc_sha, "sha256": sha256(doc)}, "files": entries}
+            "doc": doc, "files": entries}
 
 
 def write_snapshot(out: Path, files: dict[str, bytes], facts: bytes, found: dict) -> None:
@@ -225,7 +225,8 @@ def main(argv: list[str] | None = None) -> None:
     doc, doc_sha = committed_doc(args.doc)
     files = copy_sources(args.study, sha)
     facts = (json.dumps(extract_facts(args.study, sha, doc), indent=1, ensure_ascii=False) + "\n").encode()
-    write_snapshot(args.out, files, facts, manifest(sha, files, facts, args.published, doc, doc_sha))
+    doc_entry = {"path": args.doc.name, "sha": doc_sha, "sha256": sha256(doc)}
+    write_snapshot(args.out, files, facts, manifest(sha, files, facts, args.published, doc_entry))
     print(f"wrote {args.out} from tdd-experiment {sha[:8]}")
 
 
