@@ -48,8 +48,9 @@ def sha256(data):
 
 
 def strings(value):
+    """Every string in value, dict keys included."""
     if isinstance(value, dict):
-        return [s for v in value.values() for s in strings(v)]
+        return [s for k, v in value.items() for s in [k, *strings(v)]]
     if isinstance(value, list):
         return [s for v in value for s in strings(v)]
     return [value] if isinstance(value, str) else []

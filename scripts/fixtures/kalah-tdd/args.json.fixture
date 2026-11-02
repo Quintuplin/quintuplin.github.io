@@ -12,6 +12,7 @@
       "method": "Classic greedy TDD",
       "steps": ["List test scenarios.", "Pick the smallest one."],
       "home": "~/project"
-    }
+    },
+    "/Users/someone/project/tdd-experiment-wt/extra": {"method": "Keyed by a host path"}
   }
 }

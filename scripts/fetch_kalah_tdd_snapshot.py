@@ -108,9 +108,9 @@ def is_host_path(value) -> bool:
 
 
 def drop_host_paths(value):
-    """value without the strings HOST_PATH matches, at any depth."""
+    """value without the strings HOST_PATH matches, as keys or values, at any depth."""
     if isinstance(value, dict):
-        return {k: drop_host_paths(v) for k, v in value.items() if not is_host_path(v)}
+        return {k: drop_host_paths(v) for k, v in value.items() if not (is_host_path(k) or is_host_path(v))}
     if isinstance(value, list):
         return [drop_host_paths(v) for v in value if not is_host_path(v)]
     return value
