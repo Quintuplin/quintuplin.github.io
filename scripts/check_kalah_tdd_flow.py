@@ -194,7 +194,8 @@ class Flow(unittest.TestCase):
                "vertical through a lane": (down, [f.edge("a", "c")], []),
                "loop into a lower lane": (down, [], [f.loop("a", "unit", back_to="b")]),
                "loop into another row": (far, [], [f.loop("d", "unit", back_to="a")]),
-               "loop up through a node": (down[:2] + [f.node("c", "C", lane="y", col=1)], [], [f.loop("c", "unit", back_to="a")])}
+               "loop up through a node": (down[:2] + [f.node("c", "C", lane="y", col=1)], [], [f.loop("c", "unit", back_to="a")]),
+               "loop up through its own node": (down[:2], [f.edge("a", "b")], [f.loop("b", "unit", back_to="a")])}
         for case, args in bad.items():
             with self.subTest(case):
                 self.assertRaises(ValueError, f.svg, "p", "t", "d", *args)

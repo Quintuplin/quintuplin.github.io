@@ -75,8 +75,8 @@ def check_routes(cell, edges, loops):
         (sl, sc), (dl, dc) = cell[lp.node], cell[lp.back_to or lp.node]
         if sc // COLS != dc // COLS or dl > sl:
             raise ValueError(f"loop on {lp.node} must go back within its row to its own lane or one above")
-        # It rises from the loop node's lane to the target, up the target's column.
-        if crossed := taken & {(lane, dc) for lane in range(dl + 1, sl + 1)} - {(sl, sc)}:
+        # It rises from below the loop node's lane to the target, up the target's column, so its own node counts too.
+        if crossed := taken & {(lane, dc) for lane in range(dl + 1, sl + 1)}:
             raise ValueError(f"loop on {lp.node} crosses the node at {sorted(crossed)}")
 
 
