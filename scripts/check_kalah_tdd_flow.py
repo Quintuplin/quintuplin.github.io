@@ -55,6 +55,28 @@ def node_boxes(root):
             for r in root.iter(NS + "rect") if r.get("class") == "node"]
 
 
+def points(d):
+    """The corners of an M/H/V path."""
+    pts = []
+    for cmd, arg in re.findall(r"([MHV])([\d.,-]+)", d):
+        x, y = pts[-1] if pts else (0, 0)
+        pts.append(tuple(map(float, arg.split(","))) if cmd == "M" else (float(arg), y) if cmd == "H" else (x, float(arg)))
+    return pts
+
+
+def on_edge(p, box):
+    (px, py), (x, y, w, h) = p, box
+    return x <= px <= x + w and y <= py <= y + h and (px in (x, x + w) or py in (y, y + h))
+
+
+def crosses(a, b, box):
+    """Whether the horizontal or vertical segment a-b enters the inside of box."""
+    (x, y, w, h), (ax, ay), (bx, by) = box, a, b
+    if ay == by:
+        return y < ay < y + h and max(min(ax, bx), x) < min(max(ax, bx), x + w)
+    return x < ax < x + w and max(min(ay, by), y) < min(max(ay, by), y + h)
+
+
 def items():
     """Each text version list item as plain text, in order."""
     root = ET.fromstring(flow().text_version(*sample()))
@@ -181,6 +203,24 @@ class Flow(unittest.TestCase):
         label = next(t for t in root.iter(NS + "text") if "".join(t.itertext()) == "down")
         self.assertGreater(float(label.get("x")), x)
         self.assertEqual(label.get("text-anchor"), "start")
+
+    def test_routes_run_between_nodes(self):
+        f = flow()
+        # An elbow from lane x past a lane y node in the middle column.
+        elbow = ([f.node("a", "A", lane="x"), f.node("b", "B", lane="y"), f.node("c", "C", lane="y")],
+                 [f.edge("a", "c"), f.edge("b", "c")], [])
+        for name, (nodes, edges, loops) in {"sample": sample(), "long": long_chart(), "elbow": elbow}.items():
+            root = ET.fromstring(f.svg("p", "t", "d", nodes, edges, loops))
+            boxes = dict(zip([n.id for n in nodes], node_boxes(root)))
+            ends = [(e.src, e.dst) for e in edges] + [(lp.node, lp.back_to or lp.node) for lp in loops]
+            paths = [p for p in root.iter(NS + "path") if p.get("class") in ("edge", "loop")]
+            self.assertEqual(len(paths), len(ends))
+            for (src, dst), p in zip(ends, paths):
+                with self.subTest(name, path=p.get("d")):
+                    pts = points(p.get("d"))
+                    self.assertTrue(on_edge(pts[0], boxes[src]) and on_edge(pts[-1], boxes[dst]))
+                    hits = [i for a, b in zip(pts, pts[1:]) for i, box in boxes.items() if crosses(a, b, box)]
+                    self.assertEqual(hits, [])
 
     def test_rejects_shared_cell(self):
         f = flow()
