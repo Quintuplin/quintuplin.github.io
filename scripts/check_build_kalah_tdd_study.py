@@ -221,6 +221,8 @@ class Pages(unittest.TestCase):
             self.assertNotEqual(bars[0][0], bars[1][0], "the two pagers need distinct labels")
             self.assertEqual(bars[0][1], bars[1][1], "the top and bottom pagers differ")
             self.assertIn(f'<a class="pager-home" href="{BASE}">', bars[0][1])
+            # Read as text, a card's label and title stay two words.
+            self.assertNotIn("</span><b>", bars[0][1])
 
     def test_parts(self):
         pagemap = kalah("pagemap")

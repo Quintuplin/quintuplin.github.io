@@ -91,10 +91,10 @@ def header(page, snap):
 
 def pager(page, where):
     prev, nxt = pagemap.neighbours(page.slug)
-    card = lambda rel, label, p: (f'<a rel="{rel}" href="{url(p.slug)}"><span>{label}</span><b>{escape(p.title)}</b></a>\n'
+    card = lambda rel, label, p: (f'<a rel="{rel}" href="{url(p.slug)}"><span>{label}</span> <b>{escape(p.title)}</b></a>\n'
                                   if p else "")
     return (f'<nav class="pager" aria-label="Previous and next page, {where}">\n{card("prev", "Previous", prev)}'
-            f'<a class="pager-home" href="{BASE}"><span>Study</span><b>Contents</b></a>\n{card("next", "Next", nxt)}</nav>')
+            f'<a class="pager-home" href="{BASE}"><span>Study</span> <b>Contents</b></a>\n{card("next", "Next", nxt)}</nav>')
 
 
 def sidebar(page, body):
