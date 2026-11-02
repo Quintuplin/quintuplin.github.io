@@ -5,11 +5,12 @@ Usage: check_check_study_nav.py
 """
 import importlib.util
 import unittest
+from collections import Counter
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
 FIXTURE = SCRIPTS / "fixtures/study-nav"
-INDEX, PART = "/studies/demo/", "/studies/demo/part/"
+INDEX, PART, ASSET = "/studies/demo/", "/studies/demo/part/", "/studies/demo/figure.svg"
 
 
 def nav():
@@ -33,7 +34,8 @@ def fixture(**edits):
 class StudyNav(unittest.TestCase):
     def test_fixture_passes(self):
         pages = fixture()
-        self.assertEqual(sorted(pages), [INDEX, PART])
+        self.assertEqual(sorted(pages), [INDEX, ASSET, PART])
+        self.assertIsNone(pages[ASSET])
         for check in (nav().toc_links, nav().cross_links, nav().unique_ids):
             self.assertEqual(check(pages), [], check.__name__)
 
@@ -59,6 +61,14 @@ class StudyNav(unittest.TestCase):
         pages = fixture(index=[('href="#main"', 'href="#mian"')])
         self.assertRegex(" ".join(n.cross_links(pages)), f"{INDEX}.*#mian")
 
+    def test_asset_links(self):
+        # A file that is not a page resolves but has no ids.
+        n = nav()
+        pages = fixture(index=[('href="figure.svg"', 'href="gone.svg"')])
+        self.assertRegex(" ".join(n.cross_links(pages)), "no study page or file /studies/demo/gone.svg")
+        pages = fixture(index=[('href="figure.svg"', 'href="figure.svg#top"')])
+        self.assertRegex(" ".join(n.cross_links(pages)), f"{ASSET}#top but that page has no id top")
+
     def test_link_into_renamed_id(self):
         # unique_ids in the generator renames a colliding id on its own page only, so links from other pages break.
         pages = fixture(part=[('<h2 id="columns">', '<h2 id="columns-2">')])
@@ -70,6 +80,9 @@ class StudyNav(unittest.TestCase):
         self.assertEqual(nav().unique_ids(pages), [f"{PART} has id columns 2 times"])
 
     def test_committed_studies(self):
+        pages = nav().load(SCRIPTS.parent)
+        found = Counter(url.split("/")[2] for url, html in pages.items() if html is not None)
+        self.assertEqual(found, {"kalah-tdd-study": 29, "subagent-crew-study": 1})
         self.assertEqual(nav().check(SCRIPTS.parent), [])
 
 

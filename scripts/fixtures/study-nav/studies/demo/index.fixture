@@ -14,7 +14,7 @@
 </details>
 <main id="main">
 <h2 id="intro">Intro</h2>
-<p>See the <a href="part/#columns">columns</a>, the <a href="/studies/demo/part">part</a> and <a href="https://example.com/#x">elsewhere</a>.</p>
+<p>See the <a href="part/#columns">columns</a>, the <a href="/studies/demo/part">part</a>, the <a href="figure.svg">figure</a> and <a href="https://example.com/#x">elsewhere</a>.</p>
 </main>
 </body>
 </html>
