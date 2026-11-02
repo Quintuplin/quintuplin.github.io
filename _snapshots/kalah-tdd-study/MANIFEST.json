@@ -1,0 +1,87 @@
+{
+  "source": "Quintuplin/tdd-experiment",
+  "sha": "c3dd988275db04e156e2d12ee4f1ad54037cabde",
+  "published": "kalah-tdd-experiment/raw/v1793403855-d60f",
+  "doc": {
+    "path": "tdd-methodologies.md",
+    "sha": "0adf18a927cd3b1cdfc3124f00905c037518341e",
+    "sha256": "12f026f6ba5c9c1856e1fb587afa14a66be207151a79d380635b16dd19e857c6"
+  },
+  "files": {
+    "runs/full-1/report.html": {
+      "bytes": 640984,
+      "sha256": "5a234cb84507ae4d06901767a528de57d267dc6604e5101d4dfb892a3a5af63f",
+      "published_sha256": "5a234cb84507ae4d06901767a528de57d267dc6604e5101d4dfb892a3a5af63f"
+    },
+    "runs/full-1/methods/anchor-engineering.html": {
+      "bytes": 217376,
+      "sha256": "3c12805ec202c23bbe965d74433cf7776cdacf6cd4de62494e453aed911c622e",
+      "published_sha256": "37bbc76d8e736573f38e3f103cfb74b6f6365be94d2137ef6868c74ffeecbd17"
+    },
+    "runs/full-1/methods/annealed.html": {
+      "bytes": 44914,
+      "sha256": "2d1a14a6ae98ddcfa3fcb4a0befabfb2add21560757145a8544806b941328243",
+      "published_sha256": "09e84e213b0b15cc2828f84fa4ade2bd7b9b37eedeafd0a340084725ce89db25"
+    },
+    "runs/full-1/methods/classic.html": {
+      "bytes": 327952,
+      "sha256": "0b8b2f906f443cea66d97a2d1f79440608eeb75701586d5c8173a3b2817a5bee",
+      "published_sha256": "57b9b0ae5d022e507d8da246b0007b6061d271f7f4fd334538f7be9f6e02ff7c"
+    },
+    "runs/full-1/methods/coarse-to-fine.html": {
+      "bytes": 209914,
+      "sha256": "5f2befa5efa931f2191ee70a560d1cd81659e6f09351d02cfffd9167674f598f",
+      "published_sha256": "aedcbfad1640e08905708a1c27fd9dd04c201bf15456b3195607cd2e0fae2b34"
+    },
+    "runs/full-1/methods/functions-first.html": {
+      "bytes": 261673,
+      "sha256": "30864e4a8eda8649c4ba3f2dbe801a1fb9b5eb3dc222cfa89d3bb8a09d25e51a",
+      "published_sha256": "e4bc1d8c93094f63c9db84800978b59d404644e756c91110021a1dddc31afdbc"
+    },
+    "runs/full-1/methods/held-out.html": {
+      "bytes": 240463,
+      "sha256": "b3a62cd45f1cde95efb7ff5748f8758a77448dcdcdb9c43808d5a6a260ac1842",
+      "published_sha256": "fd7c4c5501f19fbe00bd716aed7ce669d86e1794b6a379fd83cfcf6d35b6c6fa"
+    },
+    "runs/full-1/methods/mapped-path.html": {
+      "bytes": 110847,
+      "sha256": "799ead7a13cdc58b62a13095c30dacd4cb12c3b24bb851f9717f85d63ae6c11e",
+      "published_sha256": "e9e17d35f9790a411ca326d98ad792760dc55208b7d9ba92e4a30e9943b1a0e9"
+    },
+    "runs/full-1/methods/multi-start.html": {
+      "bytes": 107549,
+      "sha256": "c5bbf1516bfe9e00d3e51bd96203e0d6b008a782d100e91961044238cc260336",
+      "published_sha256": "b9e90a91a7080466226a6af4b50e2a218c59a15218b5bfd9003e758fcdcc66c5"
+    },
+    "runs/full-1/methods/mutation-guided.html": {
+      "bytes": 211442,
+      "sha256": "ee2ac5b57dfbed2ccdeeca1fa6d009d02681b80eec555d9cee1a1da2bff238f8",
+      "published_sha256": "9cd56ebe4d99f729ebf7e69129277c21a8c75b9b3028c510f0309c4231f15581"
+    },
+    "runs/full-1/methods/noun-verb.html": {
+      "bytes": 547437,
+      "sha256": "015d2dc805c7def5ae11c875cc9fc9c2313824c4b96ad24c39aed88478c66f57",
+      "published_sha256": "8609ad9f460a0cb9e4cc4e654195d495bf03eac6bac262a443e093fd40137288"
+    },
+    "runs/full-1/methods/property-based.html": {
+      "bytes": 55647,
+      "sha256": "0687c3a7d48618db4ccc5c226323f78acb70cf81b02ecd533cfedc15d4b59739",
+      "published_sha256": "7848ca13093d7548023f7f70c35f46b3c104a73c147de84cf7ffbac6295adc5f"
+    },
+    "runs/full-1/methods/tpp.html": {
+      "bytes": 49878,
+      "sha256": "51ad327e6f09be17a1ba88a4e06ddeb848c1d81dcc28456d4ff3778e68953029",
+      "published_sha256": "52b93c9d20b40fc37f7f5db581d3460224ebde1ff5ccffc72e8177cff981030b"
+    },
+    "artifact/showcase.html": {
+      "bytes": 85234,
+      "sha256": "37083d0fa9ae8b275e876ee6261a91513bdea68a0a4ba1d7f09aafbc296a9edf",
+      "published_sha256": null
+    },
+    "facts.json": {
+      "bytes": 256547,
+      "sha256": "37de84fa9d24585e1b9248c2f6361511f68225ec02adbb42e2f6e6e265627b65",
+      "published_sha256": null
+    }
+  }
+}
