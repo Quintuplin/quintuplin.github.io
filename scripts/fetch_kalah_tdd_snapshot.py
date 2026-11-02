@@ -88,8 +88,13 @@ def manifest(sha: str, files: dict[str, bytes], facts: bytes, published: Path, d
 
 
 def write_snapshot(out: Path, files: dict[str, bytes], facts: bytes, found: dict) -> None:
-    # A page tdd-experiment dropped must not linger.
-    shutil.rmtree(out, ignore_errors=True)
+    # A page tdd-experiment dropped must not linger, but only a snapshot this script wrote may be replaced.
+    if out.exists():
+        if out.resolve().parent.name != "_snapshots":
+            raise SystemExit(f"{out} lies outside _snapshots/; remove it or pick a new --out")
+        if not (out / "MANIFEST.json").is_file():
+            raise SystemExit(f"{out} has no MANIFEST.json, so it is no snapshot; remove it or pick a new --out")
+        shutil.rmtree(out)
     for path, data in {**files, "facts.json": facts}.items():
         (out / path).parent.mkdir(parents=True, exist_ok=True)
         (out / path).write_bytes(data)

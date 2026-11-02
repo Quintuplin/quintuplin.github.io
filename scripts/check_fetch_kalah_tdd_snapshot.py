@@ -72,7 +72,7 @@ class Fetch(unittest.TestCase):
         self.published.with_name("v1-abcd.html").write_bytes(fixture("report.html"))
         # The published method page differs from the committed one, as the real backup's do.
         (self.published / "methods/classic.html").write_bytes(fixture("classic.html") + b"<!-- published -->\n")
-        self.out = self.root / "snapshot"
+        self.out = self.root / "_snapshots/kalah-tdd-study"
 
     def git(self, repo, *args):
         return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout.strip()
@@ -151,6 +151,20 @@ class Fetch(unittest.TestCase):
         self.assertEqual(files["facts.json"]["sha256"], sha256((self.out / "facts.json").read_bytes()))
         self.assertEqual(manifest["doc"]["sha256"], sha256(fixture("tdd-methodologies.md")))
         self.assertEqual(manifest["doc"]["sha"], self.git(self.doc.parent, "rev-parse", "HEAD"))
+
+    def test_refuses_foreign_out(self):
+        # Only a snapshot the fetcher wrote may be replaced.
+        self.out.mkdir(parents=True)
+        (self.out / "keep.txt").write_text("mine\n")
+        with self.assertRaisesRegex(SystemExit, "has no MANIFEST.json"):
+            self.fetch()
+        self.assertEqual([p.name for p in self.out.iterdir()], ["keep.txt"])
+        self.out = self.root / "elsewhere"
+        self.out.mkdir()
+        (self.out / "MANIFEST.json").write_text("{}\n")
+        with self.assertRaisesRegex(SystemExit, "outside _snapshots"):
+            self.fetch()
+        self.assertEqual([p.name for p in self.out.iterdir()], ["MANIFEST.json"])
 
     def test_refuses_missing_published_copy(self):
         (self.published / "methods/classic.html").unlink()
