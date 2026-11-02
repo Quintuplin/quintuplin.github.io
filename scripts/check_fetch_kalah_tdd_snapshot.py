@@ -10,7 +10,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import re
 import subprocess
 import tempfile
 import unittest
@@ -27,7 +26,6 @@ SOURCES = {"runs/full-1/report.html": "report.html", "runs/full-1/methods/classi
            "harness/collect.sh": "collect.sh",
            "harness/report/render.py": "render.py", "harness/report/awards.py": "awards.py",
            "harness/report/stats.py": "stats.py", "docs/SPEC.md": "SPEC.md"}
-HOST_PATH = re.compile(r"^(/|~|[A-Za-z]:)|://|Obi-Done|Cryptomator")
 COMMIT = ("-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "commit", "-qm")
 
 
@@ -129,7 +127,7 @@ class Fetch(unittest.TestCase):
                                "notes": ["kept note"], "caps": {"iterations": 15, "cycles": 15, "starts": 3},
                                "methods": {"classic": {"method": "Classic greedy TDD",
                                                        "steps": ["List test scenarios.", "Pick the smallest one."]}}})
-        self.assertEqual([s for s in strings(facts) if HOST_PATH.search(s) and "://" not in s], [])
+        self.assertEqual([s for s in strings(facts) if fetcher().HOST_PATH.search(s) and "://" not in s], [])
         self.assertNotIn(str(self.root), (self.out / "facts.json").read_text() + (self.out / "MANIFEST.json").read_text())
 
     def test_host_path_pattern_follows_render(self):
@@ -253,7 +251,7 @@ class CommittedSnapshot(unittest.TestCase):
     def test_drops_host_paths(self):
         runs = json.loads((SNAPSHOT / "facts.json").read_text())["runs"]
         self.assertTrue(runs)
-        self.assertEqual([s for s in strings(runs) if HOST_PATH.search(s)], [])
+        self.assertEqual([s for s in strings(runs) if fetcher().HOST_PATH.search(s)], [])
 
 
 if __name__ == "__main__":
