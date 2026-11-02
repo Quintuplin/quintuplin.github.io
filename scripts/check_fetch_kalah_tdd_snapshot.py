@@ -160,6 +160,13 @@ class Fetch(unittest.TestCase):
         self.assertEqual(facts["redacted"], {page: 4})
         self.assertEqual(manifest["files"][page]["sha256"], sha256(data))
 
+    def test_redacts_local_paths_in_facts(self):
+        self.doc.write_text(fixture("tdd-methodologies.md").decode().replace("Greedy.", "Greedy, see ~/notes/classic.md."))
+        self.git(self.doc.parent, *COMMIT, "path", self.doc.name)
+        _, facts = self.fetch()
+        self.assertEqual(facts["analysis"]["methodologies"][1]["text"], "Greedy, see <local path>.")
+        self.assertEqual(facts["redacted"], {"facts.json": 1})
+
     def test_host_path_pattern_follows_render(self):
         (self.study / "harness/report/render.py").write_text(fixture("render.py").decode().replace("|Cryptomator", ""))
         self.git(self.study, *COMMIT, "narrower", "harness/report/render.py")
