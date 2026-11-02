@@ -35,6 +35,7 @@ HOST_PATH = re.compile(r"^(/|~|[A-Za-z]:)|://|Obi-Done|Cryptomator")
 # The whole word around a LOCAL_PATH hit, up to whitespace, markup or quotes.
 LOCAL_WORD = re.compile(rf"""[^\s<>"'`()\[\]{{}}]*(?:{LOCAL_PATH.pattern})[^\s<>"'`()\[\]{{}}]*""")
 PLACEHOLDER = "<local path>"
+SPLIT_TAIL = re.compile(r"""\s+[^\s<>"'`()\[\]{}]*[\\/]""")
 STEP = re.compile(r"(?:^|\|\||&&)\s*(step|branchStep) ([A-Za-z]+)\b")
 FUNCTION = re.compile(r"^([A-Za-z]\w*)\(\) \{")
 HEADING = re.compile(r"^(#{1,6}) +(.*?) *#*$")
@@ -62,6 +63,9 @@ def redact(text: str, placeholder: str) -> tuple[str, int]:
     text, count = LOCAL_WORD.subn(lambda m: keep(m.group(0)), text)
     if left := LOCAL_PATH.search(text):
         raise SystemExit(f"redaction left {text[left.start():left.end() + 40]!r}; widen LOCAL_WORD")
+    # A path word with a slash right after a redaction may be the rest of a path with a space, whose end is unknowable.
+    if split := re.search(re.escape(placeholder) + SPLIT_TAIL.pattern, text):
+        raise SystemExit(f"a local path may be split at a space: {split.group(0)!r}; redact it in the source")
     return text, count
 
 

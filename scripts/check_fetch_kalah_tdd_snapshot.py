@@ -147,17 +147,22 @@ class Fetch(unittest.TestCase):
         page = "runs/full-1/methods/classic.html"
         kept = ('<a href="https://example.com/Users/x">site</a> <a href="/studies/kalah-tdd-study/">study</a> '
                 'E: distinct PMD findings. Marker ~ stays.')
+        # A path with a space has no knowable end, so the fetch refuses it.
+        (self.study / page).write_text(fixture("classic.html").decode() + "<p>/Users/x/My Docs/secret/file.txt</p>\n")
+        self.git(self.study, *COMMIT, "spaced path", page)
+        self.assertRefuses("split at a space")
         (self.study / page).write_text(
             fixture("classic.html").decode() + '<td class="brk">~/.claude/projects/-Users-x/1a2b/tool-results/b.txt</td>'
             "<p>See /Users/someone/project/run.md. Or C:\\Users\\someone\\split.sh, then Obi-Done/Claude/Notes.</p>"
-            + kept + "\n")
+            "<p>Session -Users-echo-project-COMPSCI-701 and -home-someone-x.</p>" + kept + "\n")
         self.git(self.study, *COMMIT, "paths", page)
         manifest, facts = self.fetch()
         data = (self.out / page).read_bytes()
         self.assertEqual(data.decode(), fixture("classic.html").decode()
                          + '<td class="brk">&lt;local path&gt;</td><p>See &lt;local path&gt;. Or &lt;local path&gt;, '
-                           "then &lt;local path&gt;.</p>" + kept + "\n")
-        self.assertEqual(facts["redacted"], {page: 4})
+                           "then &lt;local path&gt;.</p><p>Session &lt;local path&gt; and &lt;local path&gt;.</p>"
+                         + kept + "\n")
+        self.assertEqual(facts["redacted"], {page: 6})
         self.assertEqual(manifest["files"][page]["sha256"], sha256(data))
 
     def test_redacts_local_paths_in_facts(self):

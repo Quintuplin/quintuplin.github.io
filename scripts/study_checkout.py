@@ -6,8 +6,10 @@ import re
 import subprocess
 from pathlib import Path
 
-# Local paths and vault names. render.HOST_PATH also matches every https:// link and site-root href on a page.
-LOCAL_PATH = re.compile(r"(?<![\w.-])(?:/(?:Users|home|private|tmp|mnt|Volumes|var/folders)/|~/)|(?<!\w)[A-Za-z]:[\\/]"
+# Local paths, session slugs such as -Users-<name>-project and vault names. render.HOST_PATH also matches every
+# https:// link and site-root href on a page.
+LOCAL_PATH = re.compile(r"(?<![\w.-])(?:/(?:Users|home|private|tmp|mnt|Volumes|var/folders)/|~/|-(?:Users|home)-\w)"
+                        r"|(?<!\w)[A-Za-z]:[\\/]"
                         r"|Obi-Done|Cryptomator|file://")
 
 
