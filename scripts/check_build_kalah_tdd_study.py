@@ -174,11 +174,9 @@ class HostPaths(unittest.TestCase):
 
     def test_allows_links_and_prose(self):
         build().refuse_host_paths(rendered())
-        # Known defect: two method pages' records show local ~/ paths, which their design pages must drop.
-        # Every other source string passes, its https:// links included.
+        # Every source string passes, its https:// links included.
         hits = {(doc, m.group(0)) for doc, text in snap().files.items() for m in build().LOCAL_PATH.finditer(text)}
-        self.assertEqual(hits, {("runs/full-1/methods/anchor-engineering.html", "~/"),
-                                ("runs/full-1/methods/mutation-guided.html", "~/")})
+        self.assertEqual(hits, set())
         build().refuse_host_paths({"x/index.html": '<a href="https://github.com/Users/x">E: distinct</a> a / b '
                                                    '<a href="/projects">P</a> rep-2/rebuild'})
 
