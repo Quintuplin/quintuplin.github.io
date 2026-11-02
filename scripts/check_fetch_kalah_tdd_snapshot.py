@@ -23,7 +23,8 @@ SNAPSHOT = SCRIPTS.parent / "_snapshots/kalah-tdd-study"
 # Source path in tdd-experiment to its fixture.
 SOURCES = {"runs/full-1/report.html": "report.html", "runs/full-1/methods/classic.html": "classic.html",
            "runs/full-1/methods/outside-in.html": "outside-in.html", "artifact/showcase.html": "showcase.html", "harness/workflow/stages.json": "stages.json",
-           "runs/full-1/args.json": "args.json", "harness/collect.sh": "collect.sh",
+           "runs/full-1/args.json": "args.json", "runs/rep-2/rebuild/args.json": "rebuild-args.json",
+           "harness/collect.sh": "collect.sh",
            "harness/report/render.py": "render.py", "harness/report/awards.py": "awards.py",
            "harness/report/stats.py": "stats.py", "docs/SPEC.md": "SPEC.md"}
 HOST_PATH = re.compile(r"^(/|~|[A-Za-z]:)|://|Obi-Done|Cryptomator")
@@ -195,6 +196,12 @@ class Fetch(unittest.TestCase):
         _, facts = self.fetch()
         self.assertEqual(facts["sha"], self.head)
         self.assertEqual(facts["stages"], json.loads(fixture("stages.json")))
+        # The rebuilt replicates ran at another harness commit.
+        self.assertEqual(sorted(facts["runs"]), ["full-1", "rep-2/rebuild"])
+        self.assertEqual(facts["runs"]["rep-2/rebuild"], {
+            "tag": "rep-2", "methods": {"rep-2-r04": {"method": "Held-out TDD"}}, "waves": [["rep-2-r04"]],
+            "harness": {"commit": "cc8c8cbb06373ce400666528458a349eb0ae4d7a"},
+            "harness_delta": {"sha256": "8fde5d73aecf82700e53426dcbca82f2bd86cc1a421e20fa57f0176d86958cdf"}})
         step = lambda name, skippable=False: {"name": name, "skippable": skippable}
         self.assertEqual(facts["pipeline"], {
             "collect": {"collectOne": [step("fetchBack"), step("export", True), step("review"), step("report")],

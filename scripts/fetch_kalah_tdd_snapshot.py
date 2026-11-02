@@ -193,10 +193,11 @@ def extract_facts(study: Path, sha: str, doc: bytes) -> dict:
     found = assigned(render)
     if ast.literal_eval(found["HOST_PATH"].args[0]) != HOST_PATH.pattern:
         raise SystemExit(f"{RENDER} HOST_PATH differs from this script's copy; update the copy first")
+    # Nested runs such as rep-2/rebuild record replicates rebuilt at another harness commit.
     runs = sorted(p for p in git(study, "ls-tree", "-r", "--name-only", sha, "--", "runs").decode().split()
-                  if re.fullmatch(r"runs/[^/]+/args\.json", p))
+                  if re.fullmatch(r"runs/.+/args\.json", p))
     return {"sha": sha, "stages": json.loads(show("harness/workflow/stages.json")),
-            "runs": {Path(p).parent.name: drop_host_paths(json.loads(show(p))) for p in runs},
+            "runs": {p[len("runs/"):-len("/args.json")]: drop_host_paths(json.loads(show(p))) for p in runs},
             "pipeline": {"collect": collect_steps(show("harness/collect.sh")),
                          "notation": ast.literal_eval(found["NOTATION"]),
                          "weight_text": ast.literal_eval(found["WEIGHT_TEXT"])},
