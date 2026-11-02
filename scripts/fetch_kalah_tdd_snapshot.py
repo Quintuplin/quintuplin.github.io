@@ -21,7 +21,7 @@ from pathlib import Path
 
 # python3 -I leaves the script folder off sys.path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from study_checkout import study_sha  # noqa: E402
+from study_checkout import clean_head  # noqa: E402
 
 SITE = Path(__file__).resolve().parent.parent
 OUT = SITE / "_snapshots/kalah-tdd-study"
@@ -214,10 +214,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--sha", help="tdd-experiment commit, which must be the checkout's HEAD")
     parser.add_argument("--out", type=Path, default=OUT)
     args = parser.parse_args(argv)
-    study_sha(args.study, args.sha)
-    try:
-        sha = git(args.study, "rev-parse", "HEAD").decode().strip()
-    except (OSError, subprocess.CalledProcessError):
+    sha = clean_head(args.study, args.sha)
+    if not sha:
         raise SystemExit(f"git cannot read {args.study}; the snapshot comes from its commits")
     doc, doc_sha = committed_doc(args.doc)
     files = copy_sources(args.study, sha)
