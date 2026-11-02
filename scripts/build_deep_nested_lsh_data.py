@@ -21,6 +21,7 @@ import numpy as np
 SITE = Path(__file__).resolve().parent.parent
 PAGE = SITE / "simulations/deep-nested-lsh/index.html"
 FIXTURE = SITE / "scripts/fixtures/deep-nested-lsh-parity.json"
+HISTOGRAMS = PAGE.parent / "histograms.json"
 TABLE_KINDS = ["best_depth", "cascade", "equal_rows", "error_area", "high_cap_family", "algorithm", "quorum", "seed_spread"]
 S_GRID = [0.0, 1e-06, 0.01] + [round(0.05 * i, 2) for i in range(1, 20)] + [0.99, 0.999999, 1.0]
 Y_GRID = [0.05, 0.5, 0.95]
@@ -226,33 +227,91 @@ def brute_force_pipeline(lga) -> list[dict]:
 
 
 # ---- TidyRule ----
-TIDY_RULE = "KAlambda"
+FIT_RULE = "KAlambda"
+PICK_RULE = "F1"
+RECORDED = "recorded_n1000"
+# The page's N list stops here, so larger study datasets ship no rows and no histogram.
+MAX_N = 100000
+
+
+def on_page(cells: list[dict]) -> list[dict]:
+    return [c for c in cells if c["n"] <= MAX_N]
 
 
 def tidy_data(result: dict, corpus) -> dict:
-    """The page twins the KAlambda rule only, so it refuses a result that picked another rule or failed its cache check."""
-    if result["pick"]["elegant"] != TIDY_RULE or not result["cache_check"]["passed"]:
-        sys.exit(f"tidy_rule.json picks {result['pick']['elegant']} with cache check {result['cache_check']['passed']}, not a checked {TIDY_RULE}")
-    rule = next(c for c in result["candidates"] if c["name"] == TIDY_RULE)
-    return {"rule": TIDY_RULE, "gamma": rule["constants"]["gamma"], "noise": corpus.NOISE, "noise_group": corpus.NOISE_GROUP,
-            "filler_cap": corpus.FILLER_NOISE_DOCS, "depths": [corpus.MIN_DEPTH, corpus.SEARCH_MAX_DEPTH]}
+    """The page twins F1 and the KAlambda fit, so it refuses a result that picked other rules or failed its cache check."""
+    pick = result["pick"]
+    if pick["name"] != PICK_RULE or pick["elegant"] != FIT_RULE or not result["cache_check"]["passed"]:
+        sys.exit(f"tidy_rule.json picks {pick['name']} and {pick['elegant']} with cache check {result['cache_check']['passed']},"
+                 f" not a checked {PICK_RULE} and {FIT_RULE}")
+    rule = next(c for c in result["candidates"] if c["name"] == FIT_RULE)
+    cells = on_page(result["cells"])
+    mixes = {c["mix"] for c in cells if c["dataset"] == RECORDED}
+    assert len(mixes) == 1, f"{RECORDED} has mixes {mixes}"
+    datasets = sorted({(c["n"], c["mix"]) for c in cells})
+    missing = {c["dataset"] for c in cells if c["dataset"] != RECORDED} - set(result["histograms"])
+    assert not missing, f"no pair histogram for {missing}"
+    logs: dict[int, list[float]] = {}
+    for c in cells:
+        logs.setdefault(c["b"], []).append(math.log(c["rules"][FIT_RULE]["e"] / c["rules"][PICK_RULE]["e"]))
+    return {"rule": FIT_RULE, "pick": PICK_RULE, "gamma": rule["constants"]["gamma"], "noise": corpus.NOISE, "noise_group": corpus.NOISE_GROUP,
+            "filler_cap": corpus.FILLER_NOISE_DOCS, "depths": [corpus.MIN_DEPTH, corpus.SEARCH_MAX_DEPTH], "corpus_mix": mixes.pop(),
+            "datasets": [list(d) for d in datasets],
+            "switch": {r: {k: pick["switch_test"][r][k] for k in ("below", "keys", "p", "clears")} for r in (FIT_RULE, PICK_RULE)},
+            # How far the fit's expected errors sit above F1's, as a geometric mean per budget.
+            "excess": [[b, math.exp(sum(v) / len(v)) - 1] for b, v in sorted(logs.items())]}
 
 
 def tidy_rows(cells: list[dict], b: int | None = None) -> list[dict]:
-    """Every cell with the rule's pick and sweep size, or for the page only the cells at budget b without the budget."""
+    """Every page cell with the fit's and F1's picks and sweep sizes, or for the page only the fit at budget b without the budget."""
+    cells = on_page(cells)
     if b is None:
-        return [{**{k: c[k] for k in ("dataset", "n", "mix", "m", "t", "b")}, **{k: c["rules"][TIDY_RULE][k] for k in ("dims", "e", "work")}}
-                for c in cells]
-    return [{**{k: c[k] for k in ("n", "mix", "m", "t")}, **{k: c["rules"][TIDY_RULE][k] for k in ("dims", "e")}} for c in cells if c["b"] == b]
+        return [{**{k: c[k] for k in ("dataset", "n", "mix", "m", "t", "b")}, **{k: c["rules"][FIT_RULE][k] for k in ("dims", "e", "work")},
+                 "f1": {k: c["rules"][PICK_RULE][k] for k in ("dims", "e", "work")}} for c in cells]
+    return [{**{k: c[k] for k in ("n", "mix", "m", "t")}, **{k: c["rules"][FIT_RULE][k] for k in ("dims", "e")}} for c in cells if c["b"] == b]
 
 
-def write(page: Path, fixture: Path, data: dict, parity: dict) -> None:
+def histogram_columns(rows) -> dict:
+    """Pair counts as columns of den deltas, nums that restart at each new den, and counts. s 0 and s 1 add no error, so they drop."""
+    merged: dict[Fraction, int] = {}
+    for num, den, count in rows:
+        if 0 < num < den and count:
+            s = Fraction(num, den)
+            merged[s] = merged.get(s, 0) + count
+    cols: dict[str, list[int]] = {"d": [], "n": [], "c": []}
+    num = den = 0
+    for s in sorted(merged, key=lambda f: (f.denominator, f.numerator)):
+        d = s.denominator - den
+        cols["d"].append(d)
+        cols["n"].append(s.numerator if d else s.numerator - num)
+        cols["c"].append(merged[s])
+        num, den = s.numerator, s.denominator
+    return cols
+
+
+def histograms(results: Path, result: dict, sha: str) -> dict:
+    """The exact pair histogram of each study dataset on the page's N list, which F1 needs."""
+    out = {}
+    for c in on_page(result["cells"]):
+        name = c["dataset"]
+        if name in out or name not in result["histograms"]:
+            continue
+        with (results / result["histograms"][name]).open(encoding="utf-8") as f:
+            assert f.readline().strip() == "num,den,count"
+            rows = [tuple(int(v) for v in line.split(",")) for line in f if line.strip()]
+        assert sum(r[2] for r in rows) == c["n"] * (c["n"] - 1) // 2, f"{name} is short of N (N - 1) / 2 pairs"
+        out[name] = {"docs": c["n"], "mix": c["mix"], **histogram_columns(rows)}
+    return {"sha": sha, "datasets": out}
+
+
+def write(page: Path, fixture: Path, data: dict, parity: dict, hists: dict) -> None:
     html = page.read_text(encoding="utf-8")
     head = '<script type="application/json" id="sim-data">\n'
     start = html.index(head) + len(head)
     end = html.index("\n</script>", start)
     page.write_text(html[:start] + json.dumps(no_nan(data), separators=(",", ":"), allow_nan=False) + html[end:], encoding="utf-8")
     fixture.write_text(json.dumps(no_nan(parity), indent=1, allow_nan=False) + "\n", encoding="utf-8")
+    HISTOGRAMS.write_text(json.dumps(hists, separators=(",", ":"), allow_nan=False) + "\n", encoding="utf-8")
 
 
 def main() -> None:
@@ -269,9 +328,11 @@ def main() -> None:
 
     tables = read_tables(study)
     corpus = corpus_facts(lga, study)
-    result = json.loads((study / "tidy_rule/results/tidy_rule.json").read_text(encoding="utf-8"))
+    results = study / "tidy_rule/results"
+    result = json.loads((results / "tidy_rule.json").read_text(encoding="utf-8"))
     tidy = tidy_data(result, types.SimpleNamespace(NOISE=depths.NOISE, NOISE_GROUP=depths.NOISE_GROUP, MIN_DEPTH=depths.MIN_DEPTH,
                                                    FILLER_NOISE_DOCS=depths.make_corpus.FILLER_NOISE_DOCS, SEARCH_MAX_DEPTH=depths.SEARCH_MAX_DEPTH))
+    assert [c["n"] for c in result["cells"] if c["dataset"] == RECORDED][0] == corpus["docs"], f"{RECORDED} is not the page corpus"
     data = {
         "provenance": provenance(sha, lga, tables),
         "facts": {"top_budget": lga.MAX_SIGNATURE_ROWS, "corpus": corpus},
@@ -281,8 +342,8 @@ def main() -> None:
     parity = {"source": f"lsh_grid_analysis at {sha}", "s": S_GRID, "y": Y_GRID, "targets": TARGETS,
               "rows": parity_rows(lga, tables, corpus), "hashes": hash_samples(demo, corpus["vocab"]),
               "brute": brute_force_pipeline(lga), "tidy": {**tidy, "rows": tidy_rows(result["cells"])}}
-    write(PAGE, FIXTURE, data, parity)
-    print(f"wrote {PAGE.relative_to(SITE)} and {FIXTURE.relative_to(SITE)} from {sha}")
+    write(PAGE, FIXTURE, data, parity, histograms(results, result, sha))
+    print(f"wrote {PAGE.relative_to(SITE)}, {FIXTURE.relative_to(SITE)} and {HISTOGRAMS.relative_to(SITE)} from {sha}")
 
 
 if __name__ == "__main__":

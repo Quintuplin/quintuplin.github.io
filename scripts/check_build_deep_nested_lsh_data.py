@@ -78,8 +78,10 @@ class TidyRule(unittest.TestCase):
                   for r, p, below in (("KA", 0.4, 16), ("KAlambda", 0.36, 18), ("F1", 7.5e-09, 27))}
         cells = [self.cell("recorded_n1000", 1000, 19, 250, 0.3, 11.0, 10.0), self.cell("n3000_c10", 3000, 10, 250, 0.3, 40.0, 10.0),
                  self.cell("n3000_c10", 3000, 10, 10000, 0.3), self.cell("n1000000_c19", 1000000, 19, 250, 0.3, 99.0, 1.0)]
+        # The recorded corpus has no histogram file, as the page carries its pairs.
+        hists = {"n3000_c10": "histograms/n3000_c10.csv", "n1000000_c19": "../../scale_study/results/histograms/n1000000_c19.csv"}
         return {"pick": {"name": name, "elegant": elegant, "switch_test": switch}, "cache_check": {"passed": passed}, "cells": cells,
-                "candidates": [{"name": "KA", "constants": {"gamma": 0.9}}, {"name": "KAlambda", "constants": {"gamma": 0.05}}]}
+                "histograms": hists, "candidates": [{"name": "KA", "constants": {"gamma": 0.9}}, {"name": "KAlambda", "constants": {"gamma": 0.05}}]}
 
     # N 1000000 lies past the page's N list, so its cells add neither a dataset nor a cell to the excess.
     def test_tidy_data_reads_rule_constants(self):
