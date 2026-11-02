@@ -20,7 +20,8 @@ def rules(text, media=None):
             yield from rules(body, prelude)
         elif not prelude.startswith("@"):
             decls = dict(d.split(":", 1) for d in (p.strip() for p in body.split(";")) if ":" in d)
-            yield media, [s.strip() for s in prelude.split(",")], {k.strip(): v.strip() for k, v in decls.items()}
+            sels = [s.strip() for s in re.split(r",(?![^()]*\))", prelude)]
+            yield media, sels, {k.strip(): v.strip() for k, v in decls.items()}
         i = j
 
 
@@ -36,10 +37,42 @@ def summary_marker(parsed):
     return errors
 
 
+def specificity(sel):
+    """Selector specificity as (ids, classes, types). :is, :not and :has count their highest argument; :where counts 0."""
+    sel, extra = re.sub(r"\[[^\]]*\]", ".a", sel), (0, 0, 0)
+    while m := re.search(r":(is|not|has|where)\(([^()]*)\)", sel):
+        if m.group(1) != "where":
+            extra = tuple(map(sum, zip(extra, max(specificity(a) for a in m.group(2).split(",")))))
+        sel = sel[:m.start()] + sel[m.end():]
+    ids = sel.count("#")
+    classes = len(re.findall(r"\.[\w-]+|(?<!:):[\w-]+", sel))
+    types = len(re.findall(r"(?:^|[\s>+~])[a-z][\w-]*|::[\w-]+", sel))
+    return tuple(map(sum, zip((ids, classes, types), extra)))
+
+
+def stacked_reset(parsed):
+    """Stacked .qtable and .cols cards at 640px and below must outrank the sticky first column and clear its patch."""
+    sticky = [(i, s) for i, (media, sels, decls) in enumerate(parsed) if media is None and decls.get("position") == "sticky"
+              for s in sels if re.search(r"\btd\b", s)]
+    need = max((specificity(s) for _, s in sticky), default=(0, 0, 0))
+    last = max((i for i, _ in sticky), default=-1)
+    errors = []
+    for card in ("qtable", "cols"):
+        # An equal specificity wins only when the reset comes later in the file.
+        if not any(re.search(r"max-width:\s*640px", media or "") and decls.get("position") == "static" and "background" in decls
+                   and re.search(rf"\.{card}\b", s) and re.search(r"\btd\b", s)
+                   and (specificity(s) > need or (specificity(s) == need and i > last))
+                   for i, (media, sels, decls) in enumerate(parsed) for s in sels):
+            errors.append(f"{CSS}: no stacked .{card} td reset at 640px sets position:static and background "
+                          f"with specificity {need} or more, so its first cell stays sticky")
+    return errors
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
     text = re.sub(r"/\*.*?\*/", "", (root / CSS).read_text(encoding="utf-8"), flags=re.S)
-    errors = summary_marker(list(rules(text)))
+    parsed = list(rules(text))
+    errors = summary_marker(parsed) + stacked_reset(parsed)
     for e in errors:
         print("FAIL:", e, file=sys.stderr)
     if not errors:

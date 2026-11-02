@@ -242,11 +242,15 @@ th,td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;verti
 th{background:var(--wash);color:var(--muted);font-weight:600}
 .table-scroll th:first-child,.table-scroll td:first-child{position:sticky;left:0;z-index:1;background:var(--sheet)}
 .table-scroll thead th:first-child{background:var(--wash)}
+/* A qtable card and its scroll wrapper draw one border between them. */
+.table-scroll .qtable,.qtable .table-scroll{margin:0;border:0;border-radius:0;background:none}
 @media (max-width:640px){
   .qtable thead,.cols thead{display:none}
   .qtable tr,.qtable td,.cols,.cols tbody,.cols tr,.cols td{display:block;width:auto !important}
   .qtable tr{padding:var(--space-2) 4px;border-bottom:1px solid var(--line)}
-  .qtable td,.cols td{border:0;padding:3px var(--space-2);position:static}
+  .qtable td,.cols td{border:0;padding:3px var(--space-2)}
+  /* Matches the sticky first column's specificity and comes later, so stacked cards drop it and its patch. */
+  :is(.qtable,.cols) td:first-child{position:static;background:none}
   .qtable td.num,.qtable td.q{display:inline}
   .cols tr{border:1px solid var(--line);border-radius:var(--radius);margin:0 0 6px;padding:2px 0}
   .cols td:first-child{font-weight:600}
