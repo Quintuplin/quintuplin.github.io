@@ -7570,6 +7570,91 @@
    }
   }
  },
+ "dropped": {
+  "full-1": [
+   "blind_dir",
+   "cases_dir",
+   "clones_dir",
+   "scratch_dir",
+   "split"
+  ],
+  "pilot-1": [
+   "blind_dir",
+   "cases_dir",
+   "clones_dir",
+   "split"
+  ],
+  "pilot-2": [
+   "blind_dir",
+   "cases_dir",
+   "clones_dir",
+   "scratch_dir",
+   "split"
+  ],
+  "rep-1": [
+   "blind_dir",
+   "cases_dir",
+   "clones_dir",
+   "scratch_dir",
+   "split"
+  ],
+  "rep-2": [
+   "blind_dir",
+   "cases_dir",
+   "clones_dir",
+   "methods.rep-2-r04.cases_dir",
+   "methods.rep-2-r04.scratch_dir",
+   "methods.rep-2-r08.cases_dir",
+   "methods.rep-2-r08.scratch_dir",
+   "methods.rep-2-r14.cases_dir",
+   "methods.rep-2-r14.scratch_dir",
+   "methods.rep-2-r17.cases_dir",
+   "methods.rep-2-r17.scratch_dir",
+   "methods.rep-2-r20.cases_dir",
+   "methods.rep-2-r20.scratch_dir",
+   "scratch_dir",
+   "split"
+  ],
+  "rep-2/rebuild": [
+   "blind_dir",
+   "cases_dir",
+   "clones_dir",
+   "harness_delta.path",
+   "methods.rep-2-r04.cases_dir",
+   "methods.rep-2-r04.scratch_dir",
+   "methods.rep-2-r08.cases_dir",
+   "methods.rep-2-r08.scratch_dir",
+   "methods.rep-2-r14.cases_dir",
+   "methods.rep-2-r14.scratch_dir",
+   "methods.rep-2-r17.cases_dir",
+   "methods.rep-2-r17.scratch_dir",
+   "methods.rep-2-r20.cases_dir",
+   "methods.rep-2-r20.scratch_dir",
+   "scratch_dir",
+   "split"
+  ],
+  "tcp-1-list": [
+   "blind_dir",
+   "cases_dir",
+   "clones_dir",
+   "scratch_dir",
+   "split"
+  ],
+  "tcp-1-list2": [
+   "blind_dir",
+   "cases_dir",
+   "clones_dir",
+   "scratch_dir",
+   "split"
+  ],
+  "tcp-1": [
+   "blind_dir",
+   "cases_dir",
+   "clones_dir",
+   "scratch_dir",
+   "split"
+  ]
+ },
  "pipeline": {
   "collect": {
    "collectOne": [
