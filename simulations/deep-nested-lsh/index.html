@@ -1523,10 +1523,12 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   function ruleNotes() {
     const { datasets, switch: sw, excess, gamma } = DATA.tidy, pct = excess.map(([, x]) => 100 * x);
     const test = (r) => `${sw[r].below} of ${sw[r].keys} keys where the errors differ with p ${sw[r].p.toPrecision(2)}. So it ${sw[r].clears ? "passes" : "does not pass"}`;
-    // The page holds datasets up to the N drop-down's top, so every study claim names that cap.
+    // The page holds datasets up to the N drop-down's top, so the dataset lists and the excess range name that cap.
     const ns = [...new Set(datasets.map(([n]) => n))].sort((a, b) => a - b), cap = `N up to ${ns.at(-1)}`;
-    $("ex-n-ran").textContent = `${ns.at(-1)} which are ${ns.slice(0, -1).join(", ")} and ${ns.at(-1)}`;
-    $("ex-f1-sets").textContent = `${datasets.length} study datasets with ${cap} which are ` + datasets.map(([n, c]) => `N ${n} c ${c}`).join(", ");
+    const list = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}` : String(xs[0]));
+    $("ex-n-ran").textContent = ns.length > 1 ? `${ns.at(-1)} which are ${list(ns)}` : String(ns[0]);
+    const sets = datasets.map(([n, c]) => `N ${n} c ${c}`);
+    $("ex-f1-sets").textContent = sets.length > 1 ? `${sets.length} study datasets with ${cap} which are ${list(sets)}` : `1 study dataset with ${cap} which is ${sets[0]}`;
     $("ex-fit-gamma").textContent = String(gamma);
     $("ex-fit-facts").textContent = "The study's switch test compares a rule with the full search on held-out keys of t and row budget. " +
       "The full search keeps the sharpest tree per depth and then the depth with the fewest expected errors. A one-sided sign test counts the keys where the rule has fewer. " +

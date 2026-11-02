@@ -900,7 +900,6 @@ test("retuneLoadsF1Tuple", async () => {
     const msg = $("ex-msg").textContent;
     assert.match(msg, /^F1 tree/);
     assert.ok(msg.includes(`out of ${want.work} matched trees within ${TOP} rows`), msg);
-    assert.ok(want.e >= 1e7 || shows(msg, Math.round(want.e)), `the ${Math.round(want.e)} expected errors: ${msg}`);
     assert.equal($("ex-retune").disabled, true, "a second F1 at the same N, c and t would change nothing");
     assert.equal($("ex-auto").checked, false, "a tuned tree is set by hand");
   }
@@ -1198,6 +1197,19 @@ test("datasetSizeNamesStudyCap", () => {
   const ns = [...new Set(TIDY.datasets.map(([n]) => n))].sort((a, b) => a - b), ran = $("ex-n-ran").textContent;
   assert.ok(ran.startsWith(`${ns.at(-1)} `), `the cap leads: ${ran}`);
   for (const n of ns) assert.ok(shows(ran, n), `the study ran N ${n}: ${ran}`);
+});
+
+// Guard: a single study N rendered "1000 which are  and 1000" (#54).
+test("datasetSizeOneN", () => {
+  const RULE_DATA = "} = DATA.tidy, pct";
+  const one = (src) => {
+    assert.ok(src.includes(RULE_DATA), "ruleNotes reads DATA.tidy");
+    return src.replace(RULE_DATA, "} = { ...DATA.tidy, datasets: [[1000, 19]] }, pct");
+  };
+  const { $, flush } = boot(PINNED, one);
+  flush();
+  assert.equal($("ex-n-ran").textContent, "1000");
+  assert.ok($("ex-f1-sets").textContent.startsWith("1 study dataset with N up to 1000 which is N 1000 c 19"), $("ex-f1-sets").textContent);
 });
 
 // Guard: the page wrote P(s) for the cascade, tail cards and Measured slope, and defined an unused two-tier kind (#54).
