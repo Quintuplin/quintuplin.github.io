@@ -22,7 +22,7 @@ FIXTURES = SCRIPTS / "fixtures/kalah-tdd"
 SNAPSHOT = SCRIPTS.parent / "_snapshots/kalah-tdd-study"
 # Source path in tdd-experiment to its fixture.
 SOURCES = {"runs/full-1/report.html": "report.html", "runs/full-1/methods/classic.html": "classic.html",
-           "artifact/showcase.html": "showcase.html", "harness/workflow/stages.json": "stages.json",
+           "runs/full-1/methods/outside-in.html": "outside-in.html", "artifact/showcase.html": "showcase.html", "harness/workflow/stages.json": "stages.json",
            "runs/full-1/args.json": "args.json", "harness/collect.sh": "collect.sh",
            "harness/report/render.py": "render.py", "harness/report/awards.py": "awards.py",
            "harness/report/stats.py": "stats.py", "docs/SPEC.md": "SPEC.md"}
@@ -72,7 +72,8 @@ class Fetch(unittest.TestCase):
         (self.published / "methods").mkdir(parents=True)
         self.published.with_name("v1-abcd.html").write_bytes(fixture("report.html"))
         # The published method page differs from the committed one, as the real backup's do.
-        (self.published / "methods/classic.html").write_bytes(fixture("classic.html") + b"<!-- published -->\n")
+        for name in ("classic.html", "outside-in.html"):
+            (self.published / "methods" / name).write_bytes(fixture(name) + b"<!-- published -->\n")
         self.out = self.root / "_snapshots/kalah-tdd-study"
 
     def git(self, repo, *args):
@@ -139,19 +140,29 @@ class Fetch(unittest.TestCase):
         self.assertEqual(manifest["sha"], self.head)
         self.assertEqual(manifest["published"], "kalah-tdd-experiment/raw/v1-abcd")
         files = manifest["files"]
-        copied = ["runs/full-1/report.html", "runs/full-1/methods/classic.html", "artifact/showcase.html"]
+        copied = ["runs/full-1/report.html", "runs/full-1/methods/classic.html", "runs/full-1/methods/outside-in.html",
+                  "artifact/showcase.html"]
         self.assertEqual(sorted(files), sorted(copied + ["facts.json"]))
         for path in copied:
             data = fixture(SOURCES[path])
             self.assertEqual((self.out / path).read_bytes(), data, path)
             self.assertEqual((files[path]["bytes"], files[path]["sha256"]), (len(data), sha256(data)), path)
         self.assertEqual(files["runs/full-1/report.html"]["published_sha256"], sha256(fixture("report.html")))
-        self.assertEqual(files["runs/full-1/methods/classic.html"]["published_sha256"],
-                         sha256((self.published / "methods/classic.html").read_bytes()))
+        for name in ("classic.html", "outside-in.html"):
+            self.assertEqual(files[f"runs/full-1/methods/{name}"]["published_sha256"],
+                             sha256((self.published / "methods" / name).read_bytes()), name)
         self.assertIsNone(files["artifact/showcase.html"]["published_sha256"])
         self.assertEqual(files["facts.json"]["sha256"], sha256((self.out / "facts.json").read_bytes()))
         self.assertEqual(manifest["doc"]["sha256"], sha256(fixture("tdd-methodologies.md")))
         self.assertEqual(manifest["doc"]["sha"], self.git(self.doc.parent, "rev-parse", "HEAD"))
+
+    def test_drops_stale_pages(self):
+        self.fetch()
+        stale = self.out / "runs/full-1/methods/gone.html"
+        stale.write_text("dropped upstream\n")
+        manifest, _ = self.fetch()
+        self.assertFalse(stale.exists(), "a page tdd-experiment dropped lingers")
+        self.assertNotIn("runs/full-1/methods/gone.html", manifest["files"])
 
     def test_refuses_foreign_out(self):
         # Only a snapshot the fetcher wrote may be replaced.
