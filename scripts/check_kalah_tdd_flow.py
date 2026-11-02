@@ -173,6 +173,15 @@ class Flow(unittest.TestCase):
         f.svg("p", "t", "d", [x[0], f.node("c", "C", lane="x", col=2)], [f.edge("a", "c")])
         f.svg("p", "t", "d", [x[0], f.node("b", "B", lane="y", col=1)], [], [f.loop("b", "unit", back_to="a")])
 
+    def test_vertical_edge_label_starts_right_of_line(self):
+        root = ET.fromstring(flow().svg("p", "t", "d", *long_chart()))
+        down = [p for p in root.iter(NS + "path") if p.get("class") == "edge" and "H" not in p.get("d")]
+        self.assertEqual(len(down), 1)
+        x = float(re.match(r"M([\d.]+),", down[0].get("d")).group(1))
+        label = next(t for t in root.iter(NS + "text") if "".join(t.itertext()) == "down")
+        self.assertGreater(float(label.get("x")), x)
+        self.assertEqual(label.get("text-anchor"), "start")
+
     def test_rejects_shared_cell(self):
         f = flow()
         nodes = [f.node("a", "A", lane="x"), f.node("b", "B", lane="x", col=0)]

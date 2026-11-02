@@ -123,19 +123,23 @@ def gaps(x):
 
 def edge_path(a, b, h, below=None):
     """Straight within a lane, vertical within a column, else an elbow that turns in the gap before the target, so it
-    only crosses columns in its source lane, which check_routes keeps clear. An edge into a later row leaves through the gap right of its source, runs along the gap below its row (y below) and enters from the left."""
+    only crosses columns in its source lane, which check_routes keeps clear. An edge into a later row leaves through
+    the gap right of its source, runs along the gap below its row (y below) and enters from the left.
+    Returns the path and the label's x, y and text-anchor."""
     (sx, sy), (dx, dy) = a, b
     if below is not None:
         right, left = gaps(sx)[1], gaps(dx)[0]
-        return f"M{sx + NODE_W},{sy + h // 2}H{right}V{below}H{left}V{dy + h // 2}H{dx}", ((right + left) // 2, below - 5)
+        path = f"M{sx + NODE_W},{sy + h // 2}H{right}V{below}H{left}V{dy + h // 2}H{dx}"
+        return path, ((right + left) // 2, below - 5, "middle")
     if sx == dx:
         top = dy > sy
         cx = sx + NODE_W // 2
-        return f"M{cx},{sy + h if top else sy}V{dy if top else dy + h}", (cx + 4, (sy + dy + h) // 2)
+        # The label starts just right of the line so it never sits on it.
+        return f"M{cx},{sy + h if top else sy}V{dy if top else dy + h}", (cx + 4, (sy + dy + h) // 2, "start")
     ex, ey, tx, ty = sx + NODE_W, sy + h // 2, dx, dy + h // 2
     mx = ex if ey == ty else gaps(dx)[0]
     path = f"M{ex},{ey}H{tx}" if ey == ty else f"M{ex},{ey}H{mx}V{ty}H{tx}"
-    return path, ((mx + tx) // 2, ty - 5)
+    return path, ((mx + tx) // 2, ty - 5, "middle")
 
 
 def svg(prefix, title, desc, nodes, edges=(), loops=()):
@@ -164,10 +168,10 @@ def svg(prefix, title, desc, nodes, edges=(), loops=()):
         if note:
             out.append(text(x + NODE_W // 2, top + LINE * len(label), note, "note"))
     for e in edges:
-        path, (lx, ly) = edge_path(at[e.src], at[e.dst], h, below[e.src] if below[e.src] != below[e.dst] else None)
+        path, (lx, ly, anchor) = edge_path(at[e.src], at[e.dst], h, below[e.src] if below[e.src] != below[e.dst] else None)
         out.append(f'<path class="edge" d="{path}" marker-end="{arrow}"/>')
         if e.label:
-            out.append(text(lx, ly, [e.label], "note"))
+            out.append(text(lx, ly, [e.label], "note", anchor))
     for lp in loops:
         (sx, sy), (dx, dy) = at[lp.node], at[lp.back_to or lp.node]
         x0, x1, low = sx + NODE_W * 7 // 10, dx + NODE_W * 3 // 10, sy + h + LOOP_DROP
