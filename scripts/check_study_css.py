@@ -27,13 +27,16 @@ def rules(text, media=None):
 
 def summary_marker(parsed):
     """A summary laid out as anything but list-item loses its native disclosure marker, so it needs a ::before one."""
-    flat = [s for _, sels, decls in parsed for s in sels if "content" in decls]
-    has_marker = any(re.search(r"summary::before$", s) for s in flat)
+    markers = [(specificity(m), i, m, decls["content"]) for i, (media, sels, decls) in enumerate(parsed)
+               if media is None and "content" in decls for m in sels if m.endswith("summary::before")]
     errors = []
     for _, sels, decls in parsed:
         for s in sels:
-            if re.search(r"summary$", s) and decls.get("display", "list-item") != "list-item" and not has_marker:
-                errors.append(f"{CSS}: {s} sets display:{decls['display']} and no summary::before marker replaces the native one")
+            if re.search(r"summary$", s) and decls.get("display", "list-item") != "list-item":
+                # The winning ::before rule that reaches this summary must draw something.
+                applies = [(sp, i, c) for sp, i, m, c in markers if m in ("summary::before", f"{s}::before")]
+                if not applies or re.sub(r"\s+", "", max(applies)[2]) in ("none", "normal", '""', "''"):
+                    errors.append(f"{CSS}: {s} sets display:{decls['display']} and no summary::before marker replaces the native one")
     return errors
 
 
