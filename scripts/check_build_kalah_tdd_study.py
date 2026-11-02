@@ -231,12 +231,16 @@ class Pages(unittest.TestCase):
                 self.assertEqual(html.count('<meta name="kalah-tdd-stub">'), stub)
                 self.assertEqual("This part is being written" in html, stub)
         page = kalah("pagemap").PAGES[1]
-        fake = types.SimpleNamespace(body=lambda page, snap, idx: '<h2 id="intro">Intro</h2>')
+        marker = '<svg><marker id="m"/><path marker-end="url(#m)"/></svg>'
+        fake = types.SimpleNamespace(body=lambda page, snap, idx: ['<h2 id="intro">Intro</h2>' + marker, marker])
         with mock.patch.object(pages, "built", return_value=fake):
             html = build().render_page(page, snap(), kalah("links").index(snap()))
         self.assertNotIn("kalah-tdd-stub", html)
         self.assertNotIn("being written", html)
         self.assertIn(f'<li><a href="{BASE}{page.slug}/#intro">Intro</a></li>', html)
+        # Each fragment keeps its own references when a later one shares an id.
+        self.assertIn('<h2 id="intro">Intro</h2>' + marker, html)
+        self.assertIn('<svg><marker id="m-2"/><path marker-end="url(#m-2)"/></svg>', html)
 
     def test_shell(self):
         bar = re.search(r'<nav class="site-bar".*?</style>', (SITE / "studies/subagent-crew-study/index.html").read_text(),

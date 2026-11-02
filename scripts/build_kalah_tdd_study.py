@@ -25,9 +25,8 @@ def page_path(page):
 
 
 def render_page(page, snap, idx):
-    body, stub = pages.body(page, snap, idx)
-    [body] = links.unique_ids([body], reserved=chrome.IDS)
-    return chrome.shell(page, snap, body, stub)
+    fragments, stub = pages.body(page, snap, idx)
+    return chrome.shell(page, snap, "\n".join(links.unique_ids(fragments, reserved=chrome.IDS)), stub)
 
 
 def render_pages(snap):

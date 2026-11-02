@@ -1,4 +1,5 @@
-"""Page bodies. A page whose module is in this package is built by its body(page, snap, idx); any other is a stub."""
+"""Page bodies. A page whose module is in this package is built by its body(page, snap, idx), which returns the
+page's fragments in order; any other is a stub."""
 
 import importlib
 import importlib.util
@@ -17,6 +18,6 @@ def stub():
 
 
 def body(page, snap, idx):
-    """(main body html, is a stub)."""
+    """(main body fragments, is a stub). Each fragment keeps its own id references when unique_ids renames."""
     module = built(page)
-    return (module.body(page, snap, idx), False) if module else (stub(), True)
+    return (module.body(page, snap, idx), False) if module else ([stub()], True)
