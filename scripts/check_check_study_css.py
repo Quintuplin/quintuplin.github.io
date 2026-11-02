@@ -37,6 +37,18 @@ class TouchTargets(unittest.TestCase):
         errors = touch(lambda t: re.sub(r"(\.toc a\{[^}]*min-height:)\d+px", r"\g<1>20px", t, count=1))
         self.assertRegex(" ".join(errors), r"\.toc a has no min-height of 24px or more, ")
 
+    def test_later_override_fails(self):
+        for probe in ("@media (max-width:899.98px){.toc a{min-height:20px}}", ".toc ol ol a{min-height:20px}",
+                      ".pager a:hover{min-height:auto}"):
+            with self.subTest(probe):
+                self.assertRegex(" ".join(touch(lambda t: t + probe)), r"rule \.(toc|pager) .*a(:hover)? lowers")
+
+    def test_stronger_earlier_override_fails(self):
+        self.assertRegex(" ".join(touch(lambda t: ".toc ol a{min-height:20px}" + t)), r"rule \.toc ol a lowers \.toc a")
+
+    def test_larger_override_passes(self):
+        self.assertEqual(touch(lambda t: t + ".toc ol ol a{min-height:48px}"), [])
+
 
 if __name__ == "__main__":
     unittest.main()

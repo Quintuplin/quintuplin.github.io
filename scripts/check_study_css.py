@@ -119,11 +119,28 @@ def same_media(a, b):
     return re.sub(r"\s+", "", a or "") == re.sub(r"\s+", "", b or "")
 
 
+def reaches(s, sel):
+    """Whether selector s styles the same element as sel inside the same container, such as .toc ol ol a for .toc a."""
+    head, tail = sel.split()[0], sel.split()[-1]
+    return s == sel or ("::" not in s and re.search(rf"(?:^|[\s>+~]){re.escape(head)}(?![\w-])", s) is not None
+                        and re.search(rf"[\s>]\s*{re.escape(tail)}(?![\w-])[^\s>+~]*$", s) is not None)
+
+
 def touch_targets(parsed):
-    return [f"{CSS}: {sel} has no min-height of {need}px or more{' under ' + media if media else ''}, so it is a small touch target"
-            for sel, media, need in TOUCH
-            if not any(same_media(m, media) and sel in sels and px(decls.get("min-height", "")) >= need
-                       for m, sels, decls in parsed)]
+    errors = []
+    for sel, media, need in TOUCH:
+        meets = [(i, specificity(sel)) for i, (m, sels, decls) in enumerate(parsed)
+                 if same_media(m, media) and sel in sels and px(decls.get("min-height", "")) >= need]
+        if not meets:
+            errors.append(f"{CSS}: {sel} has no min-height of {need}px or more{' under ' + media if media else ''}, "
+                          f"so it is a small touch target")
+            continue
+        last, spec = max(meets)
+        # Any media counts, as a lowering rule in another query still wins where both apply.
+        errors += [f"{CSS}: later or more specific rule {s} lowers {sel} min-height to {decls['min-height']}, below {need}px"
+                   for i, (_, sels, decls) in enumerate(parsed) if px(decls.get("min-height", f"{need}px")) < need
+                   for s in sels if reaches(s, sel) and (i > last or specificity(s) > spec)]
+    return errors
 
 
 def main():
