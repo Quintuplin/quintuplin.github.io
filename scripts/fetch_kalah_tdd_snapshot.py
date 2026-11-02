@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import ast
 import hashlib
+import html
 import json
 import re
 import shutil
@@ -21,7 +22,7 @@ from pathlib import Path
 
 # python3 -I leaves the script folder off sys.path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from study_checkout import clean_head  # noqa: E402
+from study_checkout import LOCAL_PATH, clean_head  # noqa: E402
 
 SITE = Path(__file__).resolve().parent.parent
 OUT = SITE / "_snapshots/kalah-tdd-study"
@@ -31,6 +32,9 @@ SHOWCASE = "artifact/showcase.html"
 RENDER = "harness/report/render.py"
 # A copy of render.HOST_PATH, which the fetch checks: evidence a reader of the repo cannot open.
 HOST_PATH = re.compile(r"^(/|~|[A-Za-z]:)|://|Obi-Done|Cryptomator")
+# The whole word around a LOCAL_PATH hit, up to whitespace, markup or quotes.
+LOCAL_WORD = re.compile(rf"""[^\s<>"'`()\[\]{{}}]*(?:{LOCAL_PATH.pattern})[^\s<>"'`()\[\]{{}}]*""")
+PLACEHOLDER = "<local path>"
 STEP = re.compile(r"(?:^|\|\||&&)\s*(step|branchStep) ([A-Za-z]+)\b")
 FUNCTION = re.compile(r"^([A-Za-z]\w*)\(\) \{")
 HEADING = re.compile(r"^(#{1,6}) +(.*?) *#*$")
@@ -50,6 +54,39 @@ def copy_sources(study: Path, sha: str) -> dict[str, bytes]:
     methods = git(study, "ls-tree", "--name-only", f"{sha}:{METHODS}").decode().split()
     paths = [REPORT, *(f"{METHODS}/{name}" for name in sorted(methods) if name.endswith(".html")), SHOWCASE]
     return {path: git(study, "show", f"{sha}:{path}") for path in paths}
+
+
+def redact(text: str, placeholder: str) -> tuple[str, int]:
+    """(text with each local path word as placeholder, count). A word's closing punctuation stays as prose."""
+    keep = lambda word: placeholder + word[len(word.rstrip(".,;:!?")):]
+    text, count = LOCAL_WORD.subn(lambda m: keep(m.group(0)), text)
+    if left := LOCAL_PATH.search(text):
+        raise SystemExit(f"redaction left {text[left.start():left.end() + 40]!r}; widen LOCAL_WORD")
+    return text, count
+
+
+def redact_pages(files: dict[str, bytes]) -> tuple[dict[str, bytes], dict[str, int]]:
+    """(files with local paths redacted, {path: count} of the files that held any). Every copied file is HTML."""
+    out, counts = {}, {}
+    for path, data in files.items():
+        text, count = redact(data.decode(), html.escape(PLACEHOLDER))
+        out[path] = text.encode()
+        if count:
+            counts[path] = count
+    return out, counts
+
+
+def redact_strings(value, counts: list[int]):
+    """value with local paths redacted in every string, dict keys included. Appends each string's count."""
+    if isinstance(value, str):
+        text, count = redact(value, PLACEHOLDER)
+        counts.append(count)
+        return text
+    if isinstance(value, dict):
+        return {redact_strings(k, counts): redact_strings(v, counts) for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact_strings(v, counts) for v in value]
+    return value
 
 
 def committed_doc(path: Path) -> tuple[bytes, str]:
@@ -252,8 +289,12 @@ def main(argv: list[str] | None = None) -> None:
     if not sha:
         raise SystemExit(f"git cannot read {args.study}; the snapshot comes from its commits")
     doc, doc_sha = committed_doc(args.doc)
-    files = copy_sources(args.study, sha)
-    facts = (json.dumps(extract_facts(args.study, sha, doc), indent=1, ensure_ascii=False) + "\n").encode()
+    files, redacted = redact_pages(copy_sources(args.study, sha))
+    counts = []
+    found = redact_strings(extract_facts(args.study, sha, doc), counts)
+    # Counts only, since the redacted strings are the leak.
+    found["redacted"] = {**redacted, **({"facts.json": sum(counts)} if sum(counts) else {})}
+    facts = (json.dumps(found, indent=1, ensure_ascii=False) + "\n").encode()
     doc_entry = {"path": args.doc.name, "sha": doc_sha, "sha256": sha256(doc)}
     write_snapshot(args.out, files, facts, manifest(sha, files, facts, args.published, doc_entry))
     print(f"wrote {args.out} from tdd-experiment {sha[:8]}")
