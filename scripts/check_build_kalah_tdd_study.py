@@ -72,10 +72,8 @@ class Check(unittest.TestCase):
             self.assertFalse((out / "retired/index.html").exists(), "a write left a page the map no longer has")
 
     def test_committed_pages_are_current(self):
+        # The committed pages come from another process, so this also pins output across hash seeds.
         self.assertEqual(build().check_current(build().OUT, rendered()), [])
-
-    def test_output_is_deterministic(self):
-        self.assertEqual(build().render_pages(snap()), rendered())
 
 
 class Links(unittest.TestCase):
