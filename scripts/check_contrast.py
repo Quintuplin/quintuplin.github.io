@@ -49,7 +49,8 @@ PAGES = {
     "studies/kalah-tdd-study/study.css": {
         "glass": ["ink", "muted", "accent"],
         "card": ["ink", "muted", "accent", "s1", "s2", "s3", "s4", "good", "warn", "serious", "open"],
-        "graphic": ["s1", "s2", "s3", "s4", "axis", "gold", "silver", "bronze"],
+        # Status tokens also fill qbar segments and chip dots on bare glass.
+        "graphic": ["s1", "s2", "s3", "s4", "axis", "gold", "silver", "bronze", "good", "warn", "serious", "open"],
         "tinted": {"muted": "wash"},
     },
 }
