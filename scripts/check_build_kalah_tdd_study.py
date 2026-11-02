@@ -136,6 +136,34 @@ class Links(unittest.TestCase):
         self.assertEqual(links.unique_ids(['<p id="main">x</p>'], reserved=("main",)), ['<p id="main-2">x</p>'])
 
 
+class Snapshot(unittest.TestCase):
+    def test_load_refuses_changed_file(self):
+        s = kalah("snapshot")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in ("MANIFEST.json", *snap().files, "facts.json"):
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_bytes((s.ROOT / name).read_bytes())
+            self.assertEqual(s.load(root).sha, snap().sha)
+            (root / s.SHOWCASE).write_bytes((root / s.SHOWCASE).read_bytes() + b" ")
+            with self.assertRaisesRegex(SystemExit, "MANIFEST"):
+                s.load(root)
+
+    def test_section_and_view(self):
+        s = kalah("snapshot")
+        report = snap().files[s.REPORT]
+        part = s.section(report, "test-order")
+        self.assertTrue(part.startswith('<h3 id="test-order">Test order</h3>'))
+        self.assertTrue(report.split(part, 1)[1].lstrip().startswith('<h2 id="methods"'))
+        # An h2 runs past its h3 children to the next h2; the last section stops at the end of main.
+        self.assertIn('id="key-findings"', s.section(snap().files[s.REPORT], "headline"))
+        self.assertNotIn("</main>", s.section(snap().files[s.REPORT], "run-record-rep-2"))
+        view = s.view(snap().files[s.SHOWCASE], "classic")
+        self.assertIn("<h1>Classic greedy TDD</h1>", view)
+        self.assertNotIn("<h1>Noun-verb map</h1>", view)
+        self.assertRaises(ValueError, s.section, snap().files[s.REPORT], "nowhere")
+
+
 class HostPaths(unittest.TestCase):
     def test_rejects_host_path(self):
         b = build()
@@ -146,7 +174,11 @@ class HostPaths(unittest.TestCase):
 
     def test_allows_links_and_prose(self):
         build().refuse_host_paths(rendered())
-        build().refuse_host_paths({f"src/{doc}": text for doc, text in snap().files.items()})
+        # Known defect: two method pages' records show local ~/ paths, which their design pages must drop.
+        # Every other source string passes, its https:// links included.
+        hits = {(doc, m.group(0)) for doc, text in snap().files.items() for m in build().LOCAL_PATH.finditer(text)}
+        self.assertEqual(hits, {("runs/full-1/methods/anchor-engineering.html", "~/"),
+                                ("runs/full-1/methods/mutation-guided.html", "~/")})
         build().refuse_host_paths({"x/index.html": '<a href="https://github.com/Users/x">E: distinct</a> a / b '
                                                    '<a href="/projects">P</a> rep-2/rebuild'})
 
@@ -212,10 +244,10 @@ class Pages(unittest.TestCase):
                 self.assertIn("IBM+Plex+Mono:wght@400;500;600", html)
                 self.assertIn(f"tdd-experiment <code>{sha[:7]}</code>", html)
                 self.assertRegex(html, r'<div class="backdrop" aria-hidden="true"></div>\s*<div class="sheet">')
-                self.assertRegex(html, r'</style>\s*<a class="skip" href="#main">[^<]+</a>\s*<div class="study">\s*'
+                self.assertRegex(html, re.compile(r'</style>\s*<a class="skip" href="#main">[^<]+</a>\s*<div class="study">\s*'
                                        r'<header class="study-head">.*?</header>\s*<nav class="pager".*?</nav>\s*'
                                        r'<details class="toc" id="toc">.*?</details>\s*<main id="main">.*?</main>\s*'
-                                       r'<nav class="pager".*?</nav>\s*</div>\s*</div>')
+                                       r'<nav class="pager".*?</nav>\s*</div>\s*</div>', re.S))
                 self.assertIn('<nav aria-label="Study contents">', html)
                 self.assertNotIn("---", html.split("\n", 1)[0])
 
