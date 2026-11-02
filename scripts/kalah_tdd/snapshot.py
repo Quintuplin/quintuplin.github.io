@@ -9,7 +9,8 @@ from typing import NamedTuple
 ROOT = Path(__file__).resolve().parents[2] / "_snapshots/kalah-tdd-study"
 REPORT = "runs/full-1/report.html"
 SHOWCASE = "artifact/showcase.html"
-HEADING = re.compile(r'<h([1-6])\b[^>]*>')
+# Only headings with an id end a section, as links.placed homes ids; figure titles in figcaption have none.
+HEADING = re.compile(r'<h([1-6])\b[^>]*(?<![\w-])id="')
 
 
 class Snapshot(NamedTuple):
@@ -35,7 +36,7 @@ def load(root=ROOT):
 
 
 def section(html, id):
-    """From the heading with this id up to the next heading of the same or a higher level, or the end of main."""
+    """From the heading with this id up to the next heading with an id of the same or a higher level, or the end of main."""
     head = re.search(rf'<h([1-6])\b[^>]*\bid="{re.escape(id)}"', html)
     if not head:
         raise ValueError(f"no heading with id {id}")

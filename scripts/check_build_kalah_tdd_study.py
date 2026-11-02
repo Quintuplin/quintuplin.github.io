@@ -158,6 +158,14 @@ class Snapshot(unittest.TestCase):
         # An h2 runs past its h3 children to the next h2; the last section stops at the end of main.
         self.assertIn('id="key-findings"', s.section(snap().files[s.REPORT], "headline"))
         self.assertNotIn("</main>", s.section(snap().files[s.REPORT], "run-record-rep-2"))
+        # Id-less figure titles inside figcaption end no section.
+        self.assertIn('id="bench-strip"', s.section(report, "survey-full-1"))
+        self.assertIn('id="rep-consistency"', s.section(report, "consistency-across-runs"))
+        for anchor in {a for p in kalah("pagemap").PAGES for a in p.anchors}:
+            part = s.section(report, anchor)
+            for tag in ("figure", "details", "table"):
+                with self.subTest(anchor=anchor, tag=tag):
+                    self.assertEqual(len(re.findall(rf"<{tag}\b", part)), part.count(f"</{tag}>"))
         view = s.view(snap().files[s.SHOWCASE], "classic")
         self.assertIn("<h1>Classic greedy TDD</h1>", view)
         self.assertNotIn("<h1>Noun-verb map</h1>", view)
