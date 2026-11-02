@@ -906,6 +906,25 @@ test("retuneLoadsF1Tuple", async () => {
   }
 });
 
+// Guard: the F1 message rounded fp + fn as one sum while the readout rounds each, so one tree showed two counts (#54).
+test("retuneF1CountMatchesReadout", async () => {
+  const cells = [0.35, 0.5, 0.55].map((t) => [t, C.f1Tune(t, TOP, study.facts.corpus.pairs)]);
+  assert.ok(cells.some(([t, r]) => Math.round(r.fp + r.fn) !== counts(r.dims, t).errors), "a checked cell rounds the two ways apart");
+  for (const [t, want] of cells) {
+    const { $, flush, step } = boot(PINNED);
+    flush();
+    enter($, "ex-n", 1000);
+    enter($, "ex-mix", 19);
+    target($, t);
+    flush();
+    await retuneF1($, flush, step);
+    assert.deepEqual(arities($, want.dims.length), want.dims);
+    const errors = counts(want.dims, t).errors, msg = $("ex-msg").textContent;
+    assert.ok(shows($("ex-readout").textContent, errors), `the readout shows ${errors}`);
+    assert.ok(msg.includes(`Expected errors ${errors}.`), `t ${t} message matches the readout's ${errors}: ${msg}`);
+  }
+});
+
 test("retuneF1OffWithoutHistogram", () => {
   for (const [n, c] of [[2000, 19], [1000, 12], [100000, 41]]) {
     const { $, flush } = boot(PINNED);

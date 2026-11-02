@@ -1512,10 +1512,10 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   }
   // Messages are plain text, so a power of ten loses its markup.
   const plain = (html) => html.replace("<sup>", "^").replace("</sup>", "");
-  // F1 reports its own expected errors. The fit shows the study's only for a dataset and target it ran, where its pick is this tree.
+  // F1 reports its own expected errors, rounding E[FP] and E[FN] each as the readout does. The fit shows the study's only for a dataset and target it ran, where its pick is this tree.
   function tuneText(rule, r, N, c, T, at) {
     const tree = `${K.tuple(r.dims)} for ${at} out of ${r.tuples} matched trees within ${TOP} rows.`, shape = `t̂ ${num(C.threshold(r.dims), 3)} and W ${num(C.width(r.dims), 3)}.`;
-    if (rule === "f1") return `F1 tree ${tree} Expected errors ${plain(count(r.e))}. ${shape}`;
+    if (rule === "f1") return `F1 tree ${tree} Expected errors ${plain(count(Math.round(r.fp) + Math.round(r.fn)))}. ${shape}`;
     const row = DATA.tidy.rows.find((x) => x.n === N && x.mix === c && x.t === T && same(x.dims, r.dims));
     return `λ fit tree ${tree} ${shape}${row ? ` Expected errors (study) ${plain(count(row.e))}.` : ""}`;
   }
