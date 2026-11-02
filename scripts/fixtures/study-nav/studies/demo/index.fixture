@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><title>Demo study</title></head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<details class="toc" id="toc"><summary>Contents</summary>
+<nav aria-label="Study contents">
+<ol>
+<li><a href="/studies/demo/" aria-current="page">Demo</a></li>
+<li><a href="/studies/demo/part/">Part</a>
+<ol><li><a href="/studies/demo/part/#columns">Columns</a></li></ol></li>
+</ol>
+</nav>
+</details>
+<main id="main">
+<h2 id="intro">Intro</h2>
+<p>See the <a href="part/#columns">columns</a>, the <a href="/studies/demo/part">part</a> and <a href="https://example.com/#x">elsewhere</a>.</p>
+</main>
+</body>
+</html>
