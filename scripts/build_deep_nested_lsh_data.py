@@ -10,13 +10,16 @@ import argparse
 import json
 import math
 import re
-import subprocess
 import sys
 import types
 from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
+
+# python3 -I leaves the script folder off sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from study_checkout import study_sha  # noqa: E402
 
 SITE = Path(__file__).resolve().parent.parent
 PAGE = SITE / "simulations/deep-nested-lsh/index.html"
@@ -108,22 +111,6 @@ def corpus_facts(lga, study: Path) -> dict:
     assert [n / d for n, d, _ in pairs] == sims[keep].tolist() and [c for *_, c in pairs] == counts[keep].tolist()
     return {"docs": len(data.sets), "vocab": data.universe, "set_median": float(np.median(sizes)),
             "set_min": int(sizes.min()), "set_max": int(sizes.max()), "pairs": pairs}
-
-
-def study_sha(study: Path, given: str | None) -> str:
-    """Study HEAD of a clean tree, which --sha must name. Where git cannot read the study, such as the study container, --sha stands alone."""
-    git = lambda *a: subprocess.run(["git", "-C", str(study), *a], capture_output=True, text=True, check=True).stdout.strip()
-    try:
-        head = git("rev-parse", "HEAD")
-    except (OSError, subprocess.CalledProcessError):
-        if given:
-            return given
-        raise SystemExit(f"git cannot read {study}; pass --sha with the study commit")
-    if git("status", "--porcelain"):
-        raise SystemExit(f"{study} has uncommitted changes; the data must come from one commit")
-    if given and not (len(given) >= 7 and head.startswith(given.lower())):
-        raise SystemExit(f"--sha {given} is not {study} HEAD {head[:7]}")
-    return given or head[:7]
 
 
 # ---- ParityExport ----
