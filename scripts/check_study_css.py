@@ -88,11 +88,27 @@ def nested_card_reset(parsed):
     return errors
 
 
+# Flowchart fills and strokes use var() tokens, so High Contrast needs system colours for every class flow.py emits.
+# .flow .note outranks .flow text, so it needs its own rule.
+FORCED_FLOW = {".flow text": {"fill": "CanvasText"}, ".flow .note": {"fill": "CanvasText"},
+               ".flow .head": {"fill": "CanvasText"}, ".flow .node": {"fill": "Canvas", "stroke": "CanvasText"},
+               ".flow .edge": {"stroke": "CanvasText"}, ".flow .loop": {"stroke": "CanvasText"},
+               ".flow .lane": {"fill": "none", "stroke": "GrayText"}}
+
+
+def forced_flow(parsed):
+    """Each flowchart class keeps a visible system colour under forced colours."""
+    return [f"{CSS}: no forced-colors rule sets {sel} {{{prop}:{value}}}, so it may vanish in High Contrast"
+            for sel, want in FORCED_FLOW.items() for prop, value in want.items()
+            if not any(re.search(r"forced-colors:\s*active", media or "") and sel in sels and decls.get(prop) == value
+                       for media, sels, decls in parsed)]
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
     text = re.sub(r"/\*.*?\*/", "", (root / CSS).read_text(encoding="utf-8"), flags=re.S)
     parsed = list(rules(text))
-    errors = summary_marker(parsed) + stacked_reset(parsed) + nested_card_reset(parsed)
+    errors = summary_marker(parsed) + stacked_reset(parsed) + nested_card_reset(parsed) + forced_flow(parsed)
     for e in errors:
         print("FAIL:", e, file=sys.stderr)
     if not errors:
