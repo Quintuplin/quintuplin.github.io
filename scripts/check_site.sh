@@ -8,8 +8,9 @@ err() { echo "FAIL: $*" >&2; fail=1; }
 # The old Simulations index URL stays live as a redirect to Projects.
 grep -q 'http-equiv="refresh" content="0; *url=\(https://quintuplin\.github\.io\)\{0,1\}/projects/\{0,1\}"' "$site/simulations/index.html" 2>/dev/null || err "simulations/index.html does not redirect to /projects"
 
-# Standalone pages are served verbatim.
-for page in simulations/*/index.html studies/*/index.html; do
+# Standalone pages are served verbatim, nested study pages and their stylesheets too (#60).
+studyPages=$(find studies -name '*.html' | sort)
+for page in simulations/*/index.html $studyPages $(find studies -name '*.css'); do
 	[ -f "$page" ] || continue
 	if [ ! -f "$site/$page" ]; then
 		err "missing $page"
@@ -20,7 +21,7 @@ done
 
 # Standalone pages carry a site bar with every main nav link (#21) and the glass theme in both modes (#23).
 navHrefs=$(sed -n '/<nav>/,/<\/nav>/p' _layouts/default.html | grep -o 'href="/[^"]*"')
-for page in simulations/*/index.html studies/*/index.html; do
+for page in simulations/*/index.html $studyPages; do
 	[ -f "$page" ] || continue
 	grep -q 'class="site-bar"' "$page" || err "$page lacks the site bar"
 	for href in $navHrefs; do
@@ -88,6 +89,8 @@ python3 -I scripts/check_fetch_kalah_tdd_snapshot.py || err "Kalah TDD snapshot 
 python3 -I scripts/check_kalah_tdd_flow.py || err "Kalah TDD flowchart check failed"
 # The study pages match a fresh build, rewrite every old report link, keep ids unique and leak no host path (#59).
 python3 -I scripts/check_build_kalah_tdd_study.py || err "Kalah TDD study page build check failed"
+# Study sidebar and cross-page links reach a real page and id, and ids are unique per page (#60).
+python3 -I scripts/check_check_study_nav.py || err "study navigation check failed"
 # Jekyll skips underscore folders, so the snapshot stays off the site and its sitemap (#56).
 [ ! -e "$site/_snapshots" ] || err "_snapshots is published"
 ! grep -q '_snapshots' "$site/sitemap.xml" 2>/dev/null || err "sitemap.xml lists _snapshots"
@@ -106,6 +109,9 @@ grep -q 'href="https://nedroidcomics.tumblr.com/post/41879001445/the-internet"' 
 # The sitemap is generated with real URLs and no raw Liquid (#25).
 grep -q '<loc>' "$site/sitemap.xml" 2>/dev/null || err "sitemap.xml missing or lists no <loc>"
 ! grep -Eq '\{%|\{\{' "$site/sitemap.xml" 2>/dev/null || err "sitemap.xml contains raw Liquid"
+for page in $studyPages; do
+	grep -qF "/${page%index.html}</loc>" "$site/sitemap.xml" 2>/dev/null || err "sitemap.xml lacks $page"
+done
 
 for index in projects/index.html; do
 	[ -f "$site/$index" ] || continue
