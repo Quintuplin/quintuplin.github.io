@@ -152,6 +152,27 @@ class Flow(unittest.TestCase):
         self.assertGreater(boxes["s4"][1], boxes["s3"][1])
         self.assertGreater(boxes["s8"][1], boxes["v"][1])
 
+    def test_rejects_edges_through_nodes(self):
+        f = flow()
+        x = [f.node(i, i.upper(), lane="x") for i in "abc"]
+        far = [x[0], f.node("d", "D", lane="x", col=4)]
+        down = [f.node("a", "A", lane="x"), f.node("b", "B", lane="y", col=0), f.node("c", "C", lane="z", col=0)]
+        bad = {"backward": (x, [f.edge("b", "a")], []), "backward a row": (far, [f.edge("d", "a")], []),
+               "skips an occupied column": (x, [f.edge("a", "c")], []),
+               "elbow skips an occupied column": (x[:2] + [f.node("c", "C", lane="y")], [f.edge("a", "c")], []),
+               "vertical through a lane": (down, [f.edge("a", "c")], []),
+               "loop into a lower lane": (down, [], [f.loop("a", "unit", back_to="b")]),
+               "loop into another row": (far, [], [f.loop("d", "unit", back_to="a")]),
+               "loop up through a node": (down[:2] + [f.node("c", "C", lane="y", col=1)], [], [f.loop("c", "unit", back_to="a")])}
+        for case, args in bad.items():
+            with self.subTest(case):
+                self.assertRaises(ValueError, f.svg, "p", "t", "d", *args)
+                self.assertRaises(ValueError, f.text_version, *args)
+        # Adjacent lanes, an empty skipped column and a loop up a clear column still draw.
+        f.svg("p", "t", "d", down, [f.edge("a", "b"), f.edge("b", "c")])
+        f.svg("p", "t", "d", [x[0], f.node("c", "C", lane="x", col=2)], [f.edge("a", "c")])
+        f.svg("p", "t", "d", [x[0], f.node("b", "B", lane="y", col=1)], [], [f.loop("b", "unit", back_to="a")])
+
     def test_rejects_shared_cell(self):
         f = flow()
         nodes = [f.node("a", "A", lane="x"), f.node("b", "B", lane="x", col=0)]

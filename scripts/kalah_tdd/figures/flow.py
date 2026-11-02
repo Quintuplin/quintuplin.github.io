@@ -55,6 +55,29 @@ def check(nodes, edges, loops):
     _, cell = cells(nodes)
     if len(set(cell.values())) != len(cell):
         raise ValueError(f"two nodes share a lane and column in {cell}")
+    check_routes(cell, edges, loops)
+
+
+def check_routes(cell, edges, loops):
+    """Refuse an edge or loop whose drawn route would run backward or through another node."""
+    taken = set(cell.values())
+    for e in edges:
+        (sl, sc), (dl, dc) = cell[e.src], cell[e.dst]
+        if sc > dc or e.src == e.dst:
+            raise ValueError(f"edge {e.src} -> {e.dst} runs backward; draw it as a loop")
+        if sc == dc:
+            between = {(lane, sc) for lane in range(min(sl, dl) + 1, max(sl, dl))}
+        else:  # an edge into a later row runs only through gaps
+            between = {(sl, c) for c in range(sc + 1, dc)} if sc // COLS == dc // COLS else set()
+        if taken & between:
+            raise ValueError(f"edge {e.src} -> {e.dst} crosses the node at {sorted(taken & between)}")
+    for lp in loops:
+        (sl, sc), (dl, dc) = cell[lp.node], cell[lp.back_to or lp.node]
+        if sc // COLS != dc // COLS or dl > sl:
+            raise ValueError(f"loop on {lp.node} must go back within its row to its own lane or one above")
+        # It rises from the loop node's lane to the target, up the target's column.
+        if crossed := taken & {(lane, dc) for lane in range(dl + 1, sl + 1)} - {(sl, sc)}:
+            raise ValueError(f"loop on {lp.node} crosses the node at {sorted(crossed)}")
 
 
 def wrap(text):
@@ -99,8 +122,8 @@ def gaps(x):
 
 
 def edge_path(a, b, h, below=None):
-    """Straight within a lane, vertical within a column, else an elbow halfway across the gap. An edge into a later
-    row leaves through the gap right of its source, runs along the gap below its row (y below) and enters from the left."""
+    """Straight within a lane, vertical within a column, else an elbow that turns in the gap before the target, so it
+    only crosses columns in its source lane, which check_routes keeps clear. An edge into a later row leaves through the gap right of its source, runs along the gap below its row (y below) and enters from the left."""
     (sx, sy), (dx, dy) = a, b
     if below is not None:
         right, left = gaps(sx)[1], gaps(dx)[0]
@@ -110,7 +133,7 @@ def edge_path(a, b, h, below=None):
         cx = sx + NODE_W // 2
         return f"M{cx},{sy + h if top else sy}V{dy if top else dy + h}", (cx + 4, (sy + dy + h) // 2)
     ex, ey, tx, ty = sx + NODE_W, sy + h // 2, dx, dy + h // 2
-    mx = ex if ey == ty else (ex + tx) // 2
+    mx = ex if ey == ty else gaps(dx)[0]
     path = f"M{ex},{ey}H{tx}" if ey == ty else f"M{ex},{ey}H{mx}V{ty}H{tx}"
     return path, ((mx + tx) // 2, ty - 5)
 
