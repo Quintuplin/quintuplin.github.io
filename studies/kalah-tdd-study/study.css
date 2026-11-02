@@ -124,7 +124,7 @@ img{max-width:100%;height:auto}
 .toc ol{list-style:none;margin:0;padding:0;border-left:2px solid var(--line)}
 .toc ol ol{border-left:0;padding-left:var(--space-3);font-size:13px}
 /* Inset focus ring, because the rail scrolls and would clip an outer one. */
-.toc a{display:block;min-height:24px;padding:3px 0 3px var(--space-3);color:var(--muted);text-decoration:none;outline-offset:-2px}
+.toc a{display:flex;align-items:center;min-height:44px;padding:3px 0 3px var(--space-3);color:var(--muted);text-decoration:none;outline-offset:-2px}
 .toc a:hover,.toc a:focus-visible{color:var(--accent)}
 .toc a[aria-current="page"]{color:var(--accent);font-weight:600;border-left:2px solid var(--accent);margin-left:-2px}
 @media (max-width:899.98px){

@@ -104,11 +104,21 @@ def forced_flow(parsed):
                        for media, sels, decls in parsed)]
 
 
+# Navigation controls meet the 44px touch target the rest of the site uses (#60).
+TOUCH = (".toc > summary", ".toc a", ".pager a", "details:not(.toc) > summary")
+
+
+def touch_targets(parsed):
+    return [f"{CSS}: {sel} has no min-height of 44px or more, so it is a small touch target" for sel in TOUCH
+            if not any(media is None and sel in sels and re.fullmatch(r"(4[4-9]|[5-9]\d|\d{3,})px", decls.get("min-height", ""))
+                       for media, sels, decls in parsed)]
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
     text = re.sub(r"/\*.*?\*/", "", (root / CSS).read_text(encoding="utf-8"), flags=re.S)
     parsed = list(rules(text))
-    errors = summary_marker(parsed) + stacked_reset(parsed) + nested_card_reset(parsed) + forced_flow(parsed)
+    errors = summary_marker(parsed) + stacked_reset(parsed) + nested_card_reset(parsed) + forced_flow(parsed) + touch_targets(parsed)
     for e in errors:
         print("FAIL:", e, file=sys.stderr)
     if not errors:
