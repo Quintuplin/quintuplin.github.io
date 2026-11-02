@@ -234,6 +234,12 @@ class Pages(unittest.TestCase):
         self.assertEqual(re.findall(r'<a [^>]*aria-current="page"[^>]*>', html.split('class="toc"', 1)[1]),
                          [f'<a href="{BASE}methodology/measures/" aria-current="page">'])
 
+    def test_opener_scrolls_rail(self):
+        # Scrolling the rail alone keeps the current page in view without moving the page.
+        opener = kalah("chrome").OPENER
+        self.assertRegex(opener, r'contents\.querySelector\("\[aria-current\]"\)[^;]*;[^;]*contents\.scrollTop \+?=')
+        self.assertNotIn("scrollIntoView", opener)
+
     def test_stub_marker(self):
         pages = kalah("pages")
         for page in kalah("pagemap").PAGES:

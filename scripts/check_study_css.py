@@ -105,13 +105,25 @@ def forced_flow(parsed):
 
 
 # Navigation controls meet the 44px touch target the rest of the site uses (#60).
-TOUCH = (".toc > summary", ".toc a", ".pager a", "details:not(.toc) > summary")
+# Sidebar rows stay compact in the tall desktop rail and grow on touch or narrow screens.
+COARSE = "@media (max-width:899.98px), (pointer:coarse)"
+TOUCH = ((".toc > summary", None, 44), (".toc a", None, 24), (".toc a", COARSE, 44), (".pager a", None, 44),
+         ("details:not(.toc) > summary", None, 44))
+
+
+def px(value):
+    return float(m.group(1)) if (m := re.fullmatch(r"(\d+(?:\.\d+)?)px", value)) else 0
+
+
+def same_media(a, b):
+    return re.sub(r"\s+", "", a or "") == re.sub(r"\s+", "", b or "")
 
 
 def touch_targets(parsed):
-    return [f"{CSS}: {sel} has no min-height of 44px or more, so it is a small touch target" for sel in TOUCH
-            if not any(media is None and sel in sels and re.fullmatch(r"(4[4-9]|[5-9]\d|\d{3,})px", decls.get("min-height", ""))
-                       for media, sels, decls in parsed)]
+    return [f"{CSS}: {sel} has no min-height of {need}px or more{' under ' + media if media else ''}, so it is a small touch target"
+            for sel, media, need in TOUCH
+            if not any(same_media(m, media) and sel in sels and px(decls.get("min-height", "")) >= need
+                       for m, sels, decls in parsed)]
 
 
 def main():

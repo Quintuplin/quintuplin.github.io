@@ -32,8 +32,11 @@ SITE_BAR = """<nav class="site-bar" aria-label="Site">
 @media (max-width: 600px) { .site-bar .ext { margin-left: 0; } }
 </style>"""
 # The render.py opener: the closed contents disclosure opens on wide screens, and a followed link opens its folds.
+# It centres the current page in the rail by scrolling the rail alone, as scrollIntoView would also move the page.
 OPENER = ('<script>(() => { const contents = document.getElementById("toc"), wide = matchMedia("(min-width: 900px)"); '
           'const sync = () => { contents.open = wide.matches; }; sync(); wide.addEventListener("change", sync); '
+          'const current = contents.querySelector("[aria-current]"); if (current) contents.scrollTop += '
+          'current.getBoundingClientRect().top - contents.getBoundingClientRect().top - contents.clientHeight / 2; '
           'const reveal = (hash) => { for (let node = hash && document.getElementById(decodeURIComponent(hash.slice(1))); '
           'node; node = node.parentElement) if (node.tagName === "DETAILS") node.open = true; }; '
           'const load = () => reveal(location.hash); if (document.readyState === "loading") '

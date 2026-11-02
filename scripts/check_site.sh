@@ -44,6 +44,8 @@ checkMainDark() {
 checkMainDark
 python3 scripts/check_contrast.py . || err "glass contrast check failed"
 python3 -I scripts/check_study_css.py . || err "Kalah TDD study stylesheet check failed"
+# Its touch target check catches missing and overridden sidebar row heights (#60).
+python3 -I scripts/check_check_study_css.py || err "study stylesheet touch target check failed"
 # Post figures up to 1057 px wide scaled down to the sheet instead of widening phone pages (#23).
 grep -q '^\.post img {[^}]*max-width: *100%' "$site/css/main.css" 2>/dev/null || err "css/main.css lets post images overflow the sheet"
 
