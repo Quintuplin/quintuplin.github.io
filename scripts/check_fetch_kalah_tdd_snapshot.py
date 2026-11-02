@@ -143,6 +143,23 @@ class Fetch(unittest.TestCase):
         self.git(self.study, *COMMIT, "prose", "runs/full-1/args.json")
         self.assertRefuses("full-1 drops summary, which holds no path")
 
+    def test_redacts_local_paths(self):
+        page = "runs/full-1/methods/classic.html"
+        kept = ('<a href="https://example.com/Users/x">site</a> <a href="/studies/kalah-tdd-study/">study</a> '
+                'E: distinct PMD findings. Marker ~ stays.')
+        (self.study / page).write_text(
+            fixture("classic.html").decode() + '<td class="brk">~/.claude/projects/-Users-x/1a2b/tool-results/b.txt</td>'
+            "<p>See /Users/someone/project/run.md. Or C:\\Users\\someone\\split.sh, then Obi-Done/Claude/Notes.</p>"
+            + kept + "\n")
+        self.git(self.study, *COMMIT, "paths", page)
+        manifest, facts = self.fetch()
+        data = (self.out / page).read_bytes()
+        self.assertEqual(data.decode(), fixture("classic.html").decode()
+                         + '<td class="brk">&lt;local path&gt;</td><p>See &lt;local path&gt;. Or &lt;local path&gt;, '
+                           "then &lt;local path&gt;.</p>" + kept + "\n")
+        self.assertEqual(facts["redacted"], {page: 4})
+        self.assertEqual(manifest["files"][page]["sha256"], sha256(data))
+
     def test_host_path_pattern_follows_render(self):
         (self.study / "harness/report/render.py").write_text(fixture("render.py").decode().replace("|Cryptomator", ""))
         self.git(self.study, *COMMIT, "narrower", "harness/report/render.py")
@@ -265,6 +282,12 @@ class CommittedSnapshot(unittest.TestCase):
         runs = json.loads((SNAPSHOT / "facts.json").read_text())["runs"]
         self.assertTrue(runs)
         self.assertEqual([s for s in strings(runs) if fetcher().HOST_PATH.search(s)], [])
+
+    def test_holds_no_local_paths(self):
+        # The repository is public, so no snapshot file may name a path on the machine that fetched it.
+        hits = [(str(p.relative_to(SNAPSHOT)), m.group(0)) for p in sorted(SNAPSHOT.rglob("*")) if p.is_file()
+                for m in fetcher().LOCAL_PATH.finditer(p.read_text(encoding="utf-8"))]
+        self.assertEqual(hits, [])
 
     def test_drops_only_path_fields(self):
         # A new dropped field may be prose HOST_PATH caught; look at it before adding it here.
