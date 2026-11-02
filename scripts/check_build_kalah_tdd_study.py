@@ -168,7 +168,8 @@ class HostPaths(unittest.TestCase):
     def test_rejects_host_path(self):
         b = build()
         for leak in ("/Users/echo/project/tdd-experiment/runs", "C:/Users/quint/tdd", "C:\\Users\\quint", "~/clones/r01",
-                     "/home/runner/work/x", "E:/Obi-Done/Claude", "Cryptomator vault", "file:///tmp/x"):
+                     "/home/runner/work/x", "E:/Obi-Done/Claude", "Cryptomator vault", "file:///tmp/x",
+                     "-Users-echo-project-COMPSCI-701"):
             with self.subTest(leak), self.assertRaisesRegex(SystemExit, "host path"):
                 b.refuse_host_paths({"x/index.html": f"<p>{leak}</p>"})
 

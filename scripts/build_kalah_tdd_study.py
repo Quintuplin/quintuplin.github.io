@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import filecmp
-import re
 import sys
 import tempfile
 from pathlib import Path
@@ -16,11 +15,9 @@ from pathlib import Path
 # python3 -I leaves the script folder off sys.path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from kalah_tdd import chrome, links, pagemap, pages, snapshot  # noqa: E402
+from study_checkout import LOCAL_PATH  # noqa: E402
 
 OUT = Path(__file__).resolve().parent.parent / "studies/kalah-tdd-study"
-# Local paths and vault names. render.HOST_PATH also matches every https:// link and site-root href on a page.
-LOCAL_PATH = re.compile(r"(?<![\w.-])(?:/(?:Users|home|private|tmp|mnt|Volumes|var/folders)/|~/)|(?<!\w)[A-Za-z]:[\\/]"
-                        r"|Obi-Done|Cryptomator|file://")
 
 
 def page_path(page):
