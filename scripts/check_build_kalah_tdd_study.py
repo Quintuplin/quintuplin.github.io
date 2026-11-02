@@ -19,7 +19,6 @@ SITE = SCRIPTS.parent
 BASE = "/studies/kalah-tdd-study/"
 ARTIFACT = "https://claude.ai/artifact/5g7jbNAxSnZPjQ2nLEJ15a"
 HREF = re.compile(r'href="([^"]*)"')
-ID = re.compile(r'\bid="([^"]+)"')
 
 
 @functools.cache
@@ -121,11 +120,11 @@ class Links(unittest.TestCase):
                 links.rewrite(f'<a href="{href}">', "runs/full-1/report.html", None, idx)
 
     def test_ids_unique_per_page(self):
+        links = kalah("links")
         for path, html in rendered().items():
             with self.subTest(path):
-                ids = ID.findall(html)
+                ids = links.ID.findall(html)
                 self.assertEqual(len(ids), len(set(ids)))
-        links = kalah("links")
         first = '<h2 id="columns">A</h2>'
         second = ('<h3 id="columns">B</h3><a href="#columns">B</a><svg aria-labelledby="t columns">'
                   '<path marker-end="url(#columns)"/></svg><p id="columns-2">C</p>')
@@ -170,6 +169,9 @@ class Snapshot(unittest.TestCase):
         self.assertIn("<h1>Classic greedy TDD</h1>", view)
         self.assertNotIn("<h1>Noun-verb map</h1>", view)
         self.assertRaises(ValueError, s.section, snap().files[s.REPORT], "nowhere")
+        # data-id is no id.
+        self.assertRaises(ValueError, s.section, '<h2 data-id="d">D</h2>', "d")
+        self.assertEqual(kalah("chrome").headings(kalah("pagemap").PAGES[1], '<h2 data-id="d">D</h2>'), "")
 
 
 class HostPaths(unittest.TestCase):

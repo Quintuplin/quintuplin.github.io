@@ -4,7 +4,7 @@ import itertools
 import re
 
 from . import pagemap
-from .snapshot import REPORT, SHOWCASE
+from .snapshot import ID, ID_ATTR, REPORT, SHOWCASE
 
 BASE = "/studies/kalah-tdd-study/"
 METHODS = "runs/full-1/methods/"
@@ -12,7 +12,6 @@ METHODS = "runs/full-1/methods/"
 ARTIFACT = "https://claude.ai/artifact/5g7jbNAxSnZPjQ2nLEJ15a"
 KEEP = ("/", "https://", "http://", "mailto:")
 HREF = re.compile(r'href="([^"]*)"')
-ID = re.compile(r'(?<![\w-])id="([^"]+)"')
 OLD = re.compile(r"(?:(\.\./report|methods/[\w-]+|[\w-]+)\.html)?(?:#(.+))?")
 
 
@@ -34,7 +33,7 @@ def placed(html, opener, home):
     """Each id goes to the page of the opener element (report heading or showcase view) before it.
     A showcase view's own id names the whole page, so it carries no fragment."""
     out, here = {}, ""
-    for m in re.finditer(rf'<({opener})?\b[^>]*(?<![\w-])id="([^"]+)"', html):
+    for m in re.finditer(rf'<({opener})?\b[^>]*{ID_ATTR}([^"]+)"', html):
         id = m.group(2)
         if m.group(1):
             here = home(id)

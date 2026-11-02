@@ -5,6 +5,7 @@ from html import escape
 
 from . import pagemap
 from .links import BASE, url
+from .snapshot import ID_ATTR
 
 # Ids the chrome itself uses, which page bodies must not take.
 IDS = ("main", "toc")
@@ -39,7 +40,7 @@ OPENER = ('<script>(() => { const contents = document.getElementById("toc"), wid
           'addEventListener("DOMContentLoaded", load); else load(); addEventListener("hashchange", load); '
           'document.addEventListener("click", (event) => { const link = event.target.closest(\'a[href^="#"]\'); '
           'if (link) reveal(link.hash); }); })();</script>')
-SUBHEAD = re.compile(r'<h([23])\b[^>]*\bid="([^"]+)"[^>]*>(.*?)</h\1>', re.S)
+SUBHEAD = re.compile(r'<h([23])\b[^>]*' + ID_ATTR + r'([^"]+)"[^>]*>(.*?)</h\1>', re.S)
 
 
 def shell(page, snap, body, stub):
