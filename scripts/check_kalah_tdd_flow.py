@@ -44,6 +44,43 @@ def long_chart():
     return nodes, edges, loops
 
 
+def labelled():
+    """A labelled straight, vertical, wrap and down and up elbow edge, a self loop and a back loop, packed together."""
+    f = flow()
+    nodes = [f.node("a", "A", lane="x"), f.node("b", "B", lane="x"), f.node("c", "C", lane="y", col=1),
+             f.node("e", "E", lane="y"), f.node("g", "G", lane="y"), f.node("i", "I", lane="x", col=3),
+             f.node("h", "H", lane="x")]
+    edges = [f.edge("a", "b", "next"), f.edge("b", "c", "down"), f.edge("b", "e", "per clone"), f.edge("e", "g"),
+             f.edge("e", "i", "per clone"), f.edge("g", "h", "next row")]
+    loops = [f.loop("c", "unit"), f.loop("g", "clone", back_to="e")]
+    return nodes, edges, loops
+
+
+def charts():
+    f = flow()
+    # An elbow from lane x past a lane y node in the middle column.
+    elbow = ([f.node("a", "A", lane="x"), f.node("b", "B", lane="y"), f.node("c", "C", lane="y")],
+             [f.edge("a", "c"), f.edge("b", "c")], [])
+    return {"sample": sample(), "long": long_chart(), "elbow": elbow, "labelled": labelled()}
+
+
+def label_boxes(root):
+    """Each edge or loop label's estimated box (7px a character, 13px tall), keyed by its text."""
+    boxes, kids = {}, list(root)
+    for p, t in zip(kids, kids[1:]):
+        if p.get("class") in ("edge", "loop") and t.tag == NS + "text":
+            s, x, y = "".join(t.itertext()), float(t.get("x")), float(t.get("y"))
+            w = 7 * len(s)
+            left = {"start": x, "middle": x - w / 2, "end": x - w}[t.get("text-anchor")]
+            boxes.setdefault(s, []).append((left, y - 10, w, 13))
+    return [(s, box) for s, found in boxes.items() for box in found]
+
+
+def overlap(a, b):
+    (ax, ay, aw, ah), (bx, by, bw, bh) = a, b
+    return ax < bx + bw and bx < ax + aw and ay < by + bh and by < ay + ah
+
+
 def render(prefix="f1"):
     nodes, edges, loops = sample()
     return flow().svg(prefix, "Harness " + UNSAFE, "Desc " + UNSAFE, nodes, edges, loops)
@@ -216,10 +253,7 @@ class Flow(unittest.TestCase):
 
     def test_routes_run_between_nodes(self):
         f = flow()
-        # An elbow from lane x past a lane y node in the middle column.
-        elbow = ([f.node("a", "A", lane="x"), f.node("b", "B", lane="y"), f.node("c", "C", lane="y")],
-                 [f.edge("a", "c"), f.edge("b", "c")], [])
-        for name, (nodes, edges, loops) in {"sample": sample(), "long": long_chart(), "elbow": elbow}.items():
+        for name, (nodes, edges, loops) in charts().items():
             root = ET.fromstring(f.svg("p", "t", "d", nodes, edges, loops))
             boxes = dict(zip([n.id for n in nodes], node_boxes(root)))
             ends = [(e.src, e.dst) for e in edges] + [(lp.node, lp.back_to or lp.node) for lp in loops]
@@ -231,6 +265,18 @@ class Flow(unittest.TestCase):
                     self.assertTrue(on_edge(pts[0], boxes[src]) and on_edge(pts[-1], boxes[dst]))
                     hits = [i for a, b in zip(pts, pts[1:]) for i, box in boxes.items() if crosses(a, b, box)]
                     self.assertEqual(hits, [])
+
+    def test_labels_clear_nodes_and_each_other(self):
+        for name, chart in charts().items():
+            root = ET.fromstring(flow().svg("p", "t", "d", *chart))
+            labels = label_boxes(root)
+            self.assertEqual(len(labels), sum(1 for e in chart[1] if e.label) + len(chart[2]), name)
+            for s, box in labels:
+                with self.subTest(name, label=s):
+                    self.assertEqual([n for n in node_boxes(root) if overlap(box, n)], [])
+        labels = label_boxes(ET.fromstring(flow().svg("p", "t", "d", *labelled())))
+        hits = [(s, t) for i, (s, a) in enumerate(labels) for t, b in labels[i + 1:] if overlap(a, b)]
+        self.assertEqual(hits, [])
 
     def test_rejects_shared_cell(self):
         f = flow()

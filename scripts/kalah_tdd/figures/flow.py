@@ -137,9 +137,11 @@ def edge_path(a, b, h, below=None):
         # The label starts just right of the line so it never sits on it.
         return f"M{cx},{sy + h if top else sy}V{dy if top else dy + h}", (cx + 4, (sy + dy + h) // 2, "start")
     ex, ey, tx, ty = sx + NODE_W, sy + h // 2, dx, dy + h // 2
-    mx = ex if ey == ty else gaps(dx)[0]
-    path = f"M{ex},{ey}H{tx}" if ey == ty else f"M{ex},{ey}H{mx}V{ty}H{tx}"
-    return path, ((mx + tx) // 2, ty - 5, "middle")
+    if ey == ty:
+        return f"M{ex},{ey}H{tx}", ((ex + tx) // 2, ty - 5, "middle")
+    mx = gaps(dx)[0]
+    # The label starts right of the vertical run in the lane gap beside the target, which holds no node.
+    return f"M{ex},{ey}H{mx}V{ty}H{tx}", (mx + 4, dy - 6 if dy > sy else dy + h + 13, "start")
 
 
 def svg(prefix, title, desc, nodes, edges=(), loops=()):
