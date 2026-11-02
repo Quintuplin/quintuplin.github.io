@@ -68,11 +68,28 @@ def stacked_reset(parsed):
     return errors
 
 
+def nested_card_reset(parsed):
+    """A .qtable card nested with its .table-scroll wrapper, either way round, must drop the inner card border."""
+    card = [(i, specificity(s)) for i, (media, sels, decls) in enumerate(parsed) if media is None and "border" in decls
+            for s in sels if s in (".qtable", ".table-scroll")]
+    need = max((sp for _, sp in card), default=(0, 0, 0))
+    last = max((i for i, _ in card), default=-1)
+    errors = []
+    for outer, inner in (("table-scroll", "qtable"), ("qtable", "table-scroll")):
+        if not any(media is None and re.sub(r"\s+", "", decls.get("border", "")) in ("0", "none")
+                   and re.fullmatch(rf"\.{outer}(\s+|\s*>\s*)\.{inner}", s)
+                   and (specificity(s) > need or (specificity(s) == need and i > last))
+                   for i, (media, sels, decls) in enumerate(parsed) for s in sels):
+            errors.append(f"{CSS}: no .{outer} .{inner} rule sets border:0 above the card rule's specificity {need}, "
+                          f"so the nested card draws a double border")
+    return errors
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
     text = re.sub(r"/\*.*?\*/", "", (root / CSS).read_text(encoding="utf-8"), flags=re.S)
     parsed = list(rules(text))
-    errors = summary_marker(parsed) + stacked_reset(parsed)
+    errors = summary_marker(parsed) + stacked_reset(parsed) + nested_card_reset(parsed)
     for e in errors:
         print("FAIL:", e, file=sys.stderr)
     if not errors:
