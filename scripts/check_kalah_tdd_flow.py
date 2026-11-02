@@ -126,6 +126,12 @@ class Flow(unittest.TestCase):
         self.assertRaises(ValueError, f.svg, "p", "t", "d", nodes, [], [f.loop("b", "unit")])
         self.assertRaises(ValueError, f.svg, "p", "t", "d", nodes + nodes, [], [])
 
+    def test_rejects_shared_cell(self):
+        f = flow()
+        nodes = [f.node("a", "A", lane="x"), f.node("b", "B", lane="x", col=0)]
+        self.assertRaises(ValueError, f.svg, "p", "t", "d", nodes)
+        f.svg("p", "t", "d", [nodes[0], f.node("b", "B", lane="y", col=0)])
+
 
 if __name__ == "__main__":
     unittest.main()

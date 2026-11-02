@@ -35,6 +35,16 @@ class Loop(NamedTuple):
 node, edge, loop = Node, Edge, Loop
 
 
+def cells(nodes):
+    """The lanes in first-seen order and each node's (lane index, column)."""
+    lanes = list(dict.fromkeys(n.lane for n in nodes))
+    cell, col = {}, -1
+    for n in nodes:
+        col = col + 1 if n.col is None else n.col
+        cell[n.id] = (lanes.index(n.lane), col)
+    return lanes, cell
+
+
 def check(nodes, edges, loops):
     ids = [n.id for n in nodes]
     if len(ids) != len(set(ids)):
@@ -42,6 +52,9 @@ def check(nodes, edges, loops):
     for ref in [e.src for e in edges] + [e.dst for e in edges] + [l.node for l in loops] + [l.back_to for l in loops if l.back_to]:
         if ref not in ids:
             raise ValueError(f"unknown node {ref!r}")
+    _, cell = cells(nodes)
+    if len(set(cell.values())) != len(cell):
+        raise ValueError(f"two nodes share a lane and column in {cell}")
 
 
 def wrap(text):
@@ -57,14 +70,11 @@ def wrap(text):
 
 def layout(nodes):
     """Top-left corner of each node, the node height, the lane bands and the canvas size."""
-    lanes = list(dict.fromkeys(n.lane for n in nodes))
+    lanes, cell = cells(nodes)
     named = any(lanes)
     height = 2 * PAD + LINE * max(len(wrap(n.label)) + len(wrap(n.note)) for n in nodes)
     band = (LANE_HEAD if named else 0) + height + LOOP_ROOM
-    at, col = {}, -1
-    for n in nodes:
-        col = col + 1 if n.col is None else n.col
-        at[n.id] = (MARGIN + col * (NODE_W + GAP), MARGIN + lanes.index(n.lane) * band + (LANE_HEAD if named else 0))
+    at = {i: (MARGIN + col * (NODE_W + GAP), MARGIN + lane * band + (LANE_HEAD if named else 0)) for i, (lane, col) in cell.items()}
     width = 2 * MARGIN + max(x for x, _ in at.values()) + NODE_W - MARGIN
     bands = [(lane, MARGIN + i * band) for i, lane in enumerate(lanes)] if named else []
     return at, height, band, bands, (width, MARGIN + len(lanes) * band)
