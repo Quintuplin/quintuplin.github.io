@@ -145,6 +145,12 @@ def text_of(node: ast.expr) -> str:
     return "".join(parts)
 
 
+def literal(node: ast.expr):
+    """A literal's value, with a tuple as the list JSON writes."""
+    value = ast.literal_eval(node)
+    return list(value) if isinstance(value, tuple) else value
+
+
 def awards_facts(source: str) -> dict:
     tree = ast.parse(source)
     found = assigned(tree)
@@ -156,8 +162,7 @@ def awards_facts(source: str) -> dict:
                     and n.func.id == "award" and isinstance(n.args[0], ast.Constant)),
                    key=lambda n: (n.lineno, n.col_offset))
     return {"criteria": criteria, "awards": [{"title": n.args[0].value, "rule": text_of(n.args[1])} for n in calls],
-            "constants": {k: list(v) if isinstance(v, tuple) else v
-                          for k in ("TOP", "MEDALS", "CLEAN_MEDIAN") for v in [ast.literal_eval(found[k])]},
+            "constants": {k: literal(found[k]) for k in ("TOP", "MEDALS", "CLEAN_MEDIAN")},
             "functions": defs(tree)}
 
 
