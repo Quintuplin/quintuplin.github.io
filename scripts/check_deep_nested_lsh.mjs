@@ -613,7 +613,7 @@ function f1Mismatches(rows) {
 
 // Every cell to 1000 rows, and at the top budget the largest generated dataset and the corpus, so CI stays short.
 test("tidyF1MatchesStudy", () => {
-  const rows = f1Rows((r) => r.b <= 1000 || (r.n === 100000 && r.mix === 40) || r.n === study.facts.corpus.docs);
+  const rows = f1Rows((r) => r.b <= 1000 || (r.b === TOP && ((r.n === 100000 && r.mix === 40) || r.n === study.facts.corpus.docs)));
   assert.equal(rows.length, 159);
   assert.ok(rows.some((r) => !same(r.dims, r.f1.dims)), "F1 and the λ fit pick different trees on some cells");
   assert.deepEqual(f1Mismatches(rows), []);

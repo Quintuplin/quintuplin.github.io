@@ -8,8 +8,8 @@ err() { echo "FAIL: $*" >&2; fail=1; }
 # The old Simulations index URL stays live as a redirect to Projects.
 grep -q 'http-equiv="refresh" content="0; *url=\(https://quintuplin\.github\.io\)\{0,1\}/projects/\{0,1\}"' "$site/simulations/index.html" 2>/dev/null || err "simulations/index.html does not redirect to /projects"
 
-# Standalone pages are served verbatim.
-for page in simulations/*/index.html studies/*/index.html; do
+# Standalone pages and the data files they fetch are served verbatim.
+for page in simulations/*/index.html studies/*/index.html simulations/*/*.json; do
 	[ -f "$page" ] || continue
 	if [ ! -f "$site/$page" ]; then
 		err "missing $page"
@@ -64,9 +64,10 @@ checkFridge() { node scripts/check_fridge.mjs "$site/$fridge" || err "fridge beh
 
 # The Deep Nested LSH maths matches the study reference and its explorer behaves (#31).
 # The tidy rule parity takes about half as long as the rest of the maths, so it runs as its own process (#48).
+# F1 at every top budget cell is too slow for CI and runs by name (#54).
 deep="$site/simulations/deep-nested-lsh/index.html"
 deepMaths() { node --test-skip-pattern='^tidy' scripts/check_deep_nested_lsh.mjs "$deep"; }
-deepTidy() { node --test-name-pattern='^tidy' scripts/check_deep_nested_lsh.mjs "$deep"; }
+deepTidy() { node --test-name-pattern='^tidy' --test-skip-pattern='^tidyFull' scripts/check_deep_nested_lsh.mjs "$deep"; }
 deepExplorer() { node scripts/check_deep_nested_lsh_explorer.mjs "$deep"; }
 . scripts/run_deep_checks.sh
 sh scripts/check_run_deep_checks.sh || err "the background glue of runDeepChecks is broken"

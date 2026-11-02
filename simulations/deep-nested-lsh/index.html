@@ -566,9 +566,10 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     return r.value;
   }
 
-  // ---- TidyRule: KAlambda picks d = argmin over the matched trees M of λ A_lo + A_hi with λ = R^γ (tidy_rule/rules.py) ----
-  // The rule searches depths MIN_DEPTH to SEARCH_MAX_DEPTH (tidy_rule/depths.py).
-  const TIDY_DEPTHS = [2, 10], AREA_SAMPLES = 3001, COARSE = 300, SCORE_STEP = 16;
+  // ---- TidyRule: F1 picks d = argmin over the matched trees M of E[FP] + E[FN] on the exact pairs (errbound.least_errors) ----
+  // The λ fit picks argmin over M of λ A_lo + A_hi with λ = R^γ (tidy_rule/rules.py KAlambda).
+  // Both search depths MIN_DEPTH to SEARCH_MAX_DEPTH (tidy_rule/depths.py).
+  const TIDY_DEPTHS = [2, 10], AREA_SAMPLES = 3001, COARSE = 300, SCORE_STEP = 16, BINS = 1000, SLACK = 1e-9;
   // m: near pairs per document of the generated corpus (near_mass). Noise documents past the filler cap form groups.
   function nearMass(n, c, { noise, noise_group: group, filler_cap: cap }) {
     const k = Math.trunc(n * noise), f = Math.min(cap, k);
@@ -576,17 +577,21 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   }
   // λ = R^γ with R the non-near over near pairs per document, each spread over its side of t (design_ratio).
   const tidyLambda = (n, m, t, gamma) => ((((n - 1) / 2 - m) * (1 - t)) / (m * t)) ** gamma;
-  // np.linspace(a, b, AREA_SAMPLES) at i as trapezoid samples it.
-  const areaSample = (a, b, i) => (i === AREA_SAMPLES - 1 ? b : i * ((b - a) / (AREA_SAMPLES - 1)) + a);
-  // P rises with s, so left sums over coarse intervals bound A_lo from below and right sums bound A_hi.
-  // Terms add from t outward, where they are largest, and the scan stops once they pass ub.
-  function tidyExceeds(d, key, lam, ub) {
-    const { L, R } = key;
-    for (let j = COARSE - 1, q = 0, s = 0; q < COARSE; j--, q++) {
-      s += lam * (L[j + 1] - L[j]) * curve(L[j], d) + (R[q + 1] - R[q]) * (1 - curve(R[q + 1], d));
+  // np.linspace(a, b, n) at i.
+  const linspacePoint = (a, b, n, i) => (i === n - 1 ? b : i * ((b - a) / (n - 1)) + a);
+  // p rises with s, so weights at points left of t times p and right of t times 1 − p bound an error from below.
+  // Terms add from t outward, where they are largest, and the scan stops once they pass ub. Points of weight 0 are left out.
+  function tidyExceeds(d, { xL, wL, xR, wR }, ub) {
+    for (let q = 0, j = xL.length - 1, s = 0; q < Math.max(xL.length, xR.length); j--, q++) {
+      s += (j >= 0 ? wL[j] * curve(xL[j], d) : 0) + (q < xR.length ? wR[q] * (1 - curve(xR[q], d)) : 0);
       if (s > ub) return true;
     }
     return false;
+  }
+  // Left sums over coarse intervals bound A_lo from below and right sums bound A_hi.
+  function areaScan({ L, R }, lam) {
+    const span = (X, i) => X[i + 1] - X[i];
+    return { xL: L.slice(0, COARSE), wL: L.slice(0, COARSE).map((_, j) => lam * span(L, j)), xR: R.slice(1), wR: R.slice(1).map((_, q) => span(R, q)) };
   }
   // Matched trees and their exact parts for the last (t, B), so a new N or c rescores without a new sweep.
   let tidyKey = null;
@@ -597,21 +602,21 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       const steps = treeSearch(B, k, t, 1, Infinity, (d, w) => { M.push(d); W.push(w); });
       while (!steps.next().done) yield { phase: "sweep", depth: k, tuples: M.length };
     }
-    const coarse = (a, b) => Array.from({ length: COARSE + 1 }, (_, j) => areaSample(a, b, (j * (AREA_SAMPLES - 1)) / COARSE));
-    tidyKey = { t, B, M, order: M.map((_, i) => i).sort((x, y) => W[x] - W[y]), parts: [], L: coarse(0, t), R: coarse(t, 1) };
+    const coarse = (a, b) => Array.from({ length: COARSE + 1 }, (_, j) => linspacePoint(a, b, AREA_SAMPLES, (j * (AREA_SAMPLES - 1)) / COARSE));
+    tidyKey = { t, B, M, order: M.map((_, i) => i).sort((x, y) => W[x] - W[y]), parts: [], L: coarse(0, t), R: coarse(t, 1), bins: new Map() };
     return tidyKey;
   }
   // Narrow trees score low, so scoring by width finds a tight bound early and most trees fall to the coarse sums.
   // Ties go to the lower A_lo and then the first found, as the study's area hull keeps them.
-  function* tidySearch(N, m, t, B, gamma) {
-    const key = yield* tidySweep(t, B), { M, order, parts } = key, lam = tidyLambda(N, m, t, gamma);
+  function* fitSearch(N, m, t, B, gamma) {
+    const key = yield* tidySweep(t, B), { M, order, parts } = key, lam = tidyLambda(N, m, t, gamma), scan = areaScan(key, lam);
     let ub = Infinity, best = -1, bestS = Infinity, bestLo = Infinity, bestHi = Infinity;
     parts.forEach(([lo, hi]) => { ub = Math.min(ub, lam * lo + hi); });
     for (let n = 0; n < order.length; n++) {
       const i = order[n];
       if (n % SCORE_STEP === SCORE_STEP - 1) yield { phase: "score", scored: n, tuples: M.length };
       if (!parts[i]) {
-        if (tidyExceeds(M[i], key, lam, ub * (1 + 1e-9))) continue;
+        if (tidyExceeds(M[i], scan, ub * (1 + 1e-9))) continue;
         parts[i] = errorAreaParts(M[i], t, AREA_SAMPLES);
       }
       const [lo, hi] = parts[i], s = lam * lo + hi;
@@ -620,7 +625,54 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     }
     return { dims: best < 0 ? null : M[best], tuples: M.length, lo: bestLo, hi: bestHi, lambda: lam };
   }
-  const tidyTune = (N, m, t, B, gamma) => drain(tidySearch(N, m, t, B, gamma));
+  const fitTune = (N, m, t, B, gamma) => drain(fitSearch(N, m, t, B, gamma));
+
+  // Pairs [num, den, count] from the columns of den deltas, nums that restart at each new den, and counts.
+  function decodeHistogram({ d, n, c }) {
+    const out = new Array(c.length);
+    for (let i = 0, num = 0, den = 0; i < c.length; i++) {
+      den += d[i];
+      num = d[i] ? n[i] : num + n[i];
+      out[i] = [num, den, c[i]];
+    }
+    return out;
+  }
+  // Pairs per bin of BINS bins, split at t, as the scan point that errs least (bin_histogram, lower_bound).
+  // A bin below t sits at its left edge, where p is least, and a bin at or above t at its right edge.
+  function binHistogram(pairs, t) {
+    const split = Math.min(Math.max(Math.round(BINS * t), 1), BINS - 1);
+    const edges = [...Array.from({ length: split + 1 }, (_, i) => linspacePoint(0, t, split + 1, i)),
+      ...Array.from({ length: BINS - split }, (_, i) => linspacePoint(t, 1, BINS - split + 1, i + 1))];
+    const lo = new Float64Array(split), hi = new Float64Array(BINS - split);
+    // First index in [a, b) whose edge passes s, with ties counted as passed when right.
+    const find = (s, a, b, right) => { while (a < b) { const m = (a + b) >> 1; if (right ? edges[m] <= s : edges[m] < s) a = m + 1; else b = m; } return a; };
+    for (const [num, den, count] of pairs) {
+      const s = num / den;
+      if (s < t) lo[find(s, 0, split + 1, true) - 1] += count;
+      else hi[Math.max(find(s, split, BINS + 1, false) - split - 1, 0)] += count;
+    }
+    const keep = (w, x) => { const i = [...w.keys()].filter((k) => w[k]); return [i.map((k) => x(k)), i.map((k) => w[k])]; };
+    const [xL, wL] = keep(lo, (k) => edges[k]), [xR, wR] = keep(hi, (k) => edges[split + 1 + k]);
+    return { xL, wL, xR, wR };
+  }
+  // Exact E is costly, so it runs only for trees whose binned bound does not pass the best E so far.
+  // Ties go to the lower enumeration index, as the study keeps the first visited tree of least E.
+  function* f1Search(t, B, pairs) {
+    const key = yield* tidySweep(t, B), { M, order, bins } = key;
+    if (!bins.has(pairs)) bins.set(pairs, binHistogram(pairs, t));
+    const scan = bins.get(pairs);
+    let best = -1, bestE = Infinity, bestFp = 0, bestFn = 0;
+    for (let n = 0; n < order.length; n++) {
+      const i = order[n];
+      if (n % SCORE_STEP === SCORE_STEP - 1) yield { phase: "score", scored: n, tuples: M.length };
+      if (tidyExceeds(M[i], scan, bestE * (1 + SLACK))) continue;
+      const { fp, fn } = expectedCounts((s) => curve(s, M[i]), pairs, t), e = fp + fn;
+      if (e < bestE || (e === bestE && i < best)) [best, bestE, bestFp, bestFn] = [i, e, fp, fn];
+      yield { phase: "score", scored: n, tuples: M.length };
+    }
+    return { dims: best < 0 ? null : M[best], tuples: M.length, e: bestE, fp: bestFp, fn: bestFn };
+  }
+  const f1Tune = (t, B, pairs) => drain(f1Search(t, B, pairs));
 
   // Expected FP, FN and candidates over the corpus pairs [num, den, count] when a pair at s passes with accept(s) (expected_counts).
   // E[errors] sums the rounded parts as the study tables print them.
@@ -916,7 +968,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
 
   root.Cascade = {
     ROW_CAP, RUN_ROWS, TOLERANCE, MAX_FREE_ARITY, TIDY_DEPTHS, isOr, rows, levels, curve, flatCurve, inverse, threshold, width, profile, bandsForThreshold,
-    errorArea, errorAreaParts, tails, solveD1, treeSearch, bestTree, nearMass, tidyLambda, tidySearch, tidyTune, expectedCounts, spread, logPair, localSlopes, quorumCurve, pipelineCurve,
+    errorArea, errorAreaParts, tails, solveD1, treeSearch, bestTree, nearMass, tidyLambda, fitSearch, fitTune, linspacePoint, decodeHistogram, binHistogram, f1Search, f1Tune, expectedCounts, spread, logPair, localSlopes, quorumCurve, pipelineCurve,
     quorumInverse, keptBands, verified, mulberry32, evalTree, drawRows, hash61, pairShape, drawPair, agree, sampleSteps, sampleTree, runTrials, wilson,
   };
 })(globalThis);
@@ -1396,7 +1448,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   // Loads the tree the tidy rule picks for N, c and t within the top budget. The first sweep at a new t takes seconds.
   function retune() {
     const { N, c, T } = state, at = `N ${N} c ${c} at t ${tText(T)}`, [lo, hi] = C.TIDY_DEPTHS;
-    tuning = runSliced(C.tidySearch(N, mass(), T, TOP, DATA.tidy.gamma),
+    tuning = runSliced(C.fitSearch(N, mass(), T, TOP, DATA.tidy.gamma),
       (p) => say(p.phase === "sweep" ? `Tuning for ${at}. Finding matched trees at depth ${p.depth} of ${hi}. ${p.tuples} so far.`
         : `Tuning for ${at}. Scored ${p.scored} of ${p.tuples} matched trees.`),
       (r) => {
