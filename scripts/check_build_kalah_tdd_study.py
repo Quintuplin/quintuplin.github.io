@@ -117,6 +117,18 @@ class Links(unittest.TestCase):
             with self.subTest(href=href), self.assertRaises(ValueError):
                 links.rewrite(f'<a href="{href}">', "runs/full-1/report.html", None, idx)
 
+    def test_anchors_cover_report_headings(self):
+        pagemap, s = kalah("pagemap"), kalah("snapshot")
+        heads = re.findall(r"<h[1-3]\b[^>]*" + s.ID_ATTR + r'([^"]+)"', snap().files[s.REPORT])
+        anchors = [a for p in pagemap.PAGES for a in p.anchors]
+        self.assertEqual(len(anchors), len(set(anchors)), "an anchor sits on two pages")
+        self.assertEqual(set(heads), set(anchors))
+        dropped, *kept = pagemap.PAGES[0].anchors
+        first = pagemap.PAGES[0]._replace(anchors=tuple(kept))
+        with mock.patch.object(pagemap, "PAGES", (first, *pagemap.PAGES[1:])), \
+                self.assertRaisesRegex(ValueError, f"heading {dropped} has no page"):
+            kalah("links").index(snap())
+
     def test_ids_unique_per_page(self):
         links = kalah("links")
         for path, html in rendered().items():
