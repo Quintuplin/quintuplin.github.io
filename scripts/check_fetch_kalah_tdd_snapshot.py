@@ -224,6 +224,13 @@ class CommittedSnapshot(unittest.TestCase):
         self.assertRegex(self.manifest["sha"], r"^[0-9a-f]{40}$")
         self.assertEqual(json.loads((SNAPSHOT / "facts.json").read_text())["sha"], self.manifest["sha"])
 
+    def test_bytes_survive_autocrlf(self):
+        paths = [str((FIXTURES / "args.json.fixture").relative_to(SCRIPTS.parent)),
+                 str((SNAPSHOT / "facts.json").relative_to(SCRIPTS.parent))]
+        attrs = subprocess.run(["git", "-C", str(SCRIPTS.parent), "check-attr", "text", "--", *paths],
+                               capture_output=True, text=True, check=True).stdout
+        self.assertEqual(attrs.splitlines(), [f"{p}: text: unset" for p in paths])
+
     def test_drops_host_paths(self):
         runs = json.loads((SNAPSHOT / "facts.json").read_text())["runs"]
         self.assertTrue(runs)

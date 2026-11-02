@@ -3,3 +3,4 @@ simulations/*/index.html -text
 scripts/*.sh text eol=lf
 # The study snapshot must match its MANIFEST.json sha256 on every checkout
 _snapshots/** -text
+scripts/fixtures/kalah-tdd/* -text
