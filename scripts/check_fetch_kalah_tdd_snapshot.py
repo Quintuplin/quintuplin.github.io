@@ -26,6 +26,8 @@ SOURCES = {"runs/full-1/report.html": "report.html", "runs/full-1/methods/classi
            "harness/collect.sh": "collect.sh",
            "harness/report/render.py": "render.py", "harness/report/awards.py": "awards.py",
            "harness/report/stats.py": "stats.py", "docs/SPEC.md": "SPEC.md"}
+# The args.json fields that hold host paths, as the committed snapshot drops them.
+PATH_FIELDS = {"blind_dir", "cases_dir", "clones_dir", "path", "scratch_dir", "split"}
 COMMIT = ("-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false", "commit", "-qm")
 
 
@@ -129,6 +131,17 @@ class Fetch(unittest.TestCase):
                                                        "steps": ["List test scenarios.", "Pick the smallest one."]}}})
         self.assertEqual([s for s in strings(facts) if fetcher().HOST_PATH.search(s) and "://" not in s], [])
         self.assertNotIn(str(self.root), (self.out / "facts.json").read_text() + (self.out / "MANIFEST.json").read_text())
+        self.assertEqual(facts["dropped"], {
+            "full-1": ["clones_dir", "methods.<key>", "methods.classic.home", "notes[1]", "notes[2]", "split"],
+            "rep-2/rebuild": ["blind_dir", "harness_delta.path"]})
+
+    def test_refuses_dropping_prose(self):
+        # HOST_PATH's drive-letter branch also matches prose such as a review summary.
+        args = json.loads(fixture("args.json"))
+        args["summary"] = "E: distinct PMD findings per file"
+        (self.study / "runs/full-1/args.json").write_text(json.dumps(args))
+        self.git(self.study, *COMMIT, "prose", "runs/full-1/args.json")
+        self.assertRefuses("full-1 drops summary, which holds no path")
 
     def test_host_path_pattern_follows_render(self):
         (self.study / "harness/report/render.py").write_text(fixture("render.py").decode().replace("|Cryptomator", ""))
@@ -252,6 +265,13 @@ class CommittedSnapshot(unittest.TestCase):
         runs = json.loads((SNAPSHOT / "facts.json").read_text())["runs"]
         self.assertTrue(runs)
         self.assertEqual([s for s in strings(runs) if fetcher().HOST_PATH.search(s)], [])
+
+    def test_drops_only_path_fields(self):
+        # A new dropped field may be prose HOST_PATH caught; look at it before adding it here.
+        facts = json.loads((SNAPSHOT / "facts.json").read_text())
+        dropped = facts["dropped"]
+        self.assertEqual(sorted(dropped), sorted(facts["runs"]))
+        self.assertEqual({p for paths in dropped.values() for p in paths if p.split(".")[-1] not in PATH_FIELDS}, set())
 
 
 if __name__ == "__main__":

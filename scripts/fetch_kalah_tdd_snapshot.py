@@ -107,13 +107,42 @@ def is_host_path(value) -> bool:
     return isinstance(value, str) and bool(HOST_PATH.search(value))
 
 
-def drop_host_paths(value):
-    """value without the strings HOST_PATH matches, as keys or values, at any depth."""
+def drop_host_paths(value, dropped: list[tuple[str, str]], at: str = ""):
+    """value without the strings HOST_PATH matches, as keys or values, at any depth. Appends (JSON path, string) of
+    each drop to dropped, with <key> in the path for a dropped key."""
     if isinstance(value, dict):
-        return {k: drop_host_paths(v) for k, v in value.items() if not (is_host_path(k) or is_host_path(v))}
+        out = {}
+        for k, v in value.items():
+            if is_host_path(k):
+                dropped.append((f"{at}.<key>", k))
+            elif is_host_path(v):
+                dropped.append((f"{at}.{k}", v))
+            else:
+                out[k] = drop_host_paths(v, dropped, f"{at}.{k}")
+        return out
     if isinstance(value, list):
-        return [drop_host_paths(v) for v in value if not is_host_path(v)]
+        out = []
+        for i, v in enumerate(value):
+            if is_host_path(v):
+                dropped.append((f"{at}[{i}]", v))
+            else:
+                out.append(drop_host_paths(v, dropped, f"{at}[{i}]"))
+        return out
     return value
+
+
+def run_facts(show, paths: list[str]) -> tuple[dict, dict]:
+    """({run: args.json without host paths}, {run: sorted JSON paths of the drops}) of each runs/<run>/args.json."""
+    runs, dropped = {}, {}
+    for path in paths:
+        run, found = path[len("runs/"):-len("/args.json")], []
+        runs[run] = drop_host_paths(json.loads(show(path)), found)
+        # HOST_PATH's drive-letter branch also matches prose such as "E: distinct PMD findings".
+        for at, text in found:
+            if "/" not in text and "\\" not in text:
+                raise SystemExit(f"{run} drops {at.lstrip('.')}, which holds no path; narrow HOST_PATH in {RENDER}")
+        dropped[run] = sorted(at.lstrip(".") for at, _ in found)
+    return runs, dropped
 
 
 def assigned(tree: ast.Module) -> dict[str, ast.expr]:
@@ -199,10 +228,10 @@ def extract_facts(study: Path, sha: str, doc: bytes) -> dict:
     if ast.literal_eval(found["HOST_PATH"].args[0]) != HOST_PATH.pattern:
         raise SystemExit(f"{RENDER} HOST_PATH differs from this script's copy; update the copy first")
     # Nested runs such as rep-2/rebuild record replicates rebuilt at another harness commit.
-    runs = sorted(p for p in git(study, "ls-tree", "-r", "--name-only", sha, "--", "runs").decode().split()
-                  if re.fullmatch(r"runs/.+/args\.json", p))
-    return {"sha": sha, "stages": json.loads(show("harness/workflow/stages.json")),
-            "runs": {p[len("runs/"):-len("/args.json")]: drop_host_paths(json.loads(show(p))) for p in runs},
+    runs, dropped = run_facts(show, sorted(
+        p for p in git(study, "ls-tree", "-r", "--name-only", sha, "--", "runs").decode().split()
+        if re.fullmatch(r"runs/.+/args\.json", p)))
+    return {"sha": sha, "stages": json.loads(show("harness/workflow/stages.json")), "runs": runs, "dropped": dropped,
             "pipeline": {"collect": collect_steps(show("harness/collect.sh")),
                          "notation": ast.literal_eval(found["NOTATION"]),
                          "weight_text": ast.literal_eval(found["WEIGHT_TEXT"])},
