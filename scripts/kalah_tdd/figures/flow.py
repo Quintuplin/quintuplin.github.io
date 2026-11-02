@@ -180,8 +180,9 @@ def svg(prefix, title, desc, nodes, edges=(), loops=()):
     return "".join(out) + "</svg>"
 
 
-def text_version(nodes, edges=(), loops=()):
-    """A "Text version" disclosure: one list item per node in the given order, naming its edges and loops."""
+def text_version(title, nodes, edges=(), loops=()):
+    """A "Text version: <title>" disclosure, one list item per node in the given order, naming its edges and loops.
+    The title tells apart several charts' disclosures on one page."""
     check(nodes, edges, loops)
     label = {n.id: n.label for n in nodes}
     items = []
@@ -192,4 +193,4 @@ def text_version(nodes, edges=(), loops=()):
             parts.append("Next: " + "; ".join(nexts) + ".")
         parts += [f"Loop: repeat per {lp.unit}, back to {label[lp.back_to or lp.node]}." for lp in loops if lp.node == n.id]
         items.append(f"<li>{escape(' '.join(parts))}</li>")
-    return f"<details><summary>Text version</summary><ol>{''.join(items)}</ol></details>"
+    return f"<details><summary>Text version: {escape(title)}</summary><ol>{''.join(items)}</ol></details>"

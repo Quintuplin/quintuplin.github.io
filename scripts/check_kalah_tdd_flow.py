@@ -77,9 +77,13 @@ def crosses(a, b, box):
     return x < ax < x + w and max(min(ay, by), y) < min(max(ay, by), y + h)
 
 
+def text_doc():
+    return flow().text_version("Harness " + UNSAFE, *sample())
+
+
 def items():
     """Each text version list item as plain text, in order."""
-    root = ET.fromstring(flow().text_version(*sample()))
+    root = ET.fromstring(text_doc())
     return ["".join(li.itertext()) for li in root.iter("li")]
 
 
@@ -90,7 +94,12 @@ class Flow(unittest.TestCase):
         self.assertEqual(len(got), len(nodes))
         for item, n in zip(got, nodes):
             self.assertTrue(item.startswith(n.label), (item, n.label))
-        self.assertEqual(flow().text_version(*sample()).count("Text version"), 1)
+        self.assertEqual(text_doc().count("Text version"), 1)
+
+    def test_text_version_names_its_chart(self):
+        summary = ET.fromstring(text_doc()).find("summary")
+        self.assertEqual(summary.text, "Text version: Harness " + UNSAFE)
+        self.assertIn("<summary>Text version: Harness a &lt;b&gt; &amp; &quot;c&quot;</summary>", text_doc())
 
     def test_text_version_names_edges_and_loops(self):
         nodes, edges, loops = sample()
@@ -121,7 +130,7 @@ class Flow(unittest.TestCase):
         self.assertEqual(set(re.findall(r'\bid="([^"]*)"', render("a"))) & set(re.findall(r'\bid="([^"]*)"', render("b"))), set())
 
     def test_escapes_text(self):
-        out, text = render(), flow().text_version(*sample())
+        out, text = render(), text_doc()
         for doc in (out, text):
             self.assertNotIn(UNSAFE, doc)
             ET.fromstring(doc)
@@ -145,7 +154,7 @@ class Flow(unittest.TestCase):
     def test_classes_defined_in_study_css(self):
         css = re.sub(r"/\*.*?\*/", "", CSS.read_text(encoding="utf-8"), flags=re.S)
         defined = set(re.findall(r"\.(-?[A-Za-z_][\w-]*)", css))
-        used = {c for v in re.findall(r'\bclass="([^"]*)"', render() + flow().text_version(*sample())) for c in v.split()}
+        used = {c for v in re.findall(r'\bclass="([^"]*)"', render() + text_doc()) for c in v.split()}
         self.assertTrue({"flow", "lane", "node", "edge", "loop", "head"} <= used, used)
         self.assertEqual(used - defined, set())
 
@@ -156,7 +165,7 @@ class Flow(unittest.TestCase):
 
     def test_deterministic(self):
         self.assertEqual(render().encode(), render().encode())
-        self.assertEqual(flow().text_version(*sample()), flow().text_version(*sample()))
+        self.assertEqual(text_doc(), text_doc())
 
     def test_rejects_unknown_nodes(self):
         f = flow()
@@ -189,7 +198,7 @@ class Flow(unittest.TestCase):
         for case, args in bad.items():
             with self.subTest(case):
                 self.assertRaises(ValueError, f.svg, "p", "t", "d", *args)
-                self.assertRaises(ValueError, f.text_version, *args)
+                self.assertRaises(ValueError, f.text_version, "t", *args)
         # Adjacent lanes, an empty skipped column and a loop up a clear column still draw.
         f.svg("p", "t", "d", down, [f.edge("a", "b"), f.edge("b", "c")])
         f.svg("p", "t", "d", [x[0], f.node("c", "C", lane="x", col=2)], [f.edge("a", "c")])
