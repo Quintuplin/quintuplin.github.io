@@ -14,6 +14,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 CSS = SCRIPTS.parent / "studies/kalah-tdd-study/study.css"
 UNSAFE = 'a <b> & "c"'
+NS = "{http://www.w3.org/2000/svg}"
 
 
 @functools.cache
@@ -33,9 +34,25 @@ def sample():
     return nodes, edges, loops
 
 
+def long_chart():
+    """Twelve nodes: eleven steps in lane A that wrap into rows, a lane B node under s5, a self loop and a back loop."""
+    f = flow()
+    nodes = [f.node(f"s{i}", f"Step {i} of the harness pipeline", lane="A") for i in range(11)]
+    nodes.insert(6, f.node("v", "Side step", lane="B", col=5))
+    edges = [f.edge(f"s{i}", f"s{i + 1}", "next") for i in range(10)] + [f.edge("s5", "v", "down"), f.edge("v", "s6")]
+    loops = [f.loop("s9", "unit"), f.loop("s10", "clone", back_to="s8")]
+    return nodes, edges, loops
+
+
 def render(prefix="f1"):
     nodes, edges, loops = sample()
     return flow().svg(prefix, "Harness " + UNSAFE, "Desc " + UNSAFE, nodes, edges, loops)
+
+
+def node_boxes(root):
+    """Each node rect as (x, y, width, height), in node order."""
+    return [tuple(float(r.get(k)) for k in ("x", "y", "width", "height"))
+            for r in root.iter(NS + "rect") if r.get("class") == "node"]
 
 
 def items():
@@ -125,6 +142,15 @@ class Flow(unittest.TestCase):
         self.assertRaises(ValueError, f.svg, "p", "t", "d", nodes, [f.edge("a", "b")], [])
         self.assertRaises(ValueError, f.svg, "p", "t", "d", nodes, [], [f.loop("b", "unit")])
         self.assertRaises(ValueError, f.svg, "p", "t", "d", nodes + nodes, [], [])
+
+    def test_long_chart_wraps(self):
+        root = ET.fromstring(flow().svg("p", "t", "d", *long_chart()))
+        self.assertLessEqual(float(root.get("viewBox").split()[2]), 900)
+        boxes = {n.id: box for n, box in zip(long_chart()[0], node_boxes(root))}
+        # Each row continues below the last, starting again at the left.
+        self.assertEqual(boxes["s4"][0], boxes["s0"][0])
+        self.assertGreater(boxes["s4"][1], boxes["s3"][1])
+        self.assertGreater(boxes["s8"][1], boxes["v"][1])
 
     def test_rejects_shared_cell(self):
         f = flow()

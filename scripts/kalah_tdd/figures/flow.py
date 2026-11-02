@@ -1,6 +1,6 @@
 """Inline SVG flowcharts for the Kalah TDD study pages (#57).
 
-Nodes sit on a grid: one band per lane, one column per step, left to right. Colours come only from the
+Nodes sit on a grid: one band per lane, one column per step, left to right, wrapping after COLS columns. Colours come only from the
 study.css svg.flow classes, so both themes and forced colours apply. Each chart has a matching text version.
 """
 import re
@@ -8,7 +8,7 @@ from html import escape
 from typing import NamedTuple, Optional
 
 NODE_W, GAP, MARGIN, PAD, LINE, CHARS = 168, 56, 16, 12, 16, 22
-LANE_HEAD, LOOP_ROOM, LOOP_DROP = 22, 52, 18
+LANE_HEAD, LOOP_ROOM, LOOP_DROP, COLS, ROW_GAP = 22, 52, 18, 4, 16  # COLS * NODE_W plus gaps fits an 872px column
 PREFIX = re.compile(r"[A-Za-z][\w-]*\Z")
 
 
@@ -69,15 +69,21 @@ def wrap(text):
 
 
 def layout(nodes):
-    """Top-left corner of each node, the node height, the lane bands and the canvas size."""
+    """Top-left corner of each node, the node height, the lane bands, the y of the gap below each node's row and the
+    canvas size. Columns past COLS wrap into a new row of every lane below the last, so the chart stays column wide."""
     lanes, cell = cells(nodes)
     named = any(lanes)
     height = 2 * PAD + LINE * max(len(wrap(n.label)) + len(wrap(n.note)) for n in nodes)
     band = (LANE_HEAD if named else 0) + height + LOOP_ROOM
-    at = {i: (MARGIN + col * (NODE_W + GAP), MARGIN + lane * band + (LANE_HEAD if named else 0)) for i, (lane, col) in cell.items()}
-    width = 2 * MARGIN + max(x for x, _ in at.values()) + NODE_W - MARGIN
-    bands = [(lane, MARGIN + i * band) for i, lane in enumerate(lanes)] if named else []
-    return at, height, band, bands, (width, MARGIN + len(lanes) * band)
+    block = len(lanes) * band + ROW_GAP
+    last = max(col for _, col in cell.values())
+    at = {i: (MARGIN + col % COLS * (NODE_W + GAP), MARGIN + col // COLS * block + lane * band + (LANE_HEAD if named else 0))
+          for i, (lane, col) in cell.items()}
+    # Midway between the last lane band of a row and the first band of the next.
+    below = {i: MARGIN + (col // COLS + 1) * block - ROW_GAP // 2 - 10 for i, (_, col) in cell.items()}
+    cols, rows = min(last + 1, COLS), last // COLS + 1
+    bands = [(lane, MARGIN + r * block + i * band) for r in range(rows) for i, lane in enumerate(lanes)] if named else []
+    return at, height, band, bands, below, (2 * MARGIN + cols * NODE_W + (cols - 1) * GAP, MARGIN + rows * block - ROW_GAP)
 
 
 def text(x, y, lines, cls="", anchor="middle"):
@@ -86,9 +92,19 @@ def text(x, y, lines, cls="", anchor="middle"):
     return f'<text x="{x}" y="{y}" text-anchor="{anchor}"{attr}>{spans}</text>'
 
 
-def edge_path(a, b, h):
-    """Straight within a row, vertical within a column, else an elbow halfway across the gap."""
+def gaps(x):
+    """The x of the gaps left and right of the node column at x, where wrapped edges run."""
+    last = MARGIN + (COLS - 1) * (NODE_W + GAP)
+    return x - (GAP // 2 if x > MARGIN else MARGIN // 2), x + NODE_W + (GAP // 2 if x < last else MARGIN // 2)
+
+
+def edge_path(a, b, h, below=None):
+    """Straight within a lane, vertical within a column, else an elbow halfway across the gap. An edge into a later
+    row leaves through the gap right of its source, runs along the gap below its row (y below) and enters from the left."""
     (sx, sy), (dx, dy) = a, b
+    if below is not None:
+        right, left = gaps(sx)[1], gaps(dx)[0]
+        return f"M{sx + NODE_W},{sy + h // 2}H{right}V{below}H{left}V{dy + h // 2}H{dx}", ((right + left) // 2, below - 5)
     if sx == dx:
         top = dy > sy
         cx = sx + NODE_W // 2
@@ -104,7 +120,7 @@ def svg(prefix, title, desc, nodes, edges=(), loops=()):
     if not PREFIX.match(prefix):
         raise ValueError(f"id prefix {prefix!r} is not a plain id")
     check(nodes, edges, loops)
-    at, h, band, bands, (width, height) = layout(nodes)
+    at, h, band, bands, below, (width, height) = layout(nodes)
     arrow = f"url(#{prefix}-arrow)"
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" class="flow" viewBox="0 0 {width} {height}" role="img" '
            f'aria-labelledby="{prefix}-title {prefix}-desc">',
@@ -113,7 +129,8 @@ def svg(prefix, title, desc, nodes, edges=(), loops=()):
            f'orient="auto"><path class="head" d="M0,0L10,5L0,10z"/></marker></defs>']
     for lane, y in bands:
         out.append(f'<rect class="lane" x="0" y="{y - MARGIN // 2}" width="{width}" height="{band - 4}" rx="6"/>')
-        out.append(text(MARGIN // 2, y + 6, [lane], "note", "start"))
+        # Wrapped edges run down the left margin, so the lane name starts at the node edge.
+        out.append(text(MARGIN, y + 6, [lane], "note", "start"))
     for n in nodes:
         x, y = at[n.id]
         label, note = wrap(n.label), wrap(n.note)
@@ -124,7 +141,7 @@ def svg(prefix, title, desc, nodes, edges=(), loops=()):
         if note:
             out.append(text(x + NODE_W // 2, top + LINE * len(label), note, "note"))
     for e in edges:
-        path, (lx, ly) = edge_path(at[e.src], at[e.dst], h)
+        path, (lx, ly) = edge_path(at[e.src], at[e.dst], h, below[e.src] if below[e.src] != below[e.dst] else None)
         out.append(f'<path class="edge" d="{path}" marker-end="{arrow}"/>')
         if e.label:
             out.append(text(lx, ly, [e.label], "note"))
