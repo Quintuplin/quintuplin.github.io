@@ -8133,5 +8133,9 @@
     "text": "The game can be played with 7 houses per player, each house starting with 5 seeds."
    }
   ]
+ },
+ "redacted": {
+  "runs/full-1/methods/anchor-engineering.html": 4,
+  "runs/full-1/methods/mutation-guided.html": 1
  }
 }
