@@ -215,9 +215,15 @@ main li a,.src a,.record-link{display:inline-block;min-height:24px;padding:2px 0
 
 /* Folds and record lists. Folds keep their "N rows and M columns" summary. */
 details:not(.toc){margin:var(--space-3) 0;padding:0 14px}
-details:not(.toc) > summary{min-height:44px;display:flex;align-items:center;cursor:pointer;margin:0 -14px;padding:var(--space-2) 14px;
+details:not(.toc) > summary{min-height:44px;display:flex;align-items:center;gap:var(--space-2);cursor:pointer;margin:0 -14px;padding:var(--space-2) 14px;
   font-weight:600;font-size:14px}
 details[open]:not(.toc){padding-bottom:var(--space-3)}
+/* Flex summaries lose the native marker, so a text glyph replaces it; text stays visible under forced colours. */
+summary{list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"\25B8";content:"\25B8" / "";flex:none;transition:transform .15s}
+details[open] > summary::before{transform:rotate(90deg)}
+@media (prefers-reduced-motion: reduce){summary::before{transition:none}}
 .record{padding:0 0 6px}
 .shaped{margin:var(--space-4) 0}
 details > .shaped{margin:0;padding:0 0 10px}
