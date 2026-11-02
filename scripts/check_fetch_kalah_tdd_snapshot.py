@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parent
 FIXTURES = SCRIPTS / "fixtures/kalah-tdd"
@@ -165,6 +166,14 @@ class Fetch(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "outside _snapshots"):
             self.fetch()
         self.assertEqual([p.name for p in self.out.iterdir()], ["MANIFEST.json"])
+
+    def test_manifest_bytes_are_lf(self):
+        # Text writes on Windows turn \n into \r\n, as this patch does.
+        real = Path.write_text
+        crlf = lambda path, text, encoding=None, errors=None, newline=None: real(path, text, encoding, errors, "\r\n")
+        with mock.patch.object(Path, "write_text", crlf):
+            manifest, _ = self.fetch()
+        self.assertEqual((self.out / "MANIFEST.json").read_bytes(), (json.dumps(manifest, indent=2) + "\n").encode())
 
     def test_refuses_missing_published_copy(self):
         (self.published / "methods/classic.html").unlink()

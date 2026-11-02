@@ -98,7 +98,8 @@ def write_snapshot(out: Path, files: dict[str, bytes], facts: bytes, found: dict
     for path, data in {**files, "facts.json": facts}.items():
         (out / path).parent.mkdir(parents=True, exist_ok=True)
         (out / path).write_bytes(data)
-    (out / "MANIFEST.json").write_text(json.dumps(found, indent=2) + "\n", encoding="utf-8")
+    # Bytes, so Windows writes no \r\n.
+    (out / "MANIFEST.json").write_bytes((json.dumps(found, indent=2) + "\n").encode())
 
 
 # ---- FactExtract ----
