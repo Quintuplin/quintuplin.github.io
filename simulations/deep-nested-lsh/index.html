@@ -348,10 +348,10 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>Arity families at t 0.5</dt><dd>Trees at depth 3 and up within 10000 rows matched to t 0.5, searched with arities up to 60 above d1. The families differ in where the large arities sit.</dd>
       <dt>head-heavy, even-weights and tail-heavy</dt><dd>Head-heavy puts the large arities at the low levels near the rows. Tail-heavy puts them at the high levels near the root. Even-weights keeps the arities as close to equal as the threshold allows.</dd>
       <dt>Flat reading collapse (7, 23, 3) and (7, 69)</dt><dd>Under the flat reading (7, 23, 3) collapses to the banding (7, 69). Switch on Flat reading to compare the two trees.</dd>
-      <dt>Dataset size N</dt><dd>The number of documents in the dataset to tune for. The list runs from 1000 to 100000 in steps of 1, 2, 3 and 5 per power of ten. It holds every N the study ran, which are 1000, 3000, 10000, 30000 and 100000. The study corpus has 1000.</dd>
+      <dt>Dataset size N</dt><dd>The number of documents in the dataset to tune for. The list runs from 1000 to 100000 in steps of 1, 2, 3 and 5 per power of ten. It holds every N the study ran up to <span id="ex-n-ran"></span>. The study corpus has 1000.</dd>
       <dt>Cluster size c</dt><dd>Documents per cluster of near duplicates in the generated dataset to tune for. The box takes 2 to 50. The study corpus has 19.</dd>
       <dt>Near-pair mass m</dt><dd>Near pairs per document in that dataset. Members of a cluster pair with each other. 5% of the documents are noise. Up to 1000 of them share one filler pool and the rest share pools of 50. Documents of one pool also count as near pairs. The λ fit reads it.</dd>
-      <dt>Tidy rule F1 (Re-tune F1)</dt><dd>Re-tune F1 loads the tree the tidy rule F1 picks for N, c and t. Among the matched trees at depths 2 to 10 within 10000 rows it takes the one with the least expected false positives plus false negatives on the exact pair histogram of the dataset. It has no fitted constant. The page holds the pair histograms of the study datasets <span id="ex-f1-sets"></span>, so F1 runs for those alone. It fetches them on first use and computes the expected errors it reports. The button stays off after a tune until N, c, t or the tree changes.</dd>
+      <dt>Tidy rule F1 (Re-tune F1)</dt><dd>Re-tune F1 loads the tree the tidy rule F1 picks for N, c and t. Among the matched trees at depths 2 to 10 within 10000 rows it takes the one with the least expected false positives plus false negatives on the exact pair histogram of the dataset. It has no fitted constant. The page holds the pair histograms of <span id="ex-f1-sets"></span>. F1 runs for those alone. It fetches them on first use and computes the expected errors it reports. The button stays off after a tune until N, c, t or the tree changes.</dd>
       <dt>Fitted λ rule (λ fit)</dt><dd>λ fit loads the tree a fitted rule picks for any N, c and t. Among the same matched trees it takes the one with the least λ A_lo + A_hi, which needs only N, c and t. The study fitted it on generated datasets with N from 3000 to 100000 and c from 10 to 40. Outside those ranges it extrapolates. <span id="ex-fit-facts"></span> The button stays off after a fit until N, c, t or the tree changes.</dd>
       <dt>Weight λ</dt><dd>λ = R<sup>γ</sup> with the fitted γ <span id="ex-fit-gamma"></span>. R = ((N − 1)/2 − m)(1 − t)/(m t) is the ratio of non-near to near pairs per document with each spread evenly over its side of t. A larger λ weighs false positives more.</dd>
       <dt>A_lo and A_hi</dt><dd>The two parts of the error area E. A_lo is the FP area below t. A_hi is the FN area above t.</dd>
@@ -1523,12 +1523,15 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
   function ruleNotes() {
     const { datasets, switch: sw, excess, gamma } = DATA.tidy, pct = excess.map(([, x]) => 100 * x);
     const test = (r) => `${sw[r].below} of ${sw[r].keys} keys where the errors differ with p ${sw[r].p.toPrecision(2)}. So it ${sw[r].clears ? "passes" : "does not pass"}`;
-    $("ex-f1-sets").textContent = datasets.map(([n, c]) => `N ${n} c ${c}`).join(", ");
+    // The page holds datasets up to the N drop-down's top, so every study claim names that cap.
+    const ns = [...new Set(datasets.map(([n]) => n))].sort((a, b) => a - b), cap = `N up to ${ns.at(-1)}`;
+    $("ex-n-ran").textContent = `${ns.at(-1)} which are ${ns.slice(0, -1).join(", ")} and ${ns.at(-1)}`;
+    $("ex-f1-sets").textContent = `${datasets.length} study datasets with ${cap} which are ` + datasets.map(([n, c]) => `N ${n} c ${c}`).join(", ");
     $("ex-fit-gamma").textContent = String(gamma);
     $("ex-fit-facts").textContent = "The study's switch test compares a rule with the full search on held-out keys of t and row budget. " +
       "The full search keeps the sharpest tree per depth and then the depth with the fewest expected errors. A one-sided sign test counts the keys where the rule has fewer. " +
       `The fit has fewer on ${test("KAlambda")}. F1 has fewer on ${test("F1")}. ` +
-      `Over the study datasets the fit's expected errors sit ${Math.min(...pct).toFixed(1)}% to ${Math.max(...pct).toFixed(1)}% above F1's as a geometric mean per row budget.`;
+      `Over the study datasets with ${cap} the fit's expected errors sit ${Math.min(...pct).toFixed(1)}% to ${Math.max(...pct).toFixed(1)}% above F1's as a geometric mean per row budget.`;
   }
 
   // How much the least error area tree past the cap gains on the best within it, from the t 0.5 search at the top budget.

@@ -1163,6 +1163,22 @@ test("termsNameBothRules", () => {
   const pct = TIDY.excess.map(([, x]) => 100 * x);
   assert.ok(facts.includes(`${Math.min(...pct).toFixed(1)}% to ${Math.max(...pct).toFixed(1)}%`), `the excess range: ${facts}`);
   assert.doesNotMatch(facts, /tidy/i);
+  // Guard: the excess range and the F1 sets read as the whole study, which also ran N 1000000 (#54).
+  const maxN = Math.max(...TIDY.datasets.map(([n]) => n));
+  assert.ok(facts.includes(`N up to ${maxN}`), `the excess range names its N cap: ${facts}`);
+  assert.ok(sets.startsWith(`${TIDY.datasets.length} study datasets with N up to ${maxN}`), `F1 names its dataset count and N cap: ${sets}`);
+});
+
+// Guard: Dataset size N typed the study's N values as every N the study ran, which went stale when it added N 1000000 (#54).
+test("datasetSizeNamesStudyCap", () => {
+  const entry = terms().get("Dataset size N");
+  assert.match(entry, /every N the study ran up to <span id="ex-n-ran"><\/span>/);
+  assert.doesNotMatch(entry, /\d{4}, \d{4}/, "the study's N values come from the page data");
+  const { $, flush } = boot(PINNED);
+  flush();
+  const ns = [...new Set(TIDY.datasets.map(([n]) => n))].sort((a, b) => a - b), ran = $("ex-n-ran").textContent;
+  assert.ok(ran.startsWith(`${ns.at(-1)} `), `the cap leads: ${ran}`);
+  for (const n of ns) assert.ok(shows(ran, n), `the study ran N ${n}: ${ran}`);
 });
 
 // Guard: the page wrote P(s) for the cascade, tail cards and Measured slope, and defined an unused two-tier kind (#54).
