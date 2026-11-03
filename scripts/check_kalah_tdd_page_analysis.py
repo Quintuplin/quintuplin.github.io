@@ -3,13 +3,16 @@
 award rules and code docstrings verbatim, every test sentence quoted from its report section, and Figures F6 and F7
 built from the facts with clear routes.
 
-Usage: check_kalah_tdd_page_analysis.py
+Usage: check_kalah_tdd_page_analysis.py [--render]
+--render prints the page, which test_deterministic compares across hash seeds.
 """
 import copy
 import functools
 import importlib
 import importlib.util
+import os
 import re
+import subprocess
 import sys
 import unittest
 import xml.etree.ElementTree as ET
@@ -452,9 +455,16 @@ class Analysis(unittest.TestCase):
                 self.assertNotIn("#", href)
 
     def test_deterministic(self):
-        self.assertEqual(analysis().body(page(), snap(), idx()), analysis().body(page(), snap(), idx()))
-        self.assertEqual(render().encode(), render().encode())
+        # Set order follows the hash seed, so a second process with another seed shows any order the page relies on.
+        # -I would ignore PYTHONHASHSEED, so the child gets -s -P and an environment of the seed alone.
+        seed = "1" if os.environ.get("PYTHONHASHSEED") == "0" else "0"
+        child = subprocess.run([sys.executable, "-s", "-P", __file__, "--render"], env={"PYTHONHASHSEED": seed},
+                               capture_output=True, check=True)
+        self.assertEqual(child.stdout, html().encode())
 
 
 if __name__ == "__main__":
-    unittest.main()
+    if sys.argv[1:] == ["--render"]:
+        sys.stdout.buffer.write(html().encode())
+    else:
+        unittest.main()
