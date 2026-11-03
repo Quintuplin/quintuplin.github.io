@@ -147,9 +147,21 @@ class DiagramPull(unittest.TestCase):
         # :not(.toc) names everything but the sidebar, so a figure can hold it.
         self.assertRegex(" ".join(pull(lambda t: t + "details:not(.toc) .cnt2{margin-left:-3px}")), r"\.cnt2 sets margin-left:-3px")
 
+    def test_shorthand_pull_fails(self):
+        # The left value is the fourth of four, the second of two or three, the only one, or margin-inline's first.
+        for rule in (".yy{margin:0 0 0 -5px}", ".yy{margin:0 -5px 1px}", ".yy{margin:1px -5px}", ".yy{margin:-5px}",
+                     ".yy{margin-inline:-5px 0}", ".yy{margin:var(--a) calc(var(--b) * 2) 0 -5px !important}"):
+            with self.subTest(rule):
+                self.assertRegex(" ".join(pull(lambda t: t + rule)), r"\.yy sets margin")
+
+    def test_fold_summary_exemption_is_narrow(self):
+        # The fold summary's -14px only cancels its details' 14px padding. Any other pull there still fails.
+        self.assertRegex(" ".join(pull(lambda t: t + "details:not(.toc) > summary{margin:0 -15px}")), r"summary sets margin:0 -15px")
+
     def test_reset_and_sidebar_pass(self):
         # The sidebar never sits inside a figure, so its current-page pull needs no reset.
-        for probe in (".x{margin-inline-start:-4px}.diagram .x{margin-inline-start:0}", ".toc li a{margin-left:-2px}"):
+        for probe in (".x{margin-inline-start:-4px}.diagram .x{margin-inline-start:0}", ".toc li a{margin-left:-2px}",
+                      ".yy{margin:0 -5px 0 0}", ".yy{margin-inline:0 -5px}", ".x{margin:0 0 0 -4px}.diagram .x{margin:0}"):
             with self.subTest(probe):
                 self.assertEqual(pull(lambda t: t + probe), [])
 

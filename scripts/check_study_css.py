@@ -180,7 +180,18 @@ def kept_rules(parsed):
 
 
 # .diagram scrolls sideways, so content pulled left of its edge is clipped for good (#69). The sidebar never sits in a figure.
-PULL = ("margin-left", "margin-inline-start")
+# The fold summary's pull only cancels its details' 14px side padding, so it stays inside the fold.
+PULL_EXEMPT = {("details:not(.toc) > summary", "-14px")}
+
+
+def left_margins(decls):
+    """Yield (property, left value) for each declaration that sets a left margin, shorthands included."""
+    for prop, value in decls.items():
+        words = re.findall(r"(?:[^\s()]|\((?:[^()]|\([^()]*\))*\))+", value.replace("!important", ""))
+        if prop in ("margin-left", "margin-inline-start", "margin-inline") and words:
+            yield prop, words[0]
+        elif prop == "margin" and 1 <= len(words) <= 4:
+            yield prop, words[(0, 1, 1, 3)[len(words) - 1]]
 
 
 def diagram_pull(parsed):
@@ -188,13 +199,13 @@ def diagram_pull(parsed):
     negative = lambda v: re.match(r"\s*(-|calc\(\s*-)", v) is not None
     errors = []
     for i, (media, sels, decls) in enumerate(parsed):
-        for prop in (p for p in PULL if negative(decls.get(p, ""))):
+        for prop, value in ((p, v) for p, v in left_margins(decls) if negative(v)):
             for s in sels:
-                if re.search(r"[.#]toc(?![\w-])", re.sub(r":not\([^()]*\)", "", s)):
+                if re.search(r"[.#]toc(?![\w-])", re.sub(r":not\([^()]*\)", "", s)) or (s, value) in PULL_EXEMPT:
                     continue
                 tail = s.split()[-1]
                 if not any(m is None and r.startswith(".diagram ") and r.split()[-1] == tail
-                           and any(p in d and not negative(d[p]) for p in PULL)
+                           and any(not negative(v) for _, v in left_margins(d))
                            and (specificity(r) > specificity(s) or (specificity(r) == specificity(s) and j > i))
                            for j, (m, rs, d) in enumerate(parsed) for r in rs):
                     errors.append(f"{CSS}: {s} sets {prop}:{decls[prop]} and no .diagram rule resets it, "
