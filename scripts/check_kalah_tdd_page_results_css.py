@@ -140,14 +140,14 @@ def probe():
     made = frames()
     iframes = "".join(f'<iframe data-name="{name}" width="{w}" height="800" srcdoc="{escape(d)}"></iframe>'
                       for name, w, d in made)
-    with tempfile.TemporaryDirectory() as tmp:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         top = Path(tmp) / "probe.html"
         top.write_text(f'<!doctype html><html><head><meta charset="utf-8"></head><body>{iframes}{PROBE}</body></html>',
                        encoding="utf-8")
         start = time.monotonic()
         run = subprocess.run([chrome(), "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
                               f"--user-data-dir={tmp}/profile", "--window-size=1400,1000", "--virtual-time-budget=10000",
-                              "--dump-dom", top.as_uri()], capture_output=True, text=True, timeout=120, check=False)
+                              "--dump-dom", top.as_uri()], capture_output=True, encoding="utf-8", timeout=120, check=False)
         print(f"Chrome probe of {len(made)} frames took {time.monotonic() - start:.2f} s", file=sys.stderr)
     m = re.search(r'<pre id="out">(.*?)</pre>', run.stdout, re.S)
     if run.returncode or not m or not m.group(1):
