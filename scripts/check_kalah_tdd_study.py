@@ -92,7 +92,7 @@ class Tree(HTMLParser):
 class Item(NamedTuple):
     kind: str
     page: str  # a page slug, SHARED, or None when nothing maps it
-    key: object  # whitespace-free text, an "#id", or (aria-label, sorted mark titles) for a figure
+    key: object  # whitespace-free text, ("id", id, its question), or (aria-label, sorted mark titles) for a figure
     shown: str
     source: str = ""
 
@@ -155,6 +155,11 @@ def figure(node):
     return (node.attrs["aria-label"], marks)
 
 
+def question(node):
+    """The squashed text of an answer's .aq question, or ""."""
+    return next((squash(n.text()) for n in node.iter() if "aq" in n.classes()), "")
+
+
 def item(name, node, page):
     """The item this element holds, or None."""
     cls = node.classes()
@@ -170,7 +175,7 @@ def item(name, node, page):
     if node.tag == "dt" and node.closest("dl", "terms"):
         return Item("term", SHARED, squash(text := pair(node)), text)
     if re.fullmatch(r"q\d+", node.attrs.get("id") or ""):
-        return Item("term", page, ("id", node.attrs["id"]), "#" + node.attrs["id"])
+        return Item("term", page, ("id", node.attrs["id"], question(node)), "#" + node.attrs["id"])
     return None
 
 
@@ -212,7 +217,7 @@ def inventory(files):
 class Page(NamedTuple):
     stub: bool
     texts: Counter
-    ids: set
+    ids: dict  # id to its element
     figures: Counter
     root: Node
 
@@ -243,7 +248,7 @@ def parse(html):
     nodes = list(root.iter())
     stub = any(n.tag == "meta" and n.attrs.get("name") == STUB for n in nodes)
     figures = Counter(figure(n) for n in nodes if n.tag == "svg" and n.attrs.get("aria-label"))
-    return Page(stub, texts(nodes, root), {n.attrs["id"] for n in nodes if n.attrs.get("id")}, figures, root)
+    return Page(stub, texts(nodes, root), {n.attrs["id"]: n for n in nodes if n.attrs.get("id")}, figures, root)
 
 
 def label(slug):
@@ -266,7 +271,9 @@ def lacks(want, page):
     if kind == "figure":
         return None if page.figures[key] >= n else mark_diff(key, page)
     if isinstance(key, tuple):
-        return None if key[1] in page.ids else "no such id"
+        if (node := page.ids.get(key[1])) is None:
+            return "no such id"
+        return None if question(node) == key[2] else "question differs"
     have = page.texts[key]
     return None if have >= n else f"found {have} of {n}"
 

@@ -150,6 +150,8 @@ class Coverage(unittest.TestCase):
         self.assertRegex(" ".join(errors(moved)), "^landing lacks tile 'Correctness 11 of 11")
         moved = {"questions": [('id="q1"', 'id="q2"')], "glossary": [("<h1>", '<h1 id="q1">')]}
         self.assertRegex(" ".join(errors(moved)), "questions lacks term '#q1'")
+        emptied = {"questions": [('<p class="aq"><b>Q1</b> Does the greedy analogy hold?</p>', "")]}
+        self.assertRegex(" ".join(errors(emptied)), "questions lacks term '#q1': question differs")
         # A shared term may sit on either glossary or measures, but not elsewhere.
         terms = '<dl class="terms"><dt>PMD</dt><dd>A static analysis tool for Java.</dd></dl>'
         self.assertEqual(errors({"glossary": [(terms, "")], "methodology/measures": [("</main>", terms + "</main>")]}), [])
