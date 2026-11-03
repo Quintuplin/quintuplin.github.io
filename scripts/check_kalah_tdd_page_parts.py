@@ -5,6 +5,7 @@ Usage: check_kalah_tdd_page_parts.py
 """
 import functools
 import importlib
+import importlib.util
 import re
 import sys
 import unittest
@@ -70,6 +71,12 @@ class Parts(unittest.TestCase):
                       '<div class="fig-foot"><a href="#loop-data" aria-label="Data for Figure 3.1">Data</a></div>', html)
         self.assertTrue(html.endswith("</details></figcaption></figure>"), html)
         self.assertNotRegex(html, r"<h3\b[^>]*\bid=", "a figure title with an id would join the sidebar")
+
+    def test_figure_title_is_a_label(self):
+        spec = importlib.util.spec_from_file_location("check_kalah_tdd_study", SCRIPTS / "check_kalah_tdd_study.py")
+        study = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(study)
+        self.assertIn(("figure title", "The loop"), list(study.labels(study.parse(f"<main>{frame()}</main>").root)))
 
     def test_figure_text_version_from_flow_or_list(self):
         flow = kalah("figures.flow")
