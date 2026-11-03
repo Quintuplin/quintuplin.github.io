@@ -118,7 +118,15 @@ class MetricSources:
         raise ValueError(f"facts.analysis has no doc for {name!r}")
 
     def summary(self):
-        return FOLD.search(self.columns_html).group(1)
+        if not (m := FOLD.search(self.columns_html)):
+            raise ValueError("the report Columns section has no Column definitions fold summary")
+        return m.group(1)
+
+    def intro(self):
+        """The paragraph before the Columns fold. A definition paragraph inside the fold is no intro."""
+        if not (m := re.search(r"<p>.*?</p>", self.columns_html.split("<details>")[0], re.S)):
+            raise ValueError("the report Columns section has no intro paragraph before its fold")
+        return m.group(0)
 
 
 def slug(name):
@@ -264,7 +272,9 @@ def column_index(src, cards):
     """Every report column with its source, tag and family, under the source fold's own summary."""
     family = {n: title for _, title, names in FAMILIES + (TEST_ORDER,) for n in names}
     summary = src.summary()
-    if int(re.search(r"(\d+) rows", summary).group(1)) != len(src.columns):
+    if not (count := re.search(r"(\d+) rows", summary)):
+        raise ValueError(f"{summary!r} states no row count")
+    if int(count.group(1)) != len(src.columns):
         raise ValueError(f"{summary!r} but the report Columns section holds {len(src.columns)} rows")
     names = ("Column", "Source", "Tag", "Section")
     head = "".join(f'<th scope="col">{h}</th>' for h in names)
@@ -359,7 +369,7 @@ def body(page, snap, idx):
     src = MetricSources(snap)
     cards = MetricCards(src)
     typed = formulas(src, cards)
-    intro = re.search(r"<p>.*?</p>", src.columns_html, re.S).group(0)
+    intro = src.intro()
     figure = MeasurePipeline(src, cards).figure(next(parts.numbers(page.slug)))
     rest = [f'<h2 id="measurement-pipeline">Measurement pipeline</h2>\n{figure}',
             f'<h2 id="columns">Columns</h2>\n{intro}\n'

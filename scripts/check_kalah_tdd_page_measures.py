@@ -375,6 +375,14 @@ class Measures(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "weight_text"):
             body(with_report(snap(), old, new)._replace(facts=facts))
 
+    def test_refuses_missing_columns_parts(self):
+        intro = re.search(r"<p>.*?</p>", kalah("snapshot").section(report(), "columns"), re.S).group(0)
+        for old, new, says in (("<summary>Column definitions, 32 rows", "<summary>Definitions, 32 rows", "fold summary"),
+                               ("Column definitions, 32 rows", "Column definitions, all rows", "row count"),
+                               (intro, "", "intro")):
+            with self.subTest(says), self.assertRaisesRegex(ValueError, says):
+                body(with_report(snap(), old, new))
+
     def test_pipeline_text_version_matches(self):
         fig, root = f4_svg()
         nodes = flowcheck().node_boxes(root)
