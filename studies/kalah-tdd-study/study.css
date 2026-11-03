@@ -235,6 +235,7 @@ details > .shaped{margin:0;padding:0 0 10px}
 .entry{margin:0 0 var(--space-3);padding:var(--space-2) var(--space-3);border-left:3px solid var(--accent)}
 .entry p{margin:var(--space-1) 0}
 .nowrap{white-space:nowrap}
+.words{overflow-wrap:normal}
 .brk{overflow-wrap:anywhere}
 
 /* Tables. The wrapper is a focusable labelled region that scrolls on its own; the page never scrolls sideways. */

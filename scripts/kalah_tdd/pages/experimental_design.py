@@ -50,14 +50,18 @@ def spec(snap, after):
     return "".join(out)
 
 
+def heads(names):
+    """Column heads that never break mid-word: one-word heads stay on one line, longer ones wrap only at spaces."""
+    return "".join(f'<th scope="col" class="{"words" if " " in h else "nowrap"}">{h}</th>' for h in names)
+
+
 def variants():
     """The four variants as play(io, clockwise, sevenfive) selects them, read from the play() doc comment."""
     cells = [(f"<code>{str(cw).lower()}</code>", f"<code>{str(sf).lower()}</code>", 7 if sf else 6, 5 if sf else 4,
               "clockwise" if cw else "anti-clockwise") for sf in (False, True) for cw in (False, True)]
     rows = "".join("<tr>" + "".join(f'<td class="nowrap">{c}</td>' for c in row) + "</tr>" for row in cells)
     head = ("clockwise", "sevenfive", "Houses per player", "Seeds per house", "Sowing")
-    table = ('<table id="variants"><thead><tr>' + "".join(f'<th scope="col" class="nowrap">{h}</th>' for h in head)
-             + f"</tr></thead><tbody>{rows}</tbody></table>")
+    table = f'<table id="variants"><thead><tr>{heads(head)}</tr></thead><tbody>{rows}</tbody></table>'
     return parts.table(table, "Kalah variants")
 
 
@@ -112,8 +116,7 @@ def runs_table(snap):
                     + "".join(f'<td class="nowrap">{escape(str(c))}</td>' for c in cells) + "</tr>")
         if text := note(name, run, snap.facts):
             notes.append(f"<li><b>{escape(name)}</b>. {text}</li>")
-    table = ('<table id="runs-table"><thead><tr>' + "".join(f'<th scope="col" class="nowrap">{h}</th>' for h in head)
-             + f"</tr></thead><tbody>{''.join(rows)}</tbody></table>")
+    table = f'<table id="runs-table"><thead><tr>{heads(head)}</tr></thead><tbody>{"".join(rows)}</tbody></table>'
     return parts.table(table, "Every run with its caps and versions") + f"<ul>{''.join(notes)}</ul>"
 
 
@@ -122,9 +125,8 @@ def collect_table(snap):
                    f'<td class="nowrap"><code>{escape(s["name"])}</code></td>'
                    f'<td>{"yes" if s["skippable"] else "no"}</td></tr>'
                    for mode, steps in snap.facts["pipeline"]["collect"].items() for k, s in enumerate(steps, 1))
-    table = ('<table id="collect-steps"><thead><tr><th scope="col">Mode</th><th scope="col" class="nowrap">Order</th>'
-             '<th scope="col">Step</th><th scope="col">Skipped after a failed fetchBack</th></tr></thead>'
-             f"<tbody>{rows}</tbody></table>")
+    head = ("Mode", "Order", "Step", "Skipped on failed fetchBack")
+    table = f'<table id="collect-steps"><thead><tr>{heads(head)}</tr></thead><tbody>{rows}</tbody></table>'
     return parts.table(table, "collect.sh steps")
 
 

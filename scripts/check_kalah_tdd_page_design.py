@@ -189,9 +189,20 @@ class Design(unittest.TestCase):
                   f"cycles per call and {run['caps']['starts']} starts")
         self.assertIn(study.squash(shared), main_text())
 
+    def test_short_column_heads(self):
+        """At 375px th's overflow-wrap:anywhere breaks a squeezed head mid-word and a nowrap head widens its column,
+        so the page's own heads stay short, only one-word heads keep nowrap and longer ones wrap only at spaces."""
+        heads = [(n, study.spaced(n)) for id in ("variants", "collect-steps", "runs-table")
+                 for n in page().ids[id].iter() if n.tag == "th" and n.closest("thead")]
+        self.assertGreaterEqual(len(heads), 15)
+        self.assertEqual([t for _, t in heads if len(t) > 28], [])
+        self.assertEqual([t for n, t in heads if "nowrap" in n.classes() and len(t) > 10], [])
+        self.assertEqual([t for n, t in heads if " " in t and "words" not in n.classes()], [])
+        self.assertTrue(re.search(r"(^|\})\.words\{overflow-wrap:normal\}", CSS.read_text(encoding="utf-8"), re.M))
+
     def test_collect_steps_table(self):
         head, rows = table("collect-steps")
-        self.assertEqual(head, ["Mode", "Order", "Step", "Skipped after a failed fetchBack"])
+        self.assertEqual(head, ["Mode", "Order", "Step", "Skipped on failed fetchBack"])
         want = [[mode, str(k), s["name"], "yes" if s["skippable"] else "no"]
                 for mode, steps in facts()["pipeline"]["collect"].items() for k, s in enumerate(steps, 1)]
         self.assertEqual(rows, want)
