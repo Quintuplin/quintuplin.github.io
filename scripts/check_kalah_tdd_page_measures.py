@@ -216,6 +216,7 @@ def said(names):
     return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
 
 
+@functools.cache
 def anchor_title(anchor):
     root = check().Tree(kalah("snapshot").section(report(), anchor)).root
     return check().spaced(next(n for n in root.iter() if check().heading(n)))
