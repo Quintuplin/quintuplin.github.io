@@ -1,0 +1,283 @@
+"""The methodology page (#64): how each design runs, from stages.json, the run records, the review schema and collect.sh."""
+
+import json
+import re
+from html import escape
+
+from .. import links, pagemap, parts, snapshot
+
+KINDS = {"S": "once", "L": "repeat per unit", "F": "throughout", "starts": "for up to n starts", "H": "the harness does"}
+# Notation sentence that defines each kind.
+DEFINES = {"S": "Once means", "L": "Repeat per unit means", "F": "Throughout means", "starts": "For up to n starts means",
+           "H": "The harness does means"}
+DESIGN_PAGES = {slug for slug, *_ in pagemap.DESIGNS}
+CHIP = ' <span class="chip">skippable</span>'
+
+
+def inline(text):
+    return re.sub(r"`([^`]+)`", r"<code>\1</code>", re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", escape(text, quote=False)))
+
+
+def md(text, label):
+    """Paragraphs and numbered lists of a methods doc section; the list gets aria-label label."""
+    out = []
+    for block in text.split("\n\n"):
+        lines = block.splitlines()
+        if all(re.match(r"\d+\. ", line) for line in lines):
+            lis = "".join(f"<li>{inline(re.sub(r'^\d+\. ', '', line))}</li>" for line in lines)
+            out.append(f'<ol aria-label="{escape(label)}">{lis}</ol>')
+        else:
+            out.append(f"<p>{inline(' '.join(lines))}</p>")
+    return "".join(out)
+
+
+def grid(caption, head, rows):
+    """A captioned table that stacks into labelled cells on a narrow screen. Cells are HTML."""
+    th = "".join(f'<th scope="col">{escape(h)}</th>' for h in head)
+    body = "".join("<tr>" + "".join(f'<td data-th="{escape(h)}">{c}</td>' for h, c in zip(head, r)) + "</tr>" for r in rows)
+    return parts.table(f'<table class="cols"><caption>{escape(caption)}</caption><thead><tr>{th}</tr></thead>'
+                       f"<tbody>{body}</tbody></table>", caption)
+
+
+def section(id, title, *html):
+    return f'<section aria-labelledby="{id}"><h2 id="{id}">{escape(title)}</h2>{"".join(html)}</section>'
+
+
+def p(text, kind=None):
+    return f"<p>{text}{' ' + parts.tag(kind) if kind else ''}</p>"
+
+
+def code(text):
+    return f"<code>{escape(str(text))}</code>"
+
+
+def joined(values):
+    return ", ".join(map(str, values))
+
+
+def methodology(snap, title):
+    return next(s["text"] for s in snap.facts["analysis"]["methodologies"] if s["title"] == title)
+
+
+def families(snap):
+    """Method name to family, from the methods doc Summary table."""
+    lines = methodology(snap, "Summary").splitlines()[2:]
+    return {cells[0]: cells[1] for line in lines if (cells := [c.strip() for c in line.strip("|").split("|")])}
+
+
+def glossary(snap, term):
+    """A report glossary definition, as HTML."""
+    m = re.search(rf"<b>{re.escape(term)}</b>\. Tag: verified\.</p><p><b>Definition:</b> (.*?)</p>", snap.files[snapshot.REPORT])
+    return m.group(1)
+
+
+def design_cell(snap, d):
+    name = escape(snap.facts["stages"][d]["method"])
+    return f'<a href="{links.url("designs/" + d)}">{name}</a>' if d in DESIGN_PAGES else name
+
+
+def value(v):
+    """A stage field as run: a list as list items, else plain text."""
+    if isinstance(v, list):
+        return "<ul>" + "".join(f"<li>{escape(str(x))}</li>" for x in v) + "</ul>"
+    return escape(str(v))
+
+
+def notation(snap):
+    """The kinds of stage, each defined by its notation sentence, then the rest of the notation."""
+    f = snap.facts
+    text = f["pipeline"]["notation"].removesuffix(" Tag: verified.")
+    sentences = re.findall(r"[^.]+\.", text)
+    count = {k: sum(1 for s in f["stages"].values() for st in s["stages"] if st["kind"] == k) for k in KINDS}
+    terms, rest = [], []
+    for s in (s.strip() for s in sentences):
+        kind = next((k for k, start in DEFINES.items() if s.startswith(start)), None)
+        if kind:
+            terms.append(f"<dt>{kind}: {escape(KINDS[kind])}</dt><dd>{escape(s)} {count[kind]} "
+                         f"stage{'s' if count[kind] != 1 else ''}.</dd>")
+        else:
+            rest.append(s)
+    stages = sum(count.values())
+    return section(
+        "how-a-design-runs", "How a design runs",
+        p(f"Each design runs as a list of stages in {code('harness/workflow/stages.json')}. A stage takes numbered "
+          f"steps of its method from {code('tdd-methodologies.md')}, quoted through {code('args.json')}. "
+          f"{len(f['stages'])} stage sets hold {stages} stages.", "recomputed"),
+        f'<dl class="terms">{"".join(terms)}</dl>', p(escape(" ".join(rest)), "verified"))
+
+
+def stage_rows(snap, d):
+    out = []
+    for st in snap.facts["stages"][d]["stages"]:
+        rules = ([f"commit cap {st['commit_cap']}"] if "commit_cap" in st else []) + \
+                ([f"if {st['when']}"] if "when" in st else []) + \
+                [f"with {snap.facts['stages'][w]['method']} steps {joined(n)}" for w, n in st.get("with", {}).items()]
+        out.append([design_cell(snap, d), escape(st["id"]), f"{st['kind']} ({escape(KINDS[st['kind']])})",
+                    joined(st["steps"]) or "none", escape(st.get("unit", "")), escape(st.get("returns", "")),
+                    escape("; ".join(rules)), escape(st.get("note", ""))])
+    return out
+
+
+def changes(snap):
+    """Stage fields that a run recorded unlike stages.json, grouped by identical change: {(design, stage, field, value
+    as JSON): ["run build", ...]}."""
+    f, out = snap.facts, {}
+    for run, r in f["runs"].items():
+        for build, m in r["methods"].items():
+            d = m.get("arm") or next(k for k, s in f["stages"].items() if s["method"] == m["method"])
+            now = {st["id"]: st for st in f["stages"][d]["stages"]}
+            for st in m["stages"]:
+                for field in sorted(set(st) | set(now[st["id"]])):
+                    if st.get(field) != now[st["id"]].get(field):
+                        out.setdefault((d, st["id"], field, json.dumps(st.get(field))), []).append(f"{run} {build}")
+    return out
+
+
+def stages(snap):
+    fam, out = families(snap), []
+    head = ["Design", "Stage", "Kind", "Steps", "Unit", "Returns", "Rules", "Note"]
+    for family in dict.fromkeys(fam.values()):
+        designs = [d for d, s in snap.facts["stages"].items() if fam[s["method"]] == family]
+        slug = re.sub(r"\W+", "-", family.lower())
+        out.append(f'<h3 id="stages-{slug}">{escape(family)}</h3>' +
+                   grid(f"Stages: {family}", head, [r for d in designs for r in stage_rows(snap, d)]))
+    found = changes(snap)
+    rows = [[escape(joined(builds)), escape(snap.facts["stages"][d]["method"]), escape(stage), escape(field),
+             value(json.loads(v))] for (d, stage, field, v), builds in found.items()]
+    builds = len({b for bs in found.values() for b in bs})
+    return section(
+        "stages", "Stages",
+        p("Each table lists one family's stage sets as stages.json holds them now. Rules name a commit cap, the event "
+          "that starts a stage and the steps borrowed from another method.", "verified"), *out,
+        '<h3 id="stage-changes">Stages as run</h3>',
+        p(f"Each run records the stages it ran. {builds} builds recorded a stage field unlike stages.json. As run, "
+          f"<i>with</i> holds the quoted step texts where stages.json holds step numbers.", "recomputed"),
+        grid("Stages as run that differ from stages.json", ["Builds", "Design", "Stage", "Field", "As run"], rows))
+
+
+def tcp_fields(run, tcp):
+    dl = "".join(f"<dt>{escape(k)}</dt><dd>{code(v)}</dd>" for k, v in tcp.items() if k not in ("list", "orders"))
+    return f'<p>{escape(run)} test list fields.</p><dl class="terms">{dl}</dl>'
+
+
+def prompts(snap):
+    runs, out = snap.facts["runs"], []
+    for run, r in runs.items():
+        if "list_phase" in r:
+            lis = "".join(f"<li>{escape(s)}</li>" for s in r["list_phase"])
+            out.append(f'<p>{escape(run)} ran the list phase in {len(r["list_phase"])} steps.</p>'
+                       f'<ol aria-label="{escape(run)} list phase">{lis}</ol>')
+        if "tcp" in r:
+            out.append(tcp_fields(run, r["tcp"]))
+    tcp = runs["tcp-1"]
+    lst = tcp["tcp"]["list"]
+    arms = [[escape(b), escape(m["arm"]), escape(m["prompt"]), escape(m["order"]), escape(m["blind"])]
+            for b, m in tcp["methods"].items()]
+    orders = [[escape(o), escape(joined(c))] for o, c in tcp["tcp"]["orders"].items()]
+    clauses = [[escape(c["id"]), str(c["risk"]), str(c["usage"])] for c in lst["clauses"]]
+    candidates = [[escape(c["id"]), escape(joined(c["checks"])), escape(joined(c["relies"])) or "none", str(c["estimate"])]
+                  for c in lst["candidates"]]
+    return section(
+        "prompts", "Prompts and the shared test list",
+        p("The test-list order arms share one prompt and one test list. The methods doc states how the list is "
+          "written.", "verified"),
+        md(methodology(snap, "Shared test list"), "Shared test list steps"), *out,
+        p(f"tcp-1 built {len(arms)} arms on the list of tcp-1-list: {len(lst['clauses'])} clauses and "
+          f"{len(lst['candidates'])} candidates.", "recomputed"),
+        grid("tcp-1 arms", ["Build", "Arm", "Prompt", "Order", "Blind id"], arms),
+        grid("Clauses in the tcp-1 list", ["Clause", "Risk", "Usage"], clauses),
+        grid("Candidates in the tcp-1 list", ["Candidate", "Checks", "Relies", "Estimate"], candidates),
+        grid("tcp-1 candidate orders", ["Order", "Candidates"], orders))
+
+
+def runs(snap):
+    f = snap.facts
+    rows, versions = [], []
+    for run, r in f["runs"].items():
+        caps, doc = r["caps"], snapshot.run_doc(snap, run)
+        waves = "; ".join(f"wave {k}: {joined(w)}" for k, w in enumerate(r.get("waves") or [], 1)) or "none"
+        name = f'<a href="{links.url("methodology/analysis")}">{escape(run)}</a>' if r.get("harness_delta") else escape(run)
+        rows.append([name, escape(r["tag"]), str(len(r["methods"])), escape(r["model"]), escape(r["effort"]),
+                     f"iterations {caps['iterations']}, cycles {caps['cycles']}, starts {caps['starts']}", escape(waves),
+                     code(doc) + (" (methods text on this site)" if doc == snap.doc else ""), escape(joined(f["dropped"][run]))])
+        if h := r.get("harness"):
+            delta = (r.get("harness_delta") or {}).get("sha256")
+            versions.append([escape(run)] + [code(h[k]) for k in ("commit", "engine_sha256", "runner_tree")] +
+                            [escape(h["claude_version"]), code(h["guard_base"]), code(delta) if delta else "none"])
+    builds = sum(len(r["methods"]) for r in f["runs"].values())
+    return section(
+        "runs", "Runs and harness versions",
+        p(f"{len(f['runs'])} runs built {builds} clones. Doc version is the short sha256 of the methods doc a run was "
+          f"built under. Redacted keys name run record fields the snapshot leaves out.", "recomputed"),
+        grid("Runs", ["Run", "Tag", "Builds", "Model", "Effort", "Caps", "Waves", "Doc version", "Redacted keys"], rows),
+        p(f"{len(versions)} runs record the harness they ran. rep-2/rebuild rebuilt "
+          f"{len(f['runs']['rep-2/rebuild']['methods'])} rep-2 replicates on a changed harness and records the sha256 "
+          f"of the change.", "recomputed"),
+        grid("Harness versions", ["Run", "Harness commit", "Engine sha256", "Runner tree", "Claude version", "Guard base",
+                                  "Harness delta sha256"], versions))
+
+
+def held_out(snap):
+    notes = {st["id"]: st["note"] for st in snap.facts["stages"]["held-out"]["stages"] if st["id"] in ("s2", "s3")}
+    return section(
+        "held-out-split", "The held-out split",
+        p(f'Held-out TDD as the methods doc states it. Its <a href="{links.url("designs/held-out")}">design page</a> '
+          f"covers its builds.", "verified"),
+        md(methodology(snap, "Held-out TDD"), "Held-out TDD steps"),
+        p("The separate agent writes the cases in stage s2 and stage s3 splits them. Their notes follow.", "verified"),
+        *(f"<blockquote><p><b>{escape(id)}</b>. {escape(note)}</p></blockquote>" for id, note in notes.items()))
+
+
+def leaves(schema):
+    """(item title, criterion title) for each scored item of the review schema."""
+    out = []
+    for crit in schema["properties"].values():
+        subs = crit["properties"]
+        out += [(crit["title"], crit["title"])] if "score" in subs else [(s["title"], crit["title"]) for s in subs.values()]
+    return out
+
+
+def review(snap):
+    schema = snap.facts["runs"]["full-1"]["review_schema"]
+    same = len({json.dumps(r["review_schema"], sort_keys=True) for r in snap.facts["runs"].values()}) == 1
+    crit = "".join(f"<dt>{escape(c['title'])}</dt><dd>{escape(c['description'])}</dd>" for c in schema["properties"].values())
+    rows = [[escape(item), escape(c), "1 to 5", "1 to 400 characters"] for item, c in leaves(schema)]
+    return section(
+        "blind-review", "Blind review",
+        p(f"<b>{escape(schema['title'])}</b>. {escape(schema['description'])}", "verified"),
+        p(f"Every run records {'the same' if same else 'its own'} review schema, with {len(rows)} scored items.",
+          "recomputed"),
+        f'<dl class="terms">{crit}</dl>',
+        grid("Blind review criteria", ["Item", "Criterion", "Score", "Reason"], rows),
+        p(f"{glossary(snap, 'Blind review and blind rating')} The scores are on the "
+          f'<a href="{links.url("data/ratings")}">ratings page</a>.', "verified"))
+
+
+def collect(snap):
+    steps = snap.facts["pipeline"]["collect"]
+    lists = "".join(
+        f'<p>{code(name)} runs {len(s)} steps in order.</p><ol class="collect" aria-label="{escape(name)} steps">' +
+        "".join(f"<li>{code(x['name'])}{CHIP if x['skippable'] else ''}</li>" for x in s) +
+        "</ol>" for name, s in steps.items())
+    found = re.findall(r"<b>([^<]+)</b>\. Channel: (\w+)\. High flags: (\d+)\. Verdict: ([^.]+)\.",
+                       snapshot.section(snap.files[snapshot.REPORT], "audit-flag-dispositions"))
+    rows = [[escape(x) for x in d] for d in found]
+    return section(
+        "collect-audit", "Collect and audit",
+        p(f"After the build stages {code('collect.sh')} collects each run. Its steps marked skippable can be skipped.",
+          "recomputed"), lists,
+        p(f"<b>Audit flag.</b> {glossary(snap, 'Audit flag')}", "verified"),
+        grid("Audit flag dispositions summary", ["Design", "Channel", "High flags", "Verdict"], rows),
+        p(f"{len(found)} rows judge {sum(int(d[2]) for d in found)} high flags. The evidence for each is in "
+          f'<a href="{links.url("data", "audit-flag-dispositions")}">the audit flag dispositions</a>.', "recomputed"))
+
+
+def intro():
+    return (p(f"This part sets out how the harness runs each design, from the sources {code('harness/workflow/stages.json')}, "
+              f"{code('args.json')}, {code('collect.sh')} and {code('tdd-methodologies.md')}, and the run records.") +
+            p("Claims carry a tag. Recomputed means redone from source data. Verified means checked against a primary "
+              "source. Unchecked means written or judged by an agent and not checked."))
+
+
+def body(page, snap, idx):
+    return [intro(), notation(snap), stages(snap), prompts(snap), runs(snap), held_out(snap), review(snap), collect(snap)]
