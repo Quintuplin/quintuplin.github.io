@@ -178,6 +178,13 @@ class Merge(unittest.TestCase):
         for broken in (pre.replace(step, ""), pre.replace("Name it in the commit", "Name it in a commit")):
             with self.subTest(broken[-80:]), self.assertRaisesRegex(ValueError, r"tpp\b.*step"):
                 d.merge_steps("tpp", broken, code)
+        last = pre.rpartition('<span class="st">')
+        broken = {"last step dropped": (last[0] + "</pre>", code, "only one"),
+                  "text between lines": (pre.replace("</span><span", "</span>stray<span", 1), code, "outside a step line"),
+                  "unknown method line": (pre, code.replace("<pre><code>", "<pre><code>  x. &quot;y&quot;\n", 1), "no known form")}
+        for name, (shown, method_code, why) in broken.items():
+            with self.subTest(name), self.assertRaisesRegex(ValueError, rf"tpp\b.*{why}"):
+                d.merge_steps("tpp", shown, method_code)
 
     def test_text_union(self):
         d = kalah("pages.designs")
