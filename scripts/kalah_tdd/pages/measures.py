@@ -251,7 +251,8 @@ def lead(snap, rest):
     docs = joined([f"{run} {snapshot.run_doc(snap, run)}" for run in named_runs(snap, rest)])
     return ("<p>Each card quotes a column or term definition from the snapshot with its claim tag. The lines under it "
             "give the typed formula where the page has one, the inputs when the definition names no Source, and the "
-            "module that computes it.</p>\n"
+            "module that computes it. Formula, Inputs and Module lines, this lead and the Figure 4.1 caption are "
+            f"written by this site. Tag: {parts.tag('unchecked')}.</p>\n"
             f"<p>The methods text on these pages is from methods doc {snap.doc}. The runs this page names were built "
             f"under these doc versions, by short sha256: {docs}.</p>")
 
