@@ -155,7 +155,8 @@ def norm(text):
 
 
 def merge_steps(slug, pre, code):
-    """The showcase pre.steps with the method page's step numbers. Refused when a line differs in kind or text."""
+    """The showcase pre.steps with the method page's step numbers and with lines. Refused when a line differs in kind
+    or text."""
     inner = pre.removeprefix('<pre class="steps">').removesuffix("</pre>")
     shown = SPAN.findall(inner)
     if "".join(f'<span class="{k}">{t}</span>' for k, t in shown) != inner:
@@ -169,7 +170,9 @@ def merge_steps(slug, pre, code):
         want = m["hd"] or ("also: " if m["with"] else "") + m["st"]
         if kind != ("hd" if m["hd"] else "st") or norm(text) != norm(want):
             raise ValueError(f"{slug}: showcase step line {k} {norm(text)!r} does not match method line {norm(line)!r}")
-        out.append(f'<span class="{kind}">{m["n"] + ". " if m["n"] else ""}{text}</span>')
+        # A borrowed step keeps the method page's with form, which the kinds paragraph explains.
+        shown_text = f'with {m["st"]}' if m["with"] else f'{m["n"] + ". " if m["n"] else ""}{text}'
+        out.append(f'<span class="{kind}">{shown_text}</span>')
     if len(shown) != len(lines):
         extra = (shown[len(lines):] or [("", line) for line in lines[len(shown):]])[0][1]
         raise ValueError(f"{slug}: step line {norm(extra)!r} is in only one of the showcase and the method page")

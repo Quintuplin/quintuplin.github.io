@@ -162,12 +162,15 @@ class Merge(unittest.TestCase):
                 shown = [(k, unescape(t)) for k, t in SPAN.findall(re.search(r'<pre class="steps">(.*?)</pre>', view(slug), re.S).group(1))]
                 numbers = [m.group(1) if (m := re.match(r"  (\d+)\. ", line)) else None for line in code_lines(slug)]
                 self.assertEqual(len(shown), len(numbers))
-                want = [(k, f"{n}. {t}" if n else t) for (k, t), n in zip(shown, numbers)]
+                # A borrowed step reads as the method page's with line, which the kinds paragraph explains.
+                borrowed = {i: line.strip().removeprefix('with "').removesuffix('"')
+                            for i, line in enumerate(code_lines(slug)) if line.startswith("  with ")}
+                self.assertEqual(sorted(borrowed), [i for i, (_, t) in enumerate(shown) if t.startswith("also: ")])
+                want = [(k, f"with {borrowed[i]}" if i in borrowed else f"{n}. {t}" if n else t)
+                        for i, ((k, t), n) in enumerate(zip(shown, numbers))]
                 pre = next(n for n in main(f"designs/{slug}").iter() if n.tag == "pre" and "steps" in n.classes())
                 got = [(s.attrs["class"], text(s)) for s in pre.elements()]
                 self.assertEqual(got, want)
-                borrowed = [line for line in code_lines(slug) if line.startswith("  with ")]
-                self.assertEqual(len(borrowed), sum(t.startswith("also: ") for _, t in want))
 
     def test_steps_union_refuses_loss(self):
         d = kalah("pages.designs")
