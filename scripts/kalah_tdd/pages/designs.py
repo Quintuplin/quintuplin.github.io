@@ -6,6 +6,7 @@ import re
 from html import unescape
 
 from .. import links, pagemap, parts
+from ..figures import class_diagram
 from ..snapshot import REPORT, SHOWCASE, section, view
 
 A02 = "designs/a02-reference"
@@ -37,7 +38,8 @@ LABEL = re.compile(r"<(h[1-6]|summary)\b[^>]*>(.*?)</\1>|<table\b.*?</table>", r
 
 def body(page, snap, idx):
     fragments = reference(page, snap, idx) if page.slug == A02 else design(page, snap, idx)
-    return [TAG.sub(lambda m: f"Tag: {parts.tag(m.group(1))}.", f) for f in wrap_tables(fragments)]
+    fragments = class_diagram.frame_all(wrap_tables(fragments), page.slug)
+    return [TAG.sub(lambda m: f"Tag: {parts.tag(m.group(1))}.", f) for f in fragments]
 
 
 def design(page, snap, idx):
