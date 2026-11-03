@@ -129,7 +129,7 @@ def builds(snap):
     total = sum(len(run["methods"]) for run in every.values()) - rebuilds
     return ("<p>A build is one final clone of a method or arm. Start clones and rebuilds are not builds. Multi-start "
             "TDD runs each start in a clone of its own, up to the starts cap, so " + listed(clones)
-            + f". The runs make {total} builds, the marks of Figure 2.2, and {rebuilds} rebuilds, "
+            + f". The runs make {total} builds, the counts in Figure 2.2, and {rebuilds} rebuilds, "
             f"the ring {parts.tag('recomputed')}.</p>")
 
 

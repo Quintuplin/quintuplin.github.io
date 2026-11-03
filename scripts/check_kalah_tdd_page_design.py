@@ -216,8 +216,12 @@ class Design(unittest.TestCase):
         col = head.index("Builds")
         self.assertEqual(sum(int(r[col]) for r in rows if r[col].isdigit()), builds)
         self.assertEqual([r[col] for r in rows if not r[col].isdigit()], [f"{rebuilds} rebuilds"])
-        self.assertIn(study.squash(f"The runs make {builds} builds, the marks of Figure 2.2, and {rebuilds} rebuilds"),
+        self.assertIn(study.squash(f"The runs make {builds} builds, the counts in Figure 2.2, and {rebuilds} rebuilds"),
                       text)
+        # Figure 2.2 has one mark per arm and run cell, far fewer than the builds, so the builds are not its marks.
+        cells = marks(svg_root(figures()["arms-map"]))
+        self.assertNotEqual(len(cells), builds)
+        self.assertNotIn(study.squash("marks of Figure 2.2"), text)
 
     def test_start_clones_worded_by_evidence(self):
         """full-1 states the 3 start clones its multi-start page records. The pilots record none, so they state the cap."""
