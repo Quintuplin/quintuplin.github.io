@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><body><main>
+<h1 id="classic-greedy-tdd">Classic greedy TDD</h1>
+<h2 id="score-card">Score card</h2>
+<div class="tiles"><div class="tile"><span class="sub">Functional mark</span><b>15/15</b></div></div>
+<h2 id="records">Records</h2>
+<h5 id="headline">Headline</h5>
+<details><summary>Replicates (rep-1), 1 rows and 2 columns</summary><div class="shaped"><table class="cols"><thead><tr><th scope="col">Replicate</th><th scope="col">Adjusted mutation</th></tr></thead><tbody><tr><th scope="row">rep-1-r01</th><td>0.984</td></tr></tbody></table></div></details>
+<details><summary>Column definitions, 1 rows and 4 columns</summary><div class="shaped"><div class="entry"><p class="sub"><b>Replicate</b>. Tag: verified.</p><p><b>Definition:</b> The replicate build id.</p></div></div></details>
+</main></body></html>

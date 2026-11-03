@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en"><head><title>12 ways to test-drive Kalah</title></head><body><main id="main">
+<h1>12 ways to test-drive Kalah</h1>
+<div class="kpis"><div class="kpi"><b>12</b><span>Designs</span></div></div>
+<article class="award"><h3>Best overall</h3><ol><li data-medal="gold"><span class="medal">Gold</span> <a href="designs/functions-first/">Functions first, classes later</a> <span class="val">rank sum 11.0</span></li></ol></article>
+<h2 id="headline">Headline</h2>
+<div class="tiles"><div class="tile"><span class="sub">Correctness</span><b>11 of 11</b><span class="sub">methods with a full functional mark</span></div></div>
+<div class="awards"><div class="award"><b>Best overall</b><ol><li><span class="chip" data-k="gold"><i></i>Gold</span> Functions first, classes later, rank sum 11.0</li></ol></div></div>
+</main></body></html>

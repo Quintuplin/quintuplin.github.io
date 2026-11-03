@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><body><main>
+<nav aria-label="Contents"><a href="#headline">Headline</a></nav>
+<h1 id="kalah-tdd-experiment">Kalah TDD Experiment</h1>
+<h2 id="headline">Headline</h2>
+<div class="tiles"><div class="tile"><span class="sub">Correctness</span><b>11 of 11</b><span class="sub">methods with a full functional mark</span></div></div>
+<div class="awards"><div class="award"><b>Best overall</b><p>Lowest plain sum of ranks.</p><ol><li><span class="chip" data-k="gold"><i></i>Gold</span> Functions first, classes later, rank sum 11.0</li></ol></div></div>
+<h2 id="arguments">Arguments</h2>
+<h3 id="survey-full-1">Survey (full-1)</h3>
+<figure id="pmd-cost"><figcaption><h3>PMD violations against weighted tokens</h3></figcaption><div class="plot"><svg viewBox="0 0 520 320" role="img" aria-label="Scatter of PMD violations against weighted tokens, one mark per method"><line class="axis" x1="52" x2="504" y1="274" y2="274"/><text x="278" y="312" text-anchor="middle">Weighted tokens, millions</text><line class="axis" x1="52" x2="52" y1="14" y2="274"/><text transform="rotate(-90)" x="-144" y="14" text-anchor="middle">PMD violations</text><path class="mk s1" d="M199 14h10Z"><title>classic: 843,734 weighted tokens, 10 PMD violations</title></path><path class="mk s2" d="M220 269h10Z"><title>noun-verb: 961,206 weighted tokens, 0 PMD violations</title></path></svg></div>
+<details><summary>Table view, 2 rows and 3 columns</summary><div class="shaped"><table class="cols"><thead><tr><th scope="col">Method</th><th scope="col">Weighted tokens</th><th scope="col">PMD violations</th></tr></thead><tbody><tr><th scope="row">classic</th><td>843,734</td><td>10</td></tr><tr><th scope="row">noun-verb</th><td>961,206</td><td>0</td></tr></tbody></table></div></details></figure>
+<h2 id="questions">Questions</h2>
+<div class="answer" id="q1"><p class="aq"><b>Q1</b> Does the greedy analogy hold?</p></div>
+<h2 id="scope-and-terms">Scope and terms</h2>
+<h3 id="glossary">Glossary</h3>
+<details><summary>Glossary, 2 rows and 3 columns</summary><div class="shaped"><div class="entry"><p class="sub"><b>Kalah</b>. Tag: verified.</p><p><b>Definition:</b> A board game for two players.</p></div><div class="entry"><p class="sub"><b>Family</b>. Tag: verified.</p><p><b>Definition:</b> One of four groups of methods.</p></div></div></details>
+<h3 id="columns">Columns</h3>
+<details><summary>Column definitions, 1 rows and 4 columns</summary><div class="shaped"><div class="entry"><p class="sub"><b>Weighted tokens</b>. Tag: recomputed.</p><p><b>Definition:</b> Model tokens weighted by price.</p></div></div></details>
+</main></body></html>

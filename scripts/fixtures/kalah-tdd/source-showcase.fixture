@@ -1,0 +1,5 @@
+<!doctype html>
+<html lang="en"><body>
+<main class="sheet" id="summary" data-title="Kalah TDD showcase"><div class="kpis"><div class="kpi"><b>12</b><span>Designs</span></div></div><div class="grid"><article class="award"><h3>Best overall</h3><ol><li data-medal="gold"><span class="medal">Gold</span> <a href="#functions-first">Functions first, classes later</a> <span class="val">rank sum 11.0</span></li></ol></article></div></main>
+<main class="sheet" id="classic" data-title="Classic greedy TDD - Kalah TDD showcase" hidden><section id="survey"><div class="kpis"><div class="kpi"><b>804,727</b><span>Cost to completion</span></div></div></section><h2>Terms</h2><dl class="terms"><dt>PMD</dt><dd>A static analysis tool for Java.</dd></dl></main>
+</body></html>
