@@ -20,7 +20,15 @@ from unittest import mock
 SCRIPTS = Path(__file__).resolve().parent
 SLUG = "methodology/measures"
 HEADINGS = ["measurement-pipeline", "columns", "tests", "static-analysis-and-mutation", "size-and-speed", "cost",
-            "review-ratings", "combined-and-consistency", "records", "test-order-measures", "column-index"]
+            "review-ratings", "combined-and-consistency", "records", "test-order-measures", "table-fields",
+            "builds-and-methods", "contrasts-and-tests", "ratings", "run-records", "test-list-and-stages", "column-index"]
+# Labels the G10b results pages add from facts, outside the snapshot report (G10-plan.md, "MetricDefs labels").
+G10B_LABELS = {"figure title": ("Holm p of each planned contrast", "APFD-I and APFDc-H by test-list order",
+                                "Stage flow of a tcp-1 arm"),
+               "axis label": ("Holm p", "Hidden-pass curve area"),
+               "table header": ("Run", "Outcome", "Contrast", "U", "Holm p", "Order", "APFD-I", "APFDc-H", "Arm",
+                                "Candidate", "Checks", "Relies", "Estimate", "Clause", "Risk", "Usage", "Setting",
+                                "Value", "Stage", "Runs as", "Steps", "Details", "Note")}
 # The metrics plan.md names for this page, as dfn names.
 PLAN_METRICS = {"functional mark", "hidden pass", "seen tests", "unseen pass", "acceptance pass", "strict pmd compliance",
                 "strict pmd violations", "mutation score", "k/n", "adjusted mutation", "weighted tokens",
@@ -28,7 +36,8 @@ PLAN_METRICS = {"functional mark", "hidden pass", "seen tests", "unseen pass", "
                 "relative spread", "consistency score c", "clear presentation", "explanatory language", "consistent code",
                 "used content", "simple constructs", "minimal duplication", "modular structure", "problem alignment"}
 ABSENT = "Module: not stated in the snapshot."
-SITE_WRITTEN = "Formula, Inputs and Module lines, this lead and the Figure 4.1 caption are written by this site."
+SITE_WRITTEN = ("Formula, Inputs, Module and Also labelled lines, this lead and the Figure 4.1 caption are written by "
+                "this site.")
 STRAY = ('<div class="entry"><p class="sub"><b>{}</b>. Source: stray.json. Tag: recomputed.</p>'
          '<p><b>Definition:</b> A row no family holds.</p></div>')
 FILE = re.compile(r"[\w-]+\.(?:tsv|json|txt|csv|calls)\b")
@@ -133,7 +142,70 @@ def source_entries():
 
 
 def cards():
-    return [n for n in page().root.iter() if "entry" in n.classes() and n.closest(cls="entry") is None]
+    """The metric cards: every outer entry outside the Table fields cards."""
+    return [n for n in page().root.iter() if "entry" in n.classes() and n.closest(cls="entry") is None
+            and n.closest(cls="fields") is None]
+
+
+def field_cards():
+    return [n for n in page().root.iter() if "entry" in n.classes() and n.closest(cls="fields") is not None]
+
+
+@functools.cache
+def label_sections():
+    """{(page slug, anchor): html} for each results and data page anchor, less the sections of anchors inside it,
+    so each label belongs to one anchor as the page map places it."""
+    s, out = kalah("snapshot"), {}
+    for p in kalah("pagemap").PAGES:
+        for a in p.anchors if check().is_label_page(p.slug) else ():
+            own = s.section(report(), a)
+            for b in check().ANCHORS:
+                if b != a and re.search(rf'<h[1-6]\b[^>]*{s.ID_ATTR}{re.escape(b)}"', own):
+                    own = own.replace(s.section(report(), b), "")
+            out[(p.slug, a)] = own
+    return out
+
+
+def label_pages():
+    pages = {}
+    for (slug, _), own in label_sections().items():
+        pages[slug] = pages.get(slug, "") + own
+    return pages
+
+
+@functools.cache
+def snapshot_labels():
+    """[(anchor, what, text)] for every label MetricDefs counts in the label sections."""
+    return [(a, what, text) for (_, a), own in label_sections().items()
+            for what, text in check().labels(check().Tree(own).root) if re.search(r"[^\W\d_]", text)]
+
+
+def g10b_page():
+    """A page holding each G10b label in the shape check_kalah_tdd_study.labels reads."""
+    figures = "".join(f"<figure><figcaption><h3>{t}</h3></figcaption></figure>" for t in G10B_LABELS["figure title"])
+    axes = "".join(f'<line class="axis"></line><text text-anchor="middle">{t}</text>' for t in G10B_LABELS["axis label"])
+    heads = "".join(f"<th>{t}</th>" for t in G10B_LABELS["table header"])
+    return f"<main>{figures}<svg>{axes}</svg><table><thead><tr>{heads}</tr></thead></table></main>"
+
+
+def dfn_words(dfn):
+    """A dfn's names as check_kalah_tdd_study.dfn_names reads them."""
+    names = {check().spaced(dfn), (dfn.attrs.get("id") or "").replace("-", " ")}
+    names |= set((dfn.attrs.get("data-alias") or "").split("|"))
+    return {n.strip().casefold() for n in names if n.strip()}
+
+
+def aliases(dfn):
+    return [a for a in (dfn.attrs.get("data-alias") or "").split("|") if a]
+
+
+def said(names):
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def anchor_title(anchor):
+    root = check().Tree(kalah("snapshot").section(report(), anchor)).root
+    return check().spaced(next(n for n in root.iter() if check().heading(n)))
 
 
 def first_p(node):
@@ -490,6 +562,106 @@ class Measures(unittest.TestCase):
             for th in (c for c in table.iter() if c.tag == "th"):
                 self.assertEqual(th.attrs.get("scope"), "col" if th.closest("thead") else "row")
             self.assertEqual([a for td in table.iter() if td.tag == "td" for a in td.iter() if a.tag == "a"], [])
+
+    def test_snapshot_labels_defined(self):
+        errors, checked = check().metric_defs({**label_pages(), SLUG: html()})
+        self.assertEqual(errors, [])
+        self.assertEqual(checked, len(snapshot_labels()))
+        self.assertEqual(len({(what, text) for _, what, text in snapshot_labels()}), 104)
+        self.assertGreater(check().metric_defs({**label_pages(), SLUG: html().replace("data-alias=", "data-x=")})[0], [])
+
+    def test_g10b_labels_defined(self):
+        later = g10b_page()
+        self.assertEqual(list(check().labels(check().Tree(later).root)),
+                         [(what, t) for what, texts in G10B_LABELS.items() for t in texts])
+        errors, checked = check().metric_defs({"results/test-order": later, SLUG: html()})
+        self.assertEqual(errors, [])
+        self.assertEqual(checked, sum(map(len, G10B_LABELS.values())))
+
+    def test_figure_titles_name_a_metric(self):
+        records = {measures().slug(n) for id, _, names in measures().FAMILIES if id == "records" for n in names}
+        metric = set()
+        for dfn in (n for n in page().root.iter() if n.tag == "dfn"):
+            if dfn.attrs["id"] not in records and dfn.closest(cls="fields") is None:
+                metric |= dfn_words(dfn)
+        within = re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, sorted(metric, key=len, reverse=True))) + r")(?!\w)")
+        titles = sorted({text for _, what, text in snapshot_labels() if what == "figure title"})
+        self.assertEqual(len(titles), 12)
+        for title in titles:
+            with self.subTest(title):
+                self.assertRegex(title.casefold(), within)
+
+    def test_aliases_are_labels(self):
+        texts = [t for _, _, t in snapshot_labels()] + [t for ts in G10B_LABELS.values() for t in ts]
+        wanted = {check().folded(t) for t in texts} | {check().bare(t) for t in texts}
+        dfns = [n for n in page().root.iter() if n.tag == "dfn"]
+        self.assertGreater(sum(bool(aliases(d)) for d in dfns), 15)
+        for dfn in dfns:
+            card = dfn.closest(cls="entry")
+            lines = subs(card, "Also labelled:")
+            with self.subTest(dfn.attrs["id"]):
+                for alias in aliases(dfn):
+                    self.assertIn(alias.casefold(), wanted)
+                self.assertEqual([check().spaced(n) for n in lines],
+                                 [f"Also labelled: {'; '.join(aliases(dfn))}."] if aliases(dfn) else [])
+                if dfn.closest(cls="fields") is not None and not aliases(dfn):
+                    self.assertIn(check().spaced(dfn).casefold(), wanted)
+
+    def test_field_cards(self):
+        found = field_cards()
+        self.assertGreater(len(found), 40)
+        heads = {}
+        for (_, a), own in label_sections().items():
+            for what, text in check().labels(check().Tree(own).root):
+                if what == "table header":
+                    heads.setdefault(text.casefold(), []).append(anchor_title(a))
+        later = {t.casefold(): what for what, ts in G10B_LABELS.items() for t in ts}
+        report_root = check().Tree(report()).root
+        for card in found:
+            dfn = next(n for n in card.iter() if n.tag == "dfn")
+            name = check().spaced(dfn)
+            with self.subTest(name):
+                self.assertEqual([check().spaced(n) for n in first_p(card).iter() if "tag" in n.classes()], ["unchecked"])
+                titles = list(dict.fromkeys(t for n in [name] + aliases(dfn) for t in heads.get(n.casefold(), [])))
+                lines = [check().spaced(p) for p in card.iter() if p.tag == "p"]
+                where = [t for t in lines if " on Results: " in t or t.startswith("Table header in: ")]
+                if titles:
+                    at = [where[0].find(t) for t in titles]
+                    self.assertNotIn(-1, at, where)
+                    titles = [t for _, t in sorted(zip(at, titles))]
+                    self.assertEqual(where, [f"Table header in: {said(titles)}."])
+                else:
+                    what = later[name.casefold()]
+                    self.assertEqual(where, [f"{what[:1].upper()}{what[1:]} on Results: test order (tcp-1)."])
+                for p in (p for p in card.iter() if p.tag == "p" and "sub" in p.classes()):
+                    text = check().spaced(p)
+                    pills = [check().spaced(n) for n in p.iter() if "tag" in n.classes()]
+                    if m := re.fullmatch(r"The glossary row (.+?) says: (.+) Tag: (\w+)\.", text):
+                        row = glossary()[m.group(1)]
+                        self.assertIn(m.group(2), check().spaced(row))
+                        self.assertEqual(pills, [re.search(r"Tag: (\w+)\.", check().spaced(row)).group(1)])
+                    elif m := re.fullmatch(r"The report section (.+?) says: (.+) Tag: (\w+)\.", text):
+                        head = next(n for n in report_root.iter() if check().heading(n) and check().spaced(n) == m.group(1))
+                        section = check().Tree(kalah("snapshot").section(report(), head.attrs["id"])).root
+                        para = next(q for q in section.iter() if q.tag == "p" and m.group(2) in check().spaced(q))
+                        self.assertEqual(pills, [re.search(r"Tag: (\w+)\.", check().spaced(para)).group(1)])
+                    elif m := re.fullmatch(r"Function (\w+) doc: (.+)", text):
+                        docs = {f["name"]: f["doc"] for a in ("functions", "stats") for f in snap().facts["analysis"][a]}
+                        self.assertEqual(m.group(2), " ".join(docs[m.group(1)].split()))
+                    elif m := re.fullmatch(r"List phase step (\d+) of run (\S+): (.+)", text):
+                        step = snap().facts["runs"][m.group(2)]["list_phase"][int(m.group(1)) - 1]
+                        self.assertEqual(m.group(3), " ".join(step.split()))
+
+    def test_field_refuses_missing_source(self):
+        for old, new, name in (("Its slug is its short lowercase name", "Its slug is its short name", "Slug"),
+                               ("q is the share of bootstrap alphas", "q is the fraction of bootstrap alphas", "Finals q"),
+                               ("Agent id</th>", "Agent key</th>", "Agent id")):
+            with self.subTest(name), self.assertRaisesRegex(ValueError, rf"field {re.escape(name)!r}"):
+                body(with_report(snap(), old, new))
+        facts = copy.deepcopy(snap().facts)
+        facts["runs"]["tcp-1-list"]["list_phase"][4] = "Guess each candidate's size."
+        with self.assertRaisesRegex(ValueError, "field 'Estimate'"):
+            body(snap()._replace(facts=facts))
 
 
 if __name__ == "__main__":
