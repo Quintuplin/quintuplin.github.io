@@ -26,6 +26,7 @@ PLAN_METRICS = {"functional mark", "hidden pass", "seen tests", "unseen pass", "
                 "relative spread", "consistency score c", "clear presentation", "explanatory language", "consistent code",
                 "used content", "simple constructs", "minimal duplication", "modular structure", "problem alignment"}
 ABSENT = "Module: not stated in the snapshot."
+SITE_WRITTEN = "Formula, Inputs and Module lines, this lead and the Figure 4.1 caption are written by this site."
 STRAY = ('<div class="entry"><p class="sub"><b>{}</b>. Source: stray.json. Tag: recomputed.</p>'
          '<p><b>Definition:</b> A row no family holds.</p></div>')
 FILE = re.compile(r"[\w-]+\.(?:tsv|json|txt|csv|calls)\b")
@@ -315,6 +316,12 @@ class Measures(unittest.TestCase):
         for run, doc in listed:
             self.assertEqual(doc, kalah("snapshot").run_doc(snap(), run), run)
         self.assertEqual(measures().named_runs(snap(), "tcp-1-list2 and rep-2/rebuild"), ["tcp-1-list2", "rep-2/rebuild"])
+
+    def test_site_lines_tagged(self):
+        main = check().Tree(html()[html().index('<main id="main">'):html().index('<h2 id="measurement-pipeline"')]).root
+        said = [p for p in main.iter() if p.tag == "p" and SITE_WRITTEN in check().spaced(p)]
+        self.assertEqual(len(said), 1)
+        self.assertEqual([check().spaced(n) for n in said[0].iter() if "tag" in n.classes()], ["unchecked"])
 
     def test_refuses_unassigned_row(self):
         at = report().index("</div></details>", report().index("<summary>Column definitions"))
