@@ -399,6 +399,10 @@ class Refusals(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "no design"):
             design.arms_grid(f)
 
+    def test_spec_refuses_unknown_section(self):
+        with self.assertRaisesRegex(ValueError, "has no section"):
+            experimental_design.spec(snap(), {"spec-nope": "x"})
+
     def test_shared_refuses_differing_run(self):
         f = self.facts()
         f["runs"]["tcp-1"]["effort"] = "low"
