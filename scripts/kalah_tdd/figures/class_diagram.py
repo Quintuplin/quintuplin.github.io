@@ -12,6 +12,7 @@ CLUSTER = re.compile(r'<g class="cluster" data-qualified-name="([^"]+)"')
 LINK = re.compile(r'<g class="link" data-entity-1="(ent\d+)" data-entity-2="(ent\d+)"[^>]*data-link-type="([^"]+)"')
 # Entity 1 relates to entity 2. An aggregation diamond sits at entity 1.
 VERB = {"dependency": "uses", "aggregation": "holds", "extension": "extends"}
+# Said only in place of a report summary diagram, so it names the report.
 SAME = ("<p>The report's class diagram for this design is identical to <a href=\"#{id}\">Figure {n}</a> below, "
         "so it is shown once. Tag: " + parts.tag("recomputed") + ".</p>")
 
@@ -49,11 +50,14 @@ def caption(classes, links):
             f"Tag: {parts.tag('recomputed')}.")
 
 
-def frame_all(fragments, slug):
-    """Each source class diagram framed as Figure P.k, its title one level below the enclosing heading. A diagram
-    repeated later on the page is shown once and its first place links the later figure."""
+def frame_all(fragments, slug, report=None):
+    """Each source class diagram framed as Figure P.k, its title one level below the enclosing heading. A diagram in
+    fragments[report], the report summary, repeated later on the page is shown once and its first place links the
+    later figure. Any other repeat is refused."""
     found = [(i, m) for i, f in enumerate(fragments) for m in SOURCE.finditer(f)]
     repeated = {k for k, (_, m) in enumerate(found) if any(m.group(0) == later.group(0) for _, later in found[k + 1:])}
+    if stray := [k for k in repeated if found[k][0] != report]:
+        raise ValueError(f"{slug}: class diagram {stray[0] + 1} repeats outside the report summary")
     numbers, number = parts.numbers(slug), {}
     for k in range(len(found)):
         if k not in repeated:

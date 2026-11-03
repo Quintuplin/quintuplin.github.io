@@ -227,6 +227,18 @@ class Diagrams(unittest.TestCase):
                 self.assertTrue(set(said) <= ids, said)
         self.assertEqual((framed, links), (56, 11))
 
+    def test_only_report_diagram_deduped(self):
+        frame_all = kalah("figures.class_diagram").frame_all
+        figure = f'<figure class="diagram">{re.search(r"<svg.*?</svg>", method("tpp"), re.S).group(0)}</figure>'
+        fragments = [f"<h2>Report summary</h2>{figure}", f"<h2>Builds</h2>{figure}"]
+        first, later = frame_all(fragments, "designs/tpp", report=0)
+        self.assertIn('identical to <a href="#fig-15-1">Figure 15.1</a>', first)
+        self.assertIn('id="fig-15-1"', later)
+        with self.assertRaisesRegex(ValueError, "tpp"):
+            frame_all(fragments, "designs/tpp", report=None)
+        with self.assertRaisesRegex(ValueError, "tpp"):
+            frame_all([*fragments, fragments[1]], "designs/tpp", report=0)
+
     def test_class_diagram_text_version(self):
         diagram = kalah("figures.class_diagram")
         for slug in slugs():

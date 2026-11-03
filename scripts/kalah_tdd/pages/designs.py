@@ -37,8 +37,8 @@ LABEL = re.compile(r"<(h[1-6]|summary)\b[^>]*>(.*?)</\1>|<table\b.*?</table>", r
 
 
 def body(page, snap, idx):
-    fragments = reference(page, snap, idx) if page.slug == A02 else design(page, snap, idx)
-    fragments = class_diagram.frame_all(wrap_tables(fragments), page.slug)
+    fragments, report = (reference(page, snap, idx), None) if page.slug == A02 else design(page, snap, idx)
+    fragments = class_diagram.frame_all(wrap_tables(fragments), page.slug, report)
     return [TAG.sub(lambda m: f"Tag: {parts.tag(m.group(1))}.", f) for f in fragments]
 
 
@@ -59,8 +59,9 @@ def design(page, snap, idx):
              f'{merge_steps(slug, shown["steps"], how["code"])}\n{how["kinds"]}</section>')
     verdict = f'<h2 id="conclusion">Verdict</h2>\n<p>{union(slug, shown["verdict"], end.group(1))}</p>'
     summary = f'<h2 id="{card["id"]}">Report summary</h2>\n{card["figure"]}\n{card["kv"] or ""}'
-    return [lead, steps, links.rewrite(shown["kpis"], SHOWCASE, here, idx), verdict, summary,
-            *(links.rewrite(sections[s], doc, here, idx) for s in EVIDENCE), pointer()]
+    fragments = [lead, steps, links.rewrite(shown["kpis"], SHOWCASE, here, idx), verdict, summary,
+                 *(links.rewrite(sections[s], doc, here, idx) for s in EVIDENCE), pointer()]
+    return fragments, fragments.index(summary)
 
 
 def report_card(slug, html, require_link):
