@@ -312,6 +312,8 @@ class Analysis(unittest.TestCase):
                 for f in a[group]:
                     if f["doc"]:
                         self.assertEqual(parsed().texts[squash(f["doc"])], 1, f["name"])
+        self.assertEqual(rows("awards.py criteria"),
+                         [[c["name"], analysis().COUNTED[c["name"]], c["returns"]] for c in a["criteria"]])
         consts = {r[0]: r[1] for r in rows("awards.py constants")}
         for name, value in a["constants"].items():
             self.assertEqual(consts[name], ", ".join(value) if isinstance(value, list) else str(value))
