@@ -2,9 +2,10 @@
 validity, from the report Limits, the run records and the code docstrings in facts.json."""
 
 import re
-from html import escape
+from html import escape, unescape
+from typing import NamedTuple
 
-from .. import links, parts, snapshot
+from .. import links, pagemap, parts, snapshot
 from ..figures import flow
 
 SLUG = "methodology/analysis"
@@ -17,6 +18,46 @@ SENTENCE = re.compile(r"(?<=[.?!])\s+(?=[A-Z])")
 COUNTED = {"cost_effective": "Most cost effective", "fewest_errors": "Fewest errors", "alignment": "Best CQP/PMD alignment"}
 OVERALL, BADGES, LIMITED = "Best overall", ("Cheapest", "Most consistent design"), "Most consistent design"
 LIMIT = "{limit}"
+NO_FUNCTION = "not stated in the snapshot"
+BLOCK = re.compile(r"<(p|li|dd)\b[^>]*>(.*?)</\1>", re.S)
+
+
+class TestUse(NamedTuple):
+    lane: str
+    question: str
+    data: str
+    section: str  # report heading id whose text holds the quoted sentence
+    words: tuple  # how the report names the test, each found in that sentence
+    functions: tuple  # stats.py functions whose docstrings describe the test; empty when facts name none
+    correction: str
+    reported: str  # page slug
+
+
+TEST_USE = (
+    TestUse("Survey scores", "Do mutation scores differ between the survey methods?", "full-1 mutation scores of 11 methods",
+            "survey-full-1", ("seeded permutation chi-square", "Fisher exact tests with Holm correction"),
+            ("permutation_chi2", "fisher_pairs", "holm"), "Holm over every pair of methods", "results/survey"),
+    TestUse("Score intervals", "How precise is each method's mutation score?", "full-1 killed and compiled mutants per method",
+            "survey-full-1", ("Wilson 95% interval",), ("wilson",), "None, descriptive only", "results/survey"),
+    TestUse("Clean classes", "Do clean methods have more classes?", "full-1 classes per method, start clones left out",
+            "survey-full-1", ("exact one-sided permutation test",), (), "None, one test", "results/survey"),
+    TestUse("Planned contrasts", "Does one replicated arm differ from another?", "rep-1 and rep-2 replicates, 5 per arm",
+            "contrast-table-rep-1", ("exact two-sided Mann-Whitney U", "Holm correction"), ("mann_whitney_exact", "holm"),
+            "Holm over the planned pairs of each outcome", "results/contrasts"),
+    TestUse("Consistency", "Does one design vary more between builds?", "rep-1 and rep-2 replicates pooled per method",
+            "questions", ("Brown-Forsythe permutation tests", "Holm p"), ("brown_forsythe_permutation", "holm"),
+            "Holm over the metrics", "results/consistency"),
+    TestUse("Rater agreement", "Do the three raters agree?", "full-1, rep-1 and rep-2 blind ratings",
+            "rating-agreement-full-1", ("Krippendorff's ordinal alpha", "seeded bootstrap 95% interval"), (), "None",
+            "data/ratings"),
+    TestUse("Ratings and code", "Do the ratings track lines of code and PMD?", "finals medians against LOC and PMD violations",
+            "rating-agreement-full-1", ("Spearman correlations", "Holm-adjusted q"), ("spearman_trial", "holm"),
+            "Holm over the correlations", "data/ratings"),
+    TestUse("List reliability", "Do two listers agree on the test list?", "tcp-1-list clauses and candidates rated again",
+            "list-reliability", ("linearly weighted kappa", "Spearman rho with a seeded bootstrap 95% interval",
+                                 "mean Jaccard overlap"), ("weighted_kappa", "spearman_trial", "jaccard"), "None",
+            "data/ratings"),
+)
 
 
 def section(id, title, *html):
@@ -149,6 +190,64 @@ def awards_figure(snap, n):
                         "#award-rules", flow.text_version(title, nodes, edges, loops))
 
 
+def sentence(snap, use):
+    """The first sentence of the use's report section that holds all its test words, as plain text."""
+    text = snapshot.section(snap.files[snapshot.REPORT], use.section)
+    for m in BLOCK.finditer(text):
+        plain = " ".join(unescape(re.sub(r"<[^>]+>", "", m.group(2))).split())
+        for s in SENTENCE.split(plain):
+            if all(w in s for w in use.words):
+                return s
+    raise ValueError(f"report section {use.section} has no sentence with {' and '.join(map(repr, use.words))}")
+
+
+def statistical_tests(snap, numbers):
+    stats = snap.facts["analysis"]["stats"]
+    names = {f["name"] for f in stats}
+    for use in TEST_USE:
+        if missing := set(use.functions) - names:
+            raise ValueError(f"{use.lane} names {', '.join(sorted(missing))}, which stats.py lacks")
+    rows = [[escape(u.question), escape(u.data), escape("; ".join(u.words)), escape(", ".join(u.functions) or NO_FUNCTION),
+             escape(u.correction), escape(pagemap.BY_SLUG[u.reported].title), escape(sentence(snap, u))] for u in TEST_USE]
+    return section(
+        "statistical-tests", "Statistical tests",
+        p("Each row of the table names a question the study asks, the data it uses, the test as the report names it and "
+          "the stats.py functions whose docstrings describe that test. The source sentence is quoted from the report "
+          "section that reports the test.", "verified"),
+        p("Functions are matched to tests by docstring. The snapshot does not record which function computed each "
+          "reported number.", "unchecked"),
+        test_figure(snap, next(numbers)),
+        '<h3 id="test-use">Where each test is used</h3>',
+        grid("Where each test is used", ["Question", "Data", "Test", "Function", "Correction", "Reported in", "Source sentence"],
+             rows),
+        '<h3 id="stats-functions">stats.py functions</h3>',
+        p("Docstrings are quoted verbatim from stats.py at the snapshot sha.", "verified"),
+        grid("stats.py functions", ["Function", "Docstring"],
+             [[code(f["name"]), escape(f["doc"] or "No docstring in stats.py.")] for f in stats]))
+
+
+def test_flow(snap):
+    """F7: one lane per test with a stats.py function, from question to function, correction and the page reporting it."""
+    nodes, edges = [], []
+    for k, u in enumerate(u for u in TEST_USE if u.functions):
+        ids = [f"q{k}", f"fn{k}", f"fix{k}", f"at{k}"]
+        labels = [u.question, ", ".join(u.functions), u.correction, pagemap.BY_SLUG[u.reported].nav]
+        nodes += [flow.node(i, label, u.lane, col) for col, (i, label) in enumerate(zip(ids, labels))]
+        edges += [flow.edge(a, b) for a, b in zip(ids, ids[1:])]
+    return nodes, edges, []
+
+
+def test_figure(snap, n):
+    nodes, edges, loops = test_flow(snap)
+    title = "Which test answers each question"
+    desc = (f"{len({x.lane for x in nodes})} lanes, one per question. Each runs from the question to the stats.py "
+            f"functions, the multiple-test correction and the page that reports the result.")
+    left = listed(u.lane for u in TEST_USE if not u.functions)
+    return parts.figure(n, "test-flow", title, flow.svg("f7", title, desc, nodes, edges, loops),
+                        f"Each lane reads left to right. {escape(left)} name no stats.py function in the snapshot, so "
+                        f"only the table lists them.", "#test-use", flow.text_version(title, nodes, edges, loops))
+
+
 def rebuild(facts):
     """The rep-2 rebuild: one method rebuilt at a harness commit unlike the rest of rep-2."""
     runs = facts["runs"]
@@ -217,4 +316,4 @@ def threats(snap, idx):
 
 def body(page, snap, idx):
     numbers = parts.numbers(page.slug)
-    return [lead(), award_scoring(snap, numbers), threats(snap, idx)]
+    return [lead(), award_scoring(snap, numbers), statistical_tests(snap, numbers), threats(snap, idx)]
