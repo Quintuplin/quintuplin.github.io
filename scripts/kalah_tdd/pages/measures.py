@@ -67,7 +67,7 @@ KINDS = ("input", "cache creation", "cache read", "output")  # the token kinds w
 ALIASES = {"Classes": ("Classes in src/", "Median classes"), "Static analysis violations": ("PMD violations",),
            "Mutation score": ("Mutants killed", "Score %"), "K/N": ("Killed", "Compiled mutants"),
            "Adjusted mutation": ("Adjusted %", "Adjusted mutation score", "Median adjusted mutation"),
-           "Bench median ms": ("Bench run time", "Bench run times", "Median ms"),
+           "Bench median ms": ("Bench run times", "Median ms"),
            "Cost to completion": ("Weighted tokens to completion", "Median cost to completion"),
            "M": ("M, weighted tokens per hidden test passed",), "CQP": ("Median CQP",), "Planned contrast": ("Contrast",),
            "Consistency score C": ("Consistency score",)}
@@ -108,7 +108,7 @@ FIELDS = (
               ("glossary", "Replicate and representative build", "The representative build is the middle replicate by "
                "adjusted mutation score, then by lower cost to completion.")),
         Field("Run ms", f"The time of each bench run of a build in milliseconds. Their median is the "
-              f"{link('Bench median ms')}."))),
+              f"{link('Bench median ms')}.", aliases=("Bench run time",)))),
     ("contrasts-and-tests", "Contrasts and tests", (
         Field("Outcome", f"The measure a {link('Planned contrast', 'planned contrast')} compares.",
               ("glossary", "Planned contrast", "A pair of methods and an outcome fixed before any build of its run.")),
