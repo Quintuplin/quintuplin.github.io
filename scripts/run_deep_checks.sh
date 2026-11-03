@@ -1,6 +1,6 @@
 # Sourced by check_site.sh and check_run_deep_checks.sh. The caller defines err, checkFridge, deepMaths, deepTidy and deepExplorer.
-# The maths and tidy checks run in the background beside the fridge and explorer checks, so the job stays under 2 minutes (#46, #48).
-# Their lines stream with a [maths] or [tidy] prefix, so a timeout kill keeps them.
+# The maths and tidy checks run in the background beside the fridge and explorer checks, so the local run stays short (#46, #48).
+# Their lines stream with a [maths] or [tidy] prefix, so an interrupted run keeps them.
 runDeepChecks() {
 	inBackground '[maths] ' deepMaths
 	maths=$!
