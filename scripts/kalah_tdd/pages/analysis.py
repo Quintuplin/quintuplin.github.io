@@ -253,6 +253,8 @@ def test_figure(snap, n):
 def rebuild(facts):
     """The rep-2 rebuild: one method rebuilt at a harness commit unlike the rest of rep-2."""
     runs = facts["runs"]
+    if REBUILD not in runs or REP not in runs:
+        raise ValueError(f"{REBUILD} needs the {REBUILD} and {REP} run records")
     again, base = runs[REBUILD], runs[REP]
     methods = sorted({m["method"] for m in again["methods"].values()})
     if len(methods) != 1:
@@ -261,10 +263,11 @@ def rebuild(facts):
     if not new or not old or new == old:
         raise ValueError(f"{REBUILD} needs a harness commit unlike {REP}'s, got {new!r} against {old!r}")
     builds = [b for wave in again["waves"] for b in wave]
-    cli = {r["harness"]["claude_version"].split()[0] for r in (again, base)}
-    cli = (f"Both record agent CLI {cli.pop()}." if len(cli) == 1 else
-           f"They record agent CLI {again['harness']['claude_version'].split()[0]} and "
-           f"{base['harness']['claude_version'].split()[0]}.")
+    new_cli, old_cli = ((r["harness"].get("claude_version") or "").split()[:1] for r in (again, base))
+    if not new_cli or not old_cli:
+        raise ValueError(f"{REBUILD} and {REP} each need a harness claude_version")
+    cli = (f"Both record agent CLI {new_cli[0]}." if new_cli == old_cli else
+           f"They record agent CLI {new_cli[0]} and {old_cli[0]}.")
     return (f"{REBUILD} rebuilt the {len(builds)} {escape(methods[0])} replicates {listed(builds)} at harness commit "
             f"{code(new[:7])}, where the rest of {REP} records {code(old[:7])}. The rebuild records a harness delta of "
             f"sha256 {code(again['harness_delta']['sha256'][:8])}. {cli}")

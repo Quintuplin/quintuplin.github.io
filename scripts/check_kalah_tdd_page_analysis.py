@@ -241,6 +241,12 @@ class Analysis(unittest.TestCase):
         def no_harness(s):
             del s.facts["runs"]["rep-2/rebuild"]["harness"]
 
+        def no_cli(s):
+            del s.facts["runs"]["rep-2/rebuild"]["harness"]["claude_version"]
+
+        def no_run(s):
+            del s.facts["runs"]["rep-2/rebuild"]
+
         def no_limit(s):
             f = doc(s, "stats", "mann_whitney_exact")
             f["doc"] = f["doc"].replace(" The C(n, len(xs)) splits suit small samples only.", "")
@@ -253,7 +259,7 @@ class Analysis(unittest.TestCase):
         self.assertIn("Every run records a harness commit", text)
 
         for change, name in ((two_methods, "rep-2/rebuild"), (same_commit, "rep-2/rebuild"), (no_harness, "rep-2/rebuild"),
-                             (no_limit, "mann_whitney_exact")):
+                             (no_cli, "rep-2/rebuild"), (no_run, "rep-2/rebuild"), (no_limit, "mann_whitney_exact")):
             refuses(self, change, name)
 
     def test_award_rules_from_facts(self):
