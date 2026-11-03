@@ -337,7 +337,11 @@ class Analysis(unittest.TestCase):
         def reworded(s):
             s.files[kalah("snapshot").REPORT] = report().replace("seeded permutation chi-square", "seeded shuffle chi-square")
 
+        def no_wilson(s):
+            s.facts["analysis"]["stats"].remove(doc(s, "stats", "wilson"))
+
         refuses(self, reworded, "survey-full-1")
+        refuses(self, no_wilson, "Score intervals")
 
     def test_f6_from_facts(self):
         nodes, _, _ = analysis().awards_flow(snap())
