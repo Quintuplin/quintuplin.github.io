@@ -53,6 +53,8 @@ def design(page, snap, idx):
         raise ValueError(f"{slug}: the method page has an unexpected shape")
     heading = next(d[1] for d in pagemap.DESIGNS if d[0] == slug)
     card = report_card(slug, section(snap.files[REPORT], heading), require_link=True)
+    if unescape(card["name"]) != page.title:
+        raise ValueError(f"{slug}: the report card name {card['name']!r} differs from the page map")
     lead = shown["chip"] + shown["lead"] + "\n" + intro.group(1)
     steps = (f'<section id="steps"><h2 id="how-it-works">How it builds code</h2>\n{shown["intro"]}\n'
              f'<p>{union(slug, card["card"], how["family"])}</p>\n'

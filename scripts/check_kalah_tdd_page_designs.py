@@ -85,6 +85,15 @@ def report_section(heading):
     return kalah("snapshot").section(snap().files[kalah("snapshot").REPORT], heading)
 
 
+def mutated(name, old, new):
+    """The snapshot with the first old in file name replaced by new."""
+    files = dict(snap().files)
+    if old not in files[name]:
+        raise AssertionError(f"{name} holds no {old[:60]!r}")
+    files[name] = files[name].replace(old, new, 1)
+    return snap()._replace(files=files)
+
+
 def code_lines(slug):
     code = re.search(r'<h2 id="how-it-works">.*?<pre><code>(.*?)</code></pre>', method(slug), re.S).group(1)
     return unescape(code).split("\n")
@@ -202,6 +211,11 @@ class Merge(unittest.TestCase):
         for wrong in (page._replace(title="TPP"), page._replace(blurb="Another lede.")):
             with self.subTest(wrong.title), self.assertRaisesRegex(ValueError, "tpp"):
                 d.showcase(wrong, view("tpp"))
+        # The report card name is replaced by "Report summary", so it must also equal the page title.
+        h3 = f'<h3 id="{designs()[4][1]}">{page.title}</h3>'
+        renamed = mutated(kalah("snapshot").REPORT, h3, h3.replace(page.title, "TPP"))
+        with self.assertRaisesRegex(ValueError, "tpp.*report"):
+            d.design(page, renamed, kalah("links").index(snap()))
 
 
 class Diagrams(unittest.TestCase):
