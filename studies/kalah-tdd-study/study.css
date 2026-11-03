@@ -128,7 +128,7 @@ img{max-width:100%;height:auto}
 .toc a:hover,.toc a:focus-visible{color:var(--accent)}
 .toc a[aria-current="page"]{color:var(--accent);font-weight:600;border-left:2px solid var(--accent);margin-left:-2px}
 /* Compact rows keep the desktop rail short; touch and narrow screens get the 44px target. */
-@media (max-width:899.98px), (pointer:coarse){.toc a{min-height:44px}}
+@media (max-width:899.98px), (pointer:coarse){.toc a,.contents li > a{min-height:44px}}
 @media (max-width:899.98px){
   .toc{position:static;max-height:none;overflow:visible;padding:0 var(--space-4) var(--space-2);
     background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}

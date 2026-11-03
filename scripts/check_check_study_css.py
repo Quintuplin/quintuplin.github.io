@@ -60,7 +60,8 @@ class TouchTargets(unittest.TestCase):
     def test_rem_and_em_count_at_16px(self):
         for value, ok in (("3rem", True), ("2.75em", True), ("2rem", False), ("10vh", False), ("auto", False)):
             with self.subTest(value):
-                errors = touch(lambda t: t.replace("{.toc a{min-height:44px}}", f"{{.toc a{{min-height:{value}}}}}"))
+                errors = touch(lambda t: t.replace("{.toc a,.contents li > a{min-height:44px}}",
+                                                    f"{{.toc a,.contents li > a{{min-height:{value}}}}}"))
                 self.assertEqual(errors == [], ok, errors)
 
     def test_other_selectors_for_the_link_fail(self):

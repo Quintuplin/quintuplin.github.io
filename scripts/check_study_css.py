@@ -108,7 +108,8 @@ def forced_flow(parsed):
 # Sidebar rows stay compact in the tall desktop rail and grow on touch or narrow screens.
 COARSE = "@media (max-width:899.98px), (pointer:coarse)"
 TOUCH = ((".toc > summary", None, 44, None), (".toc a", None, 24, 28), (".toc a", COARSE, 44, None),
-         (".pager a", None, 44, None), ("details:not(.toc) > summary", None, 44, None), (".fig-foot a", None, 44, None))
+         (".pager a", None, 44, None), ("details:not(.toc) > summary", None, 44, None), (".fig-foot a", None, 44, None),
+         (".contents li > a", COARSE, 44, None))
 
 
 def px(value):
