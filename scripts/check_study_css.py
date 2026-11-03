@@ -112,7 +112,9 @@ TOUCH = ((".toc > summary", None, 44, None), (".toc a", None, 24, 28), (".toc a"
 
 
 def px(value):
-    return float(m.group(1)) if (m := re.fullmatch(r"(\d+(?:\.\d+)?)px", value.replace("!important", "").strip())) else 0
+    """A length in px with rem and em at the 16px default. Any other unit or auto counts as 0, so it fails."""
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)(px|r?em)", value.replace("!important", "").strip())
+    return float(m.group(1)) * (1 if m.group(2) == "px" else 16) if m else 0
 
 
 def same_media(a, b):
