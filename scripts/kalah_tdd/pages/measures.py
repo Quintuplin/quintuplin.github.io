@@ -262,10 +262,12 @@ def column_index(src, cards):
     summary = src.summary()
     if int(re.search(r"(\d+) rows", summary).group(1)) != len(src.columns):
         raise ValueError(f"{summary!r} but the report Columns section holds {len(src.columns)} rows")
-    head = "".join(f'<th scope="col">{h}</th>' for h in ("Column", "Source", "Tag", "Section"))
-    body = "".join(f'<tr><th scope="row">{escape(r.name, quote=False)}</th><td>{r.source}</td>'
-                   f"<td>{parts.tag(r.tag)}</td><td>{escape(family[r.name])}</td></tr>" for r in src.columns)
-    table = f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>"
+    names = ("Column", "Source", "Tag", "Section")
+    head = "".join(f'<th scope="col">{h}</th>' for h in names)
+    # td cells with data-th, so the .cols table stacks into labelled cards on a narrow screen.
+    body = "".join("<tr>" + "".join(f'<td data-th="{h}">{c}</td>' for h, c in zip(names, (
+        escape(r.name, quote=False), r.source, parts.tag(r.tag), escape(family[r.name])))) + "</tr>" for r in src.columns)
+    table = f'<table class="cols"><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>'
     return ('<h2 id="column-index">Column index</h2>\n<p>Each report column with its source file, its claim tag and '
             f"the section of this page that defines it.</p>\n<details><summary>{escape(summary)}</summary>"
             f"{parts.table(table, 'Column index')}</details>")
