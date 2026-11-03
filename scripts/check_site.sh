@@ -97,10 +97,9 @@ python3 -I scripts/check_check_study_nav.py || err "study navigation check faile
 python3 -I scripts/check_kalah_tdd_study.py || err "Kalah TDD study completeness check failed"
 python3 -I scripts/check_check_kalah_tdd_study.py || err "Kalah TDD study completeness check self-test failed"
 # Each study page group brings its own test file, so no group edits this line (#79).
-for t in scripts/check_kalah_tdd_page_*.py; do
-	[ -e "$t" ] || { err "no scripts/check_kalah_tdd_page_*.py"; break; }
-	python3 -I "$t" || err "$t failed"
-done
+. scripts/run_kalah_tdd_page_checks.sh
+runKalahTddPageChecks scripts
+sh scripts/check_run_kalah_tdd_page_checks.sh || err "the Kalah TDD page test loop is broken"
 # Jekyll skips underscore folders, so the snapshot stays off the site and its sitemap (#56).
 [ ! -e "$site/_snapshots" ] || err "_snapshots is published"
 ! grep -q '_snapshots' "$site/sitemap.xml" 2>/dev/null || err "sitemap.xml lists _snapshots"
