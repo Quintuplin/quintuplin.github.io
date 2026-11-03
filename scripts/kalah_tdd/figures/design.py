@@ -15,8 +15,9 @@ RUNS = {"pilot-1": "Pilot", "pilot-2": "Pilot", "full-1": "Survey", "tcp-1-list"
         "tcp-1-list2": "List reliability", "rep-1": "Planned contrasts", "rep-2": "Planned contrasts",
         "rep-2/rebuild": "Rebuild"}
 REBUILD = "/rebuild"
-# Arms map geometry: label column, first mark column, column step, first row, row step.
-WIDTH, LABEL_X, X0, STEP, Y0, ROW = 640, 8, 300, 56, 48, 22
+# Arms map geometry, narrow enough for a phone column: label x, first mark column, column step, first label baseline,
+# row step and the mark centre below its label.
+WIDTH, LABEL_X, X0, STEP, Y0, ROW, MARK = 312, 8, 32, 50, 44, 40, 14
 
 
 def runs(facts):
@@ -118,18 +119,20 @@ def cell(builds, rebuilt):
 
 
 def arms_svg(built, rows):
-    """A dot matrix of builds per arm and run, area by count, a ring on rebuilt replicates."""
-    height = Y0 + (len(rows) - 1) * ROW + 16
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} {height}" role="img" '
+    """A dot matrix of builds per arm and run, area by count, a ring on rebuilt replicates. Each arm's label sits above
+    its row, so the columns start at the left edge and the map fits a phone column."""
+    height = Y0 + (len(rows) - 1) * ROW + MARK + 12
+    out = [f'<svg class="arms" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} {height}" role="img" '
            'aria-labelledby="arms-svg-title arms-svg-desc">',
            '<title id="arms-svg-title">Builds per arm and run</title>',
            f'<desc id="arms-svg-desc">One row per arm and one column per build run. Each mark\'s area grows with its '
            f'build count, which stands beside it. A ring marks rebuilt replicates.</desc>']
-    out += [f'<text x="{X0 + i * STEP}" y="24" text-anchor="middle">{escape(r)}</text>' for i, r in enumerate(built)]
+    out += [f'<text x="{X0 + i * STEP}" y="20" text-anchor="middle">{escape(r)}</text>' for i, r in enumerate(built)]
     for j, (label, counts) in enumerate(rows):
         y = Y0 + j * ROW
-        out.append(f'<line class="grid" x1="{X0 - 24}" x2="{WIDTH - 8}" y1="{y}" y2="{y}"/>')
-        out.append(f'<text class="lbl" x="{LABEL_X}" y="{y + 4}">{escape(label)}</text>')
+        out.append(f'<text class="lbl" x="{LABEL_X}" y="{y}">{escape(label)}</text>')
+        y += MARK
+        out.append(f'<line class="grid" x1="{LABEL_X}" x2="{WIDTH - 8}" y1="{y}" y2="{y}"/>')
         for i, r in enumerate(built):
             if r not in counts:
                 continue
@@ -138,7 +141,7 @@ def arms_svg(built, rows):
             out.append(f'<circle class="mk s1" cx="{x}" cy="{y}" r="{radius}">'
                        f'<title>{escape(label)}, {escape(r)}: {cell(n, rebuilt)}</title></circle>')
             if rebuilt:
-                radius += 4
+                radius += 3
                 out.append(f'<circle class="mk ring s1" cx="{x}" cy="{y}" r="{radius}"/>')
             out.append(f'<text x="{x + radius + 4}" y="{y + 4}">{n}</text>')
     return "".join(out) + "</svg>"
@@ -158,4 +161,4 @@ def arms_map(facts, table):
     title = "Builds per arm and run"
     summary = f"Table view: {title}, {len(rows)} rows and {len(built) + 1} columns"
     view = f"<details><summary>{escape(summary)}</summary>{table(arms_table(built, rows), title)}</details>"
-    return f'<div class="plot">{arms_svg(built, rows)}</div>', view
+    return arms_svg(built, rows), view

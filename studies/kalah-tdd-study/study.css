@@ -272,9 +272,11 @@ figcaption{font-size:14px;color:var(--muted)}
 .diagram,.plot{overflow-x:auto}
 .diagram svg{display:block;max-width:100%;height:auto;margin:0 auto}
 .plot svg{display:block;width:100%;max-width:40rem;height:auto}
-.plot text{fill:var(--muted);font-size:12px}
-.plot .lbl{fill:var(--ink);font-weight:600}
-.plot .grid{stroke:var(--line)}
+/* A page plot passed straight into a .diagram, so the labelled region is its only scroller. */
+svg.arms{width:100%;max-width:24rem}
+:is(.plot,.arms) text{fill:var(--muted);font-size:12px}
+:is(.plot,.arms) .lbl{fill:var(--ink);font-weight:600}
+:is(.plot,.arms) .grid{stroke:var(--line)}
 .plot .axis{stroke:var(--axis)}
 .mk{stroke-width:1.5}
 line.mk{stroke-width:2.5}
@@ -295,7 +297,7 @@ figure > :is(h4,h5,h6){margin:0;font-size:1rem}
 /* Flowcharts from the site flow module: S stages are plain boxes, L stages add a loop-back arrow. */
 /* Inside a .diagram wrapper a flow keeps readable labels and scrolls; the text version covers narrow screens. */
 svg.flow{display:block;width:100%;height:auto;font-family:var(--sans)}
-.diagram svg.flow,.diagram .plot svg{min-width:640px}
+.diagram svg.flow{min-width:640px}
 .flow .lane{fill:var(--wash);opacity:.6}
 .flow .node{fill:var(--surface);stroke:var(--axis);stroke-width:1.5}
 .flow .edge,.flow .loop{fill:none;stroke:var(--axis);stroke-width:1.5}

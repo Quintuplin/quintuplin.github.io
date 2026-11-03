@@ -66,6 +66,12 @@ def table(id):
     return head, rows
 
 
+@functools.cache
+def css_rules():
+    """(selector, declarations) of each study.css rule, the rules inside @media blocks included."""
+    return re.findall(r"([^{}]+)\{([^{}]*)\}", CSS.read_text(encoding="utf-8"))
+
+
 def svg_root(fig):
     return ET.fromstring(SVG.search(fig).group(0))
 
@@ -229,13 +235,44 @@ class Design(unittest.TestCase):
         self.assertEqual(rings, [got[rebuilt]])
 
     def test_arms_map_fits(self):
+        """The map fits a phone column near 1:1: a narrow viewBox, every text inside it, each row label above its marks."""
         root = svg_root(figures()["arms-map"])
-        self.assertLessEqual(float(root.get("viewBox").split()[2]), 640)
-        left = min(float(c.get("cx")) - float(c.get("r")) for c in root.iter(NS + "circle"))
-        rows = [t for t in root.iter(NS + "text") if t.get("class") == "lbl"]
-        self.assertEqual(len(rows), len(table("arms-table")[1]))
-        for t in rows:
-            self.assertLessEqual(float(t.get("x")) + 7 * len(t.text), left, t.text)
+        width, height = map(float, root.get("viewBox").split()[2:])
+        self.assertLessEqual(width, 320)
+        circles = [(float(c.get("cx")), float(c.get("cy")), float(c.get("r"))) for c in root.iter(NS + "circle")]
+        self.assertLessEqual(max(x + r for x, _, r in circles), width)
+        texts = list(root.iter(NS + "text"))
+        for t in texts:
+            x, n = float(t.get("x")), len(t.text)
+            left = x - 3.5 * n if t.get("text-anchor") == "middle" else x
+            self.assertTrue(0 <= left and left + 7 * n <= width, t.text)
+        heads = sorted((float(t.get("x")), len(t.text)) for t in texts if t.get("text-anchor") == "middle")
+        for (a, n), (b, m) in zip(heads, heads[1:]):
+            self.assertLessEqual(a + 3.5 * n, b - 3.5 * m, "column heads overlap")
+        labels = [float(t.get("y")) for t in texts if t.get("class") == "lbl"]
+        self.assertEqual(len(labels), len(table("arms-table")[1]))
+        for y, below in zip(labels, labels[1:] + [height + 10]):
+            row = [(cy, r) for _, cy, r in circles if y < cy < below]
+            with self.subTest(y=y):
+                self.assertTrue(row)
+                self.assertGreaterEqual(min(cy - r for cy, r in row), y + 3, "a mark covers its row label")
+                self.assertLessEqual(max(cy + r for cy, r in row), below - 10, "a mark covers the next row label")
+
+    def test_svg_min_width_opt_in(self):
+        """A min-width on figure svgs names its svg class, so plots that later pages pass to parts.figure keep fitting."""
+        sels = [s.strip() for sel, decl in css_rules() if re.search(r"(^|;)\s*min-width", decl)
+                for s in sel.split(",") if "svg" in s]
+        self.assertTrue(sels)
+        self.assertEqual([s for s in sels if not re.search(r"\bsvg\.[\w-]+$", s)], [])
+
+    def test_only_regions_scroll(self):
+        """Every element a class rule scrolls sideways is a labelled .diagram or .table-scroll region, not a nested div."""
+        scrollers = {c for sel, decl in css_rules() if re.search(r"(^|;)\s*overflow(-x)?:\s*auto", decl)
+                     for s in sel.split(",") for c in re.findall(r"\.([\w-]+)", s.split()[-1])}
+        self.assertLessEqual({"diagram", "table-scroll"}, scrollers)
+        inner = [n.tag + "." + ".".join(n.classes()) for n in page().root.iter()
+                 if n.closest("main") and scrollers & set(n.classes()) and not {"diagram", "table-scroll"} & set(n.classes())]
+        self.assertEqual(inner, [])
 
     def test_svg_classes_in_css(self):
         css = CSS.read_text(encoding="utf-8")
