@@ -356,6 +356,8 @@ class Results(unittest.TestCase):
             results.holm(both)
         self.assertIn("rep-2", str(caught.exception))
         self.assertIn("Coarse-to-fine TDD", str(caught.exception))
+        self.assertIn("adjusted mutation Held-out TDD against Classic greedy TDD", str(caught.exception))
+        self.assertNotIn("adjusted mutation Coarse-to-fine TDD against Classic greedy TDD", str(caught.exception))
 
     def test_f71_headline_first(self):
         main = main_of("results/contrasts")
@@ -473,6 +475,16 @@ class Results(unittest.TestCase):
         with self.assertRaises(ValueError) as caught:
             results.body(two, snap(), kalah("links").index(snap()))
         self.assertIn("results/test-order", str(caught.exception))
+
+    def test_section_extra_numbers_after(self):
+        # extra numbers its figures after the section's own, so a page's added figure never takes a source's number.
+        results, slug, id = kalah("pages.results"), "results/consistency", "consistency-across-runs"
+        part, figs = kalah("pagemap").number(slug), len(re.findall(r"<figure id=", own(id)))
+        self.assertEqual(figs, 1)
+        got = []
+        results.section(snap(), kalah("links").index(snap()), slug, id, kalah("parts").numbers(slug),
+                        lambda n: got.append(next(n)) or "")
+        self.assertEqual(got, [f"{part}.{figs + 1}"])
 
     def test_q20_values(self):
         results = kalah("pages.results")
