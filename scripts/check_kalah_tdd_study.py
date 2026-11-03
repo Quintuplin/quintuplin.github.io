@@ -344,7 +344,7 @@ def dfn_names(page):
     """Each dfn's text, its id read as words, and its data-alias names split on |."""
     names = set()
     for dfn in (n for n in page.root.iter() if n.tag == "dfn"):
-        names |= {spaced(dfn), dfn.attrs.get("id", "").replace("-", " ")}
+        names |= {spaced(dfn), (dfn.attrs.get("id") or "").replace("-", " ")}
         names |= set((dfn.attrs.get("data-alias") or "").split("|"))
     return {n.strip().casefold() for n in names if n.strip()}
 

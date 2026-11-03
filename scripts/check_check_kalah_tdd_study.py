@@ -187,6 +187,10 @@ class MetricDefs(unittest.TestCase):
         found = " ".join(errors({"results/survey": [(title, "Figure 1. Methods")]}))
         self.assertRegex(found, "figure title 'Figure 1. Methods' has no dfn")
 
+    def test_bare_dfn_id(self):
+        # An id with no value names nothing and must not crash the check.
+        self.assertEqual(errors({"methodology/measures": [("<h2 ", "<p><dfn id>Bare</dfn></p><h2 ")]}), [])
+
     def test_void_tag_closes_itself(self):
         # A br opens nothing, so the span after it is still the tile's first label span.
         tile = '<div class="tile"><span class="sub">Cost</span>'
