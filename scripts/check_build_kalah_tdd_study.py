@@ -243,6 +243,8 @@ class Pages(unittest.TestCase):
         opener = kalah("chrome").OPENER
         self.assertRegex(opener, r'contents\.querySelector\("\[aria-current\]"\)[^;]*;[^;]*contents\.scrollTop \+?=')
         self.assertNotIn("scrollIntoView", opener)
+        # Centring the link means its middle, not its top edge, lands at mid-rail.
+        self.assertIn("contents.clientHeight / 2 + current.offsetHeight / 2;", opener)
 
     def test_stub_marker(self):
         pages = kalah("pages")
