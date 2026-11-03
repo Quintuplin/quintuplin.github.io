@@ -3,18 +3,22 @@
 
 Usage: check_kalah_tdd_page_design.py
 """
+import copy
 import functools
 import re
 import sys
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 import check_kalah_tdd_study as study  # noqa: E402
 from check_kalah_tdd_flow import NS, crosses, label_boxes, node_boxes, overlap, points  # noqa: E402
 from kalah_tdd import snapshot  # noqa: E402
+from kalah_tdd.figures import design  # noqa: E402
+from kalah_tdd.pages import experimental_design  # noqa: E402
 
 SLUG = "experimental-design"
 PAGE = SCRIPTS.parent / "studies/kalah-tdd-study" / SLUG / "index.html"
@@ -348,6 +352,58 @@ class Design(unittest.TestCase):
             with self.subTest(n.attrs.get("aria-label")):
                 self.assertEqual((n.attrs.get("tabindex"), n.attrs.get("role")), ("0", "region"))
                 self.assertTrue(n.attrs.get("aria-label"))
+
+
+class Refusals(unittest.TestCase):
+    """The design figures and runs sentence refuse facts they would misdraw. Each case tweaks a copy of facts.json."""
+
+    def facts(self):
+        return copy.deepcopy(facts())
+
+    def test_runs_refuses_unlisted_or_missing_run(self):
+        extra, missing = self.facts(), self.facts()
+        extra["runs"]["rep-3"] = extra["runs"]["rep-2"]
+        del missing["runs"]["tcp-1"]
+        for f in (extra, missing):
+            with self.subTest(sorted(f["runs"])), self.assertRaisesRegex(ValueError, "RUNS"):
+                design.runs(f)
+
+    def test_runs_refuses_renamed_entry(self):
+        """A RUNS entry renamed under its kind no longer names a facts run."""
+        renamed = {("tcp-2" if k == "tcp-1" else k): v for k, v in design.RUNS.items()}
+        with mock.patch.object(design, "RUNS", renamed), self.assertRaisesRegex(ValueError, "RUNS"):
+            design.runs(self.facts())
+
+    def test_replicate_refuses_shape_mismatch(self):
+        caps, arms = self.facts(), self.facts()
+        caps["runs"]["rep-2"]["caps"]["iterations"] += 1
+        del arms["runs"]["rep-1"]["methods"][next(iter(arms["runs"]["rep-1"]["methods"]))]
+        for name, f, why in (("caps", caps, "differ in shape"), ("arm sizes", arms, "arms differ in size")):
+            with self.subTest(name), self.assertRaisesRegex(ValueError, why):
+                design.replicate(f)
+
+    def test_replicate_refuses_uneven_waves(self):
+        f = self.facts()
+        for r in ("rep-1", "rep-2"):
+            slugs = [s for w in f["runs"][r]["waves"] for s in w]
+            f["runs"][r]["waves"] = [slugs[:12], slugs[12:]]
+        with self.assertRaisesRegex(ValueError, "waves differ"):
+            design.replicate(f)
+
+    def test_arm_label_refuses_unknown_arm(self):
+        with self.assertRaisesRegex(ValueError, "no design"):
+            design.arm_label("no-such-arm", {})
+        f = self.facts()
+        entry = next(iter(f["runs"]["tcp-1"]["methods"].values()))
+        entry["arm"], entry["order"] = "no-such-arm", None
+        with self.assertRaisesRegex(ValueError, "no design"):
+            design.arms_grid(f)
+
+    def test_shared_refuses_differing_run(self):
+        f = self.facts()
+        f["runs"]["tcp-1"]["effort"] = "low"
+        with self.assertRaisesRegex(ValueError, "runs differ"):
+            experimental_design.shared(f["runs"])
 
 
 if __name__ == "__main__":
