@@ -204,7 +204,7 @@ def aliases(dfn):
     return [a for a in (dfn.attrs.get("data-alias") or "").split("|") if a]
 
 
-QUOTES = ("The glossary row ", "The report section ", "Function ", "List phase step ")
+QUOTES = ("The glossary row ", "The report section ", "Function ", "List phase step ", "Each method page ")
 
 
 def flat(node):
@@ -673,6 +673,13 @@ class Measures(unittest.TestCase):
                     elif m := re.fullmatch(r"List phase step (\d+) of run (\S+): (.+)", text):
                         step = snap().facts["runs"][m.group(2)]["list_phase"][int(m.group(1)) - 1]
                         self.assertEqual(m.group(3), " ".join(step.split()))
+                    elif m := re.fullmatch(r"Each method page of run (\S+) says: (.+)", text):
+                        pages = [t for n, t in snap().files.items() if n.startswith(f"runs/{m.group(1)}/methods/")]
+                        self.assertTrue(pages)
+                        for t in pages:
+                            paras = [flat(q) for q in check().Tree(t).root.iter() if q.tag == "p"]
+                            self.assertTrue(any(m.group(2) in q and "Tag:" not in q for q in paras))
+                        self.assertEqual(pills, [])
                     else:
                         self.assertFalse(text.startswith(QUOTES), text)  # a quote line in no known shape
         self.assertGreater(quoted, 20)
@@ -680,6 +687,9 @@ class Measures(unittest.TestCase):
         self.assertIn("Table header on Results: planned contrasts.", lines("run"))
         self.assertTrue(any(t.startswith("Table header in: ") and t.endswith(" Table header on Results: test order (tcp-1).")
                             for t in lines("value")), lines("value"))
+        agent = " ".join(lines("agent-time"))
+        self.assertIn("Each method page of run full-1 says: Agent time sums each agent's first to last timestamp", agent)
+        self.assertNotIn("no definition", agent)
 
     def test_value_covers_settings(self):
         # The tcp-1 settings table puts seed, lister, list sha and doc version under Value, which are no numbers.
@@ -697,6 +707,10 @@ class Measures(unittest.TestCase):
         facts["runs"]["tcp-1-list"]["list_phase"][4] = "Guess each candidate's size."
         with self.assertRaisesRegex(ValueError, "field 'Estimate'"):
             body(snap()._replace(facts=facts))
+        name = check().METHODS + "classic.html"  # one method page reworded is enough to refuse
+        files = {**snap().files, name: snap().files[name].replace("Agent time sums each", "Agent time adds each")}
+        with self.assertRaisesRegex(ValueError, "field 'Agent time'"):
+            body(snap()._replace(files=files))
 
 
 if __name__ == "__main__":

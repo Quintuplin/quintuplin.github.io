@@ -87,7 +87,8 @@ def link(name, text=None, title=None):
 class Field(NamedTuple):
     name: str
     text: str  # this site's definition, HTML
-    quote: tuple = ()  # (kind, where, sentence): glossary row, report section id, function, or a list phase phrase
+    # (kind, where, sentence): glossary row, report section id, function, a list phase phrase or a run's method pages
+    quote: tuple = ()
     aliases: tuple = ()
 
 
@@ -137,8 +138,9 @@ FIELDS = (
         Field("Round", "One rating round of the blind raters, such as round-a."),
         Field("Role", "What a rating round was for, such as a calibration that passed or failed.",
               ("section", RATING, "A calibration round's role comes from its committed verdict.json.")),
-        Field("Agent time", f"The time the agents of a round ran, beside its {link('Wall time')}. The snapshot report "
-              "states no definition of it."))),
+        Field("Agent time", f"The sum over a round's agents of each agent's first to last timestamp, beside its "
+              f"{link('Wall time')}. Agents that ran side by side add up.", ("method", "full-1",
+              "Agent time sums each agent's first to last timestamp, so agents that ran side by side add up.")))),
     ("run-records", "Run records", (
         Field("Label", "The harness label of an agent call, such as review:r18."),
         Field("Cap", "The harness limit a labelled call reached, such as cycles."),
@@ -426,6 +428,14 @@ class TableFields:
             if row and said[0] in plain(row.inner):
                 return f"The glossary row <i>{escape(row.name)}</i> says: {escape(said[0])} Tag: {parts.tag(row.tag)}."
             raise ValueError(f"field '{f.name}': the glossary row {where!r} no longer says {said[0]!r}")
+        if kind == "method":  # an untagged paragraph every method page of the run repeats, so no pill
+            pages = {n: t for n, t in self.src.snap.files.items() if n.startswith(f"runs/{where}/methods/")}
+            if lacking := sorted(n for n, t in pages.items()
+                                 if not any(said[0] in plain(p) for p in re.findall(r"<p\b[^>]*>.*?</p>", t, re.S))):
+                raise ValueError(f"field '{f.name}': method pages {lacking} do not say {said[0]!r}")
+            if not pages:
+                raise ValueError(f"field '{f.name}': run {where} has no method pages")
+            return f"Each method page of run <code>{where}</code> says: {escape(said[0])}"
         section = snapshot.section(self.src.report, where)
         for para in re.findall(r"<p\b[^>]*>.*?</p>", section, re.S):
             if said[0] in plain(para) and (tag := re.search(r"Tag: (\w+)\.", plain(para))):
