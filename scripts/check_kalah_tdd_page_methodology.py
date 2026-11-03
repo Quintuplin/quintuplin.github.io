@@ -86,6 +86,13 @@ def items(node, label):
     return [spaced(li) for li in ol.elements() if li.tag == "li"]
 
 
+def terms(node, label):
+    """(dt, dd) texts of the dl with this aria-label."""
+    dl = next(n for n in node.iter() if n.tag == "dl" and n.attrs.get("aria-label") == label)
+    kids = dl.elements()
+    return [(spaced(dt), spaced(dd)) for dt, dd in zip(kids[::2], kids[1::2])]
+
+
 def unmark(text):
     return text.replace("**", "").replace("`", "")
 
@@ -180,8 +187,10 @@ class Data(unittest.TestCase):
                             [f"with {method_name(w)} steps {', '.join(map(str, n))}" for w, n in st.get("with", {}).items()]
                     self.assertEqual(cells[:2], [method_name(d), st["id"]])
                     self.assertEqual(cells[2].split()[0], st["kind"])
-                    self.assertEqual(cells[3:], [", ".join(map(str, st["steps"])) or "none", st.get("unit", ""),
-                                                 st.get("returns", ""), "; ".join(rules), shown(st.get("note", ""))])
+                    self.assertEqual(cells[3:], [", ".join(map(str, st["steps"])) or "none", st.get("unit", "none"),
+                                                 st.get("returns", "none"), "; ".join(rules) or "none"])
+            notes = [(f"{method_name(d)} {st['id']}", shown(st["note"])) for d, st in want if "note" in st]
+            self.assertEqual(terms(sec, f"Stage notes: {family}") if notes else [], notes, family)
             seen += len(got)
         self.assertEqual(seen, 58)
 
@@ -216,6 +225,12 @@ class Data(unittest.TestCase):
             delta = (r.get("harness_delta") or {}).get("sha256", "none")
             self.assertEqual(cells[1:], [h["commit"], h["engine_sha256"], h["runner_tree"], h["claude_version"],
                                          h["guard_base"], delta])
+
+    def test_notation_sentences_kept(self):
+        # A sentence split on every period once broke "args.json" into "args. json".
+        text = spaced(section("how-a-design-runs"))
+        for sentence in re.split(r"(?<=\.) (?=[A-Z])", facts()["pipeline"]["notation"].removesuffix(" Tag: verified.")):
+            self.assertIn(sentence, text)
 
     def test_collect_steps_in_order(self):
         sec = section("collect-audit")

@@ -243,6 +243,8 @@ details > .shaped{margin:0;padding:0 0 10px}
 .table-scroll:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 table{border-collapse:collapse;font-size:.875rem;line-height:1.5;width:100%}
 .table-scroll > table{margin:0}
+/* A long cell no longer squeezes short columns to one letter a line; a wide table scrolls instead. */
+.table-scroll > table.cols :is(th,td){overflow-wrap:break-word}
 caption{caption-side:top;text-align:left;font-weight:600;font-size:14px;color:var(--muted);padding:var(--space-1) var(--space-3)}
 th,td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
 th{background:var(--wash);color:var(--muted);font-weight:600}
@@ -261,6 +263,7 @@ th{background:var(--wash);color:var(--muted);font-weight:600}
   .cols tr{border:1px solid var(--line);border-radius:var(--radius);margin:0 0 6px;padding:2px 0}
   .cols td:first-child{font-weight:600}
   .cols td + td::before{content:attr(data-th) ": ";color:var(--muted);font-weight:600}
+  .cols caption{display:block}
 }
 
 /* Figures. Source SVGs draw with the aliased tokens; .plot and the series classes come from render.py. */

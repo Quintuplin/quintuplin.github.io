@@ -88,7 +88,7 @@ def notation(snap):
     """The kinds of stage, each defined by its notation sentence, then the rest of the notation."""
     f = snap.facts
     text = f["pipeline"]["notation"].removesuffix(" Tag: verified.")
-    sentences = re.findall(r"[^.]+\.", text)
+    sentences = re.split(r"(?<=\.) (?=[A-Z])", text)
     count = {k: sum(1 for s in f["stages"].values() for st in s["stages"] if st["kind"] == k) for k in KINDS}
     terms, rest = [], []
     for s in (s.strip() for s in sentences):
@@ -114,9 +114,16 @@ def stage_rows(snap, d):
                 ([f"if {st['when']}"] if "when" in st else []) + \
                 [f"with {snap.facts['stages'][w]['method']} steps {joined(n)}" for w, n in st.get("with", {}).items()]
         out.append([design_cell(snap, d), escape(st["id"]), f"{st['kind']} ({escape(KINDS[st['kind']])})",
-                    joined(st["steps"]) or "none", escape(st.get("unit", "")), escape(st.get("returns", "")),
-                    escape("; ".join(rules)), escape(st.get("note", ""))])
+                    joined(st["steps"]) or "none", escape(st.get("unit", "none")), escape(st.get("returns", "none")),
+                    escape("; ".join(rules) or "none")])
     return out
+
+
+def stage_notes(snap, designs, family):
+    """Stage notes sit under the table, as one long note would squeeze its other columns."""
+    terms = "".join(f"<dt>{escape(snap.facts['stages'][d]['method'])} {escape(st['id'])}</dt><dd>{escape(st['note'])}</dd>"
+                    for d in designs for st in snap.facts["stages"][d]["stages"] if "note" in st)
+    return f'<dl class="terms" aria-label="Stage notes: {escape(family)}">{terms}</dl>' if terms else ""
 
 
 def changes(snap):
@@ -136,12 +143,13 @@ def changes(snap):
 
 def stages(snap):
     fam, out = families(snap), []
-    head = ["Design", "Stage", "Kind", "Steps", "Unit", "Returns", "Rules", "Note"]
+    head = ["Design", "Stage", "Kind", "Steps", "Unit", "Returns", "Rules"]
     for family in dict.fromkeys(fam.values()):
         designs = [d for d, s in snap.facts["stages"].items() if fam[s["method"]] == family]
         slug = re.sub(r"\W+", "-", family.lower())
         out.append(f'<h3 id="stages-{slug}">{escape(family)}</h3>' +
-                   grid(f"Stages: {family}", head, [r for d in designs for r in stage_rows(snap, d)]))
+                   grid(f"Stages: {family}", head, [r for d in designs for r in stage_rows(snap, d)]) +
+                   stage_notes(snap, designs, family))
     found = changes(snap)
     rows = [[escape(joined(builds)), escape(snap.facts["stages"][d]["method"]), escape(stage), escape(field),
              value(json.loads(v))] for (d, stage, field, v), builds in found.items()]
@@ -149,7 +157,8 @@ def stages(snap):
     return section(
         "stages", "Stages",
         p("Each table lists one family's stage sets as stages.json holds them now. Rules name a commit cap, the event "
-          "that starts a stage and the steps borrowed from another method.", "verified"), *out,
+          "that starts a stage and the steps borrowed from another method. The stage notes follow each table.",
+          "verified"), *out,
         '<h3 id="stage-changes">Stages as run</h3>',
         p(f"Each run records the stages it ran. {builds} builds recorded a stage field unlike stages.json. As run, "
           f"<i>with</i> holds the quoted step texts where stages.json holds step numbers.", "recomputed"),
