@@ -25,8 +25,9 @@ FIXTURE = SCRIPTS / "fixtures/kalah-tdd/results-qtable.fixture"
 BASE = "/studies/kalah-tdd-study/"
 SLUGS = ("results/survey", "results/contrasts", "results/consistency", "results/test-order")
 WIDTHS = (375, 768)
-CHROMES = ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "google-chrome", "google-chrome-stable",
-           "chromium", "chromium-browser")
+CHROMES = ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+           "C:/Program Files/Google/Chrome/Application/chrome.exe", "google-chrome", "google-chrome-stable", "chromium",
+           "chromium-browser")
 # The rules the probe guards, each removed in the mutated copy.
 GUARDED = {
     "summary-marker": 'summary::before{content:"\\25B8";content:"\\25B8" / "";flex:none;transition:transform .15s}',
