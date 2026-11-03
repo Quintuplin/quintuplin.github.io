@@ -151,6 +151,15 @@ class MetricDefs(unittest.TestCase):
         found = " ".join(errors({"methodology/measures": [('id="weighted-tokens"', 'id="wt"')]}))
         self.assertRegex(found, "table header 'Weighted tokens' has no dfn")
 
+    def test_label_must_match_whole_name(self):
+        # Only a figure title may contain a dfn name. Other labels are one name, less a unit.
+        header = '<th scope="col">PMD violations</th>'
+        found = " ".join(errors({"results/survey": [(header, '<th scope="col">Strict PMD compliance</th>')]}))
+        self.assertRegex(found, "results/survey table header 'Strict PMD compliance' has no dfn")
+        unit = {"results/survey": [(header, '<th scope="col">PMD violations /15</th>'),
+                                   ("<span class=\"sub\">Cost</span>", "<span class=\"sub\">cost, millions</span>")]}
+        self.assertEqual(errors(unit), [])
+
     def test_stub_measures_defines_nothing(self):
         # Labels wait for a built measures page, as shared items do.
         site = pages({"methodology/measures": [("<head>", f"<head>{STUB}")]})

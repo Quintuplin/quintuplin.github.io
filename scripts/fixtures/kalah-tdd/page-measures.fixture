@@ -4,6 +4,7 @@
 <p><dfn id="method">Method</dfn>: one TDD design.</p>
 <p><dfn id="weighted-tokens">Model tokens by price</dfn>: input 1, output 5.</p>
 <p><dfn id="pmd">PMD</dfn>: a static analysis tool for Java.</p>
+<p><dfn id="pmd-violations">PMD violations</dfn>: warnings PMD reports.</p>
 <p><dfn id="cost-to-completion" data-alias="Cost">Cost to completion</dfn>: weighted tokens to finish.</p>
 <h2 id="columns">Columns</h2>
 <details><summary>Column definitions, 1 rows and 4 columns</summary><div class="shaped"><div class="entry"><p class="sub"><b>Weighted tokens</b>. Tag: recomputed.</p><p><b>Definition:</b> Model tokens weighted by price.</p></div></div></details>

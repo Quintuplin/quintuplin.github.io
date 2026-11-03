@@ -28,6 +28,7 @@ BASE = "/studies/kalah-tdd-study/"
 ANCHORS = {a: p.slug for p in pagemap.PAGES for a in p.anchors}
 VIEWS = {"summary": "", **{d[0]: f"designs/{d[0]}" for d in pagemap.DESIGNS}}
 ROWS = re.compile(r"\b(\d+) rows?\b")
+UNIT = re.compile(r"(,[^,]*| /\s*\d+)$")
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
 
@@ -341,14 +342,20 @@ def dfn_names(page):
     return {n.strip().casefold() for n in names if n.strip()}
 
 
+def bare(label):
+    """A label less a trailing ", unit" or " /N", folded for case."""
+    return UNIT.sub("", label).strip().casefold()
+
+
 def metric_defs(pages):
-    """(errors, labels checked). A label is defined when a dfn name on measures appears in it as whole words.
-    Labels wait while measures is a stub."""
+    """(errors, labels checked). A figure title is defined when a dfn name on measures appears in it as whole words,
+    and any other label when it is a dfn name less its unit. Labels wait while measures is a stub."""
     measures = parse(pages[MEASURES]) if MEASURES in pages else None
     if measures and measures.stub:
         return [], 0
-    names = sorted(dfn_names(measures), key=len, reverse=True) if measures else []
-    defined = re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, names)) + r")(?!\w)") if names else None
+    names = dfn_names(measures) if measures else set()
+    alts = "|".join(map(re.escape, sorted(names, key=len, reverse=True)))
+    within = re.compile(r"(?<!\w)(?:" + alts + r")(?!\w)") if names else None
     errors, checked = [], 0
     for slug in sorted(filter(is_label_page, pages), key=order):
         page = parse(pages[slug])
@@ -356,7 +363,7 @@ def metric_defs(pages):
             if not re.search(r"[^\W\d_]", text):
                 continue
             checked += 1
-            if not (defined and defined.search(text.casefold())):
+            if not (within and within.search(text.casefold()) if what == "figure title" else bare(text) in names):
                 errors.append(f"{slug} {what} {text!r} has no dfn on {MEASURES}")
     return errors, checked
 
