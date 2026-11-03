@@ -199,6 +199,14 @@ def aliases(dfn):
     return [a for a in (dfn.attrs.get("data-alias") or "").split("|") if a]
 
 
+QUOTES = ("The glossary row ", "The report section ", "Function ", "List phase step ")
+
+
+def flat(node):
+    """A node's text as written, so "Tag: <span>x</span>." reads "Tag: x."."""
+    return " ".join(node.text().split())
+
+
 def said(names):
     return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
 
@@ -618,7 +626,7 @@ class Measures(unittest.TestCase):
                 if what == "table header":
                     heads.setdefault(text.casefold(), []).append(anchor_title(a))
         later = {t.casefold(): what for what, ts in G10B_LABELS.items() for t in ts}
-        report_root = check().Tree(report()).root
+        report_root, quoted = check().Tree(report()).root, 0
         for card in found:
             dfn = next(n for n in card.iter() if n.tag == "dfn")
             name = check().spaced(dfn)
@@ -636,23 +644,27 @@ class Measures(unittest.TestCase):
                     what = later[name.casefold()]
                     self.assertEqual(where, [f"{what[:1].upper()}{what[1:]} on Results: test order (tcp-1)."])
                 for p in (p for p in card.iter() if p.tag == "p" and "sub" in p.classes()):
-                    text = check().spaced(p)
+                    text = flat(p)
                     pills = [check().spaced(n) for n in p.iter() if "tag" in n.classes()]
+                    quoted += text.startswith(QUOTES)
                     if m := re.fullmatch(r"The glossary row (.+?) says: (.+) Tag: (\w+)\.", text):
                         row = glossary()[m.group(1)]
-                        self.assertIn(m.group(2), check().spaced(row))
-                        self.assertEqual(pills, [re.search(r"Tag: (\w+)\.", check().spaced(row)).group(1)])
+                        self.assertIn(m.group(2), flat(row))
+                        self.assertEqual(pills, [re.search(r"Tag: (\w+)\.", flat(row)).group(1)])
                     elif m := re.fullmatch(r"The report section (.+?) says: (.+) Tag: (\w+)\.", text):
                         head = next(n for n in report_root.iter() if check().heading(n) and check().spaced(n) == m.group(1))
                         section = check().Tree(kalah("snapshot").section(report(), head.attrs["id"])).root
-                        para = next(q for q in section.iter() if q.tag == "p" and m.group(2) in check().spaced(q))
-                        self.assertEqual(pills, [re.search(r"Tag: (\w+)\.", check().spaced(para)).group(1)])
+                        para = next(q for q in section.iter() if q.tag == "p" and m.group(2) in flat(q))
+                        self.assertEqual(pills, [re.search(r"Tag: (\w+)\.", flat(para)).group(1)])
                     elif m := re.fullmatch(r"Function (\w+) doc: (.+)", text):
                         docs = {f["name"]: f["doc"] for a in ("functions", "stats") for f in snap().facts["analysis"][a]}
                         self.assertEqual(m.group(2), " ".join(docs[m.group(1)].split()))
                     elif m := re.fullmatch(r"List phase step (\d+) of run (\S+): (.+)", text):
                         step = snap().facts["runs"][m.group(2)]["list_phase"][int(m.group(1)) - 1]
                         self.assertEqual(m.group(3), " ".join(step.split()))
+                    else:
+                        self.assertFalse(text.startswith(QUOTES), text)  # a quote line in no known shape
+        self.assertGreater(quoted, 20)
 
     def test_field_refuses_missing_source(self):
         for old, new, name in (("Its slug is its short lowercase name", "Its slug is its short name", "Slug"),
