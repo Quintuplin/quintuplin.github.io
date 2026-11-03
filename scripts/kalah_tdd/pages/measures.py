@@ -387,7 +387,8 @@ class TableFields:
 
     def __init__(self, src, taken):
         self.src, self.heads = src, self.table_heads(src.report)
-        ids = list(taken) + [slug(f.name) for _, _, fields in FIELDS for f in fields]
+        groups = [id for id, _, _ in FAMILIES + (TEST_ORDER,) + FIELDS]  # h3 ids a field dfn must not repeat
+        ids = list(taken) + groups + [slug(f.name) for _, _, fields in FIELDS for f in fields]
         if dup := sorted({i for i in ids if ids.count(i) > 1}):
             raise ValueError(f"dfn ids {dup} are on two cards")
 
