@@ -622,6 +622,9 @@ class Measures(unittest.TestCase):
                                  [f"Also labelled: {'; '.join(aliases(dfn))}."] if aliases(dfn) else [])
                 if dfn.closest(cls="fields") is not None and not aliases(dfn):
                     self.assertIn(check().spaced(dfn).casefold(), wanted)
+        # Each bench strip dot is one bench run, so its axis label names Run ms.
+        self.assertIn("bench run time", dfn_words(page().ids["run-ms"]))
+        self.assertNotIn("bench run time", dfn_words(page().ids["bench-median-ms"]))
 
     def test_field_cards(self):
         found = field_cards()
