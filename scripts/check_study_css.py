@@ -190,7 +190,7 @@ def diagram_pull(parsed):
     for i, (media, sels, decls) in enumerate(parsed):
         for prop in (p for p in PULL if negative(decls.get(p, ""))):
             for s in sels:
-                if re.search(r"[.#]toc(?![\w-])", s) or s.startswith(".diagram"):
+                if re.search(r"[.#]toc(?![\w-])", s):
                     continue
                 tail = s.split()[-1]
                 if not any(m is None and r.startswith(".diagram ") and r.split()[-1] == tail
