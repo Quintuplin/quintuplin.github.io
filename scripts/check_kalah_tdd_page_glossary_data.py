@@ -178,16 +178,17 @@ class GlossaryData(unittest.TestCase):
     def test_measures_links(self):
         rows = [n for n in main("glossary").iter() if "entry" in n.classes()]
         self.assertEqual(len(rows), 35)
+        squash = study().squash
         for row in rows:
             name = study().spaced(next(b for b in row.iter() if b.tag == "b"))
-            kids = row.parent.elements()
-            after = kids[kids.index(row) + 1] if kids.index(row) + 1 < len(kids) else None
-            linked = after is not None and "entry" not in after.classes()
+            linked = any(a.tag == "a" for a in row.iter())
             with self.subTest(name):
                 self.assertEqual(linked, name in MEASURED)
                 if linked:
-                    hrefs = [a.attrs["href"] for a in after.iter() if a.tag == "a"]
-                    self.assertEqual(hrefs, [MEASURES])
+                    # The link closes the row's card, after a div that holds the report row's text whole.
+                    *text, after = row.elements()
+                    self.assertEqual([(t.tag, squash(t.text())) for t in text], [("div", squash(study().Tree(entry(name)).root.text()))])
+                    self.assertEqual([a.attrs["href"] for a in after.iter() if a.tag == "a"], [MEASURES])
                     self.assertEqual(" ".join(after.text().split()), "Its formula and inputs are on Measures.")
         refused(self, {kalah("snapshot").REPORT: report().replace(entry("Kendall distance"), "")}, "Kendall distance")
 

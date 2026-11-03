@@ -193,9 +193,11 @@ def glossary(page, snap, idx):
         if not m:
             raise ValueError(f"section glossary holds a row of no known form {block[:60]!r}")
         names.append(name := plain(m.group(1)))
-        # The link sits after the row, so the row's text stays whole for the coverage check.
-        link = MEASURED_LINK if name in MEASURED else ""
-        return block.replace('<div class="entry">', f'<div class="entry" id="{term_id(name)}">', 1) + link
+        inner = block[len('<div class="entry">'):-len("</div>")]
+        if name in MEASURED:
+            # The link closes the row's card, so it reads as the row's; a div keeps the row's text whole for coverage.
+            inner = f"<div>{inner}</div>{MEASURED_LINK}"
+        return f'<div class="entry" id="{term_id(name)}">{inner}</div>'
 
     def after():
         if missing := [n for n in MEASURED if n not in names]:
