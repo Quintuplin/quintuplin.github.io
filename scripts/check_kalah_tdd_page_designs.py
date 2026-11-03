@@ -511,7 +511,7 @@ class StageFlow(unittest.TestCase):
                 nodes, edges, loops = sf.chart(sf.stages(slug, snap().facts["stages"], merged(slug)))
                 self.assertTrue(all(n.col is not None for n in nodes))
                 row = {id: col // flow.COLS for id, (_, col) in flow.cells(nodes)[1].items()}
-                self.assertTrue(all(row[lp.node] == row[lp.back_to or lp.node] for lp in loops))
+                self.assertTrue(all(not lp.back_to for lp in loops), "an L stage loops on itself")
                 breaks = [row[e.src] for e in edges if row[e.src] != row[e.dst]]
                 self.assertEqual(len(breaks), len(set(breaks)), "two wrap edges share one gap line")
                 self.assertTrue(all(len(e.label) <= 10 for e in edges), edges)
