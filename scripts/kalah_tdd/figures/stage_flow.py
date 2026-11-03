@@ -114,6 +114,13 @@ def chart(checked):
     return nodes, edges, [flow.loop(s["id"], s["unit"]) for s in chain if s["kind"] == "L"]
 
 
+def sized(svg):
+    """A chart narrower than study.css's 640px flow min-width at its drawn size. Scaled to the column, a one column
+    chart drew 42px to 51px labels."""
+    width = int(re.match(r'<svg [^>]*viewBox="0 0 (\d+) ', svg).group(1))
+    return svg if width >= 640 else svg.replace("<svg ", f'<svg style="width:{width}px;min-width:{width}px" ', 1)
+
+
 def figure(n, slug, facts, pre):
     """Figure n, the stage flow, then h3#stages with the stage table its Data link targets."""
     found = stages(slug, facts, pre)
@@ -124,7 +131,7 @@ def figure(n, slug, facts, pre):
             + (" Each loop repeats its stage per unit." if loops else ""))
     caption = (f"{len(nodes)} stages from the run facts, each checked against its block of the steps above. "
                f"Details and notes are in the stage table. Tag: {parts.tag('recomputed')}.")
-    fig = parts.figure(n, "fig-" + n.replace(".", "-"), title, flow.svg("f5", title, desc, nodes, edges, loops), caption,
+    fig = parts.figure(n, "fig-" + n.replace(".", "-"), title, sized(flow.svg("f5", title, desc, nodes, edges, loops)), caption,
                        "#stages", flow.text_version(title, nodes, edges, loops))
     rows = "".join(f'<tr><th scope="row">{escape(label(s))}</th><td>{escape(header)}</td><td>{"<br>".join(lines)}</td>'
                    f'<td>{escape(details(s))}</td><td>{escape(s.get("note", "none"))}</td></tr>' for s, header, lines in found)

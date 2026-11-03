@@ -458,6 +458,9 @@ class StageFlow(unittest.TestCase):
                 svg = next(n for n in fig.iter() if n.tag == "svg")
                 self.assertIn("flow", svg.classes())
                 self.assertEqual([k.tag for k in svg.elements()][:2], ["title", "desc"])
+                # A chart narrower than the 640px flow min-width keeps its drawn size, so labels stay 13px.
+                width = int(svg.attrs["viewbox"].split()[2])
+                self.assertEqual(svg.attrs.get("style"), f"width:{width}px;min-width:{width}px" if width < 640 else None)
                 nodes = [r for r in svg.iter() if r.tag == "rect" and "node" in r.classes()]
                 items = [li for li in fig.iter() if li.tag == "li"]
                 self.assertEqual((len(nodes), len(items)), (len(stages), len(stages)))
