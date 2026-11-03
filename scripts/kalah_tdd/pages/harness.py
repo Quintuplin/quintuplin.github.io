@@ -359,7 +359,7 @@ def roles(snap):
     edges = [flow.edge("lister", "clone", "its list"), flow.edge("clone", "throughout"), flow.edge("throughout", "once"),
              flow.edge("once", "writer", "s2"), flow.edge("once", "repeat"), flow.edge("writer", "harness", "after s3"),
              flow.edge("harness", "repeat"), flow.edge("repeat", "fresh", "if hidden"), flow.edge("repeat", "review"),
-             flow.edge("transfers", "starts", f"{caps.pop()} parallel"), flow.edge("starts", "review"),
+             flow.edge("transfers", "starts", f"up to {caps.pop()}"), flow.edge("starts", "review"),
              flow.edge("fresh", "review"), flow.edge("review", "measure"), flow.edge("measure", "audit", "collect"),
              flow.edge("audit", "copy"), flow.edge("copy", "raters"), flow.edge("raters", "report")]
     return nodes, edges, [flow.loop("repeat", "unit")]

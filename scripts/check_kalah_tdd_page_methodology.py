@@ -435,7 +435,7 @@ class AgentRoles(unittest.TestCase):
         self.assertEqual([lp.node for lp in loops], ["repeat"])
         label = {(e.src, e.dst): e.label for e in edges}
         self.assertEqual((label[("once", "writer")], label[("repeat", "fresh")], label[("transfers", "starts")]),
-                         ("s2", "if hidden", "3 parallel"))
+                         ("s2", "if hidden", "up to 3"))
         desc = svg().find(self.NS + "desc").text
         self.assertNotRegex(desc, r"(?i)collect[^.]*reviewer")
         self.assertRegex(desc, r"Review phase runs one blind reviewer[^.]*Measure phase[^.]*\. Collect then")
