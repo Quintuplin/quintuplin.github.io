@@ -14,6 +14,8 @@ import unittest
 import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parent
 SLUG = "methodology/measures"
@@ -428,6 +430,17 @@ class Measures(unittest.TestCase):
             for name in (n for n in names if n not in drawn):
                 with self.subTest(name):
                     self.assertRegex(caption, rf"(?<![\w-]){re.escape(name)}(?![\w-])")
+
+    def test_undrawn_sentence_well_formed(self):
+        m = measures()
+        families = m.FAMILIES + (m.TEST_ORDER,)
+        undrawn = functools.partial(m.MeasurePipeline.undrawn, SimpleNamespace(nodes=[]))
+        with mock.patch.object(m, "LANES", {title: names[:1] for _, title, names in families}):
+            sentence = undrawn()
+        self.assertNotIn("famil", sentence)
+        self.assertRegex(sentence, r"^[^,]+(, [^,]+)* and [^,]+ are not drawn\.$")
+        with mock.patch.object(m, "LANES", {title: names for _, title, names in families if title != "Records"}):
+            self.assertEqual(undrawn(), "The Records family is not drawn.")
 
     def test_pipeline_routes_and_limits(self):
         nodes, edges = measures().pipeline(snap())

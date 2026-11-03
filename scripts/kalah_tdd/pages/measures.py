@@ -342,7 +342,11 @@ class MeasurePipeline:
                 whole.append(title)
             else:
                 cards += left
-        return f"The {joined(whole)} families are not drawn, nor {'is' if len(cards) == 1 else 'are'} {joined(cards)}."
+        are = "is" if len(cards) == 1 else "are"
+        if not whole:
+            return f"{joined(cards)} {are} not drawn." if cards else ""
+        families = f"The {joined(whole)} famil{'y is' if len(whole) == 1 else 'ies are'} not drawn"
+        return f"{families}, nor {are} {joined(cards)}." if cards else f"{families}."
 
     def figure(self, n):
         title = "From raw inputs to scores"
