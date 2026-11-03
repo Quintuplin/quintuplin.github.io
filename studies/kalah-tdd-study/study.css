@@ -265,6 +265,7 @@ figure h3,figcaption h3{margin:0;font-size:1rem}
 figcaption{font-size:14px;color:var(--muted)}
 .fig-n{font:500 12px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
 .fig-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--space-2) var(--space-4);font-size:14px}
+.fig-foot a{min-height:44px;display:inline-flex;align-items:center}
 .diagram,.plot{overflow-x:auto}
 .diagram svg{display:block;max-width:100%;height:auto;margin:0 auto}
 .plot svg{display:block;width:100%;max-width:40rem;height:auto}
