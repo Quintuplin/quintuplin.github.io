@@ -118,7 +118,7 @@ FIELDS = (
         Field("Metric", "The measure a row's statistic is computed on."),
         Field("Statistic", "The test statistic a row reports, named with its value, such as a Brown-Forsythe F.",
               ("function", "brown_forsythe")),
-        Field("Value", "The number a row reports for its statistic or its cap."),
+        Field("Value", "The value a row reports for its statistic, cap or setting."),
         Field("95% interval", "A 95% interval around a row's value. A percent interval of a mutation score is a Wilson "
               "interval.", ("function", "wilson"), ("95% interval %",)))),
     ("ratings", "Ratings", (

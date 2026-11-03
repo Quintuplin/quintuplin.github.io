@@ -681,6 +681,12 @@ class Measures(unittest.TestCase):
         self.assertTrue(any(t.startswith("Table header in: ") and t.endswith(" Table header on Results: test order (tcp-1).")
                             for t in lines("value")), lines("value"))
 
+    def test_value_covers_settings(self):
+        # The tcp-1 settings table puts seed, lister, list sha and doc version under Value, which are no numbers.
+        card = page().ids["value"].closest(cls="entry")
+        definition = next(check().spaced(p) for p in card.iter() if p.tag == "p" and check().spaced(p).startswith("Definition:"))
+        self.assertIn("setting", definition)
+
     def test_field_refuses_missing_source(self):
         for old, new, name in (("Its slug is its short lowercase name", "Its slug is its short name", "Slug"),
                                ("q is the share of bootstrap alphas", "q is the fraction of bootstrap alphas", "Finals q"),
