@@ -170,7 +170,7 @@ def awards_flow(snap):
              flow.node("ranks", "stats.ranks", lanes[1], 1, "ties share their average rank"),
              flow.node("overall", "overall", lanes[1], 2, "rank sum over CRITERIA"),
              flow.node("best", "places and podium", lanes[1], 3, top),
-             flow.node("badge-in", "Cost to completion and C", lanes[2], 1, "never ranked in CRITERIA"),
+             flow.node("badge-in", "Cost to completion, C", lanes[2], 1, "never ranked in CRITERIA"),
              flow.node("badge-places", "places", lanes[2], 2, "lower first"),
              flow.node("bronze", "Bronze badge only", lanes[2], 3, "limit stated with the award")]
     edges = [flow.edge("records", "criteria"), flow.edge("criteria", "places"), flow.edge("places", "podium"),
@@ -231,7 +231,7 @@ def test_flow(snap):
     nodes, edges = [], []
     for k, u in enumerate(u for u in TEST_USE if u.functions):
         ids = [f"q{k}", f"fn{k}", f"fix{k}", f"at{k}"]
-        labels = [u.question, ", ".join(u.functions), u.correction, pagemap.BY_SLUG[u.reported].nav]
+        labels = [u.question, listed(u.functions), u.correction, pagemap.BY_SLUG[u.reported].nav]
         nodes += [flow.node(i, label, u.lane, col) for col, (i, label) in enumerate(zip(ids, labels))]
         edges += [flow.edge(a, b) for a, b in zip(ids, ids[1:])]
     return nodes, edges, []

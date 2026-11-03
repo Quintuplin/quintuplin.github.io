@@ -339,7 +339,7 @@ class Analysis(unittest.TestCase):
         functions = [n for n in nodes if n.col == 1]
         self.assertEqual(len(functions), len(drawn))
         for n, u in zip(functions, drawn):
-            self.assertEqual(n.label.split(", "), list(u.functions))
+            self.assertEqual(re.split(r", | and ", n.label), list(u.functions))
             self.assertLessEqual(set(u.functions), names)
         out, _ = svg("f7")
         self.assertEqual([i for i in re.findall(r'\bid="([^"]*)"', out) if not i.startswith("f7-")], [])
@@ -367,6 +367,27 @@ class Analysis(unittest.TestCase):
                     self.assertEqual([n for n in boxes.values() if flow.overlap(box, n)], [], s)
                     self.assertEqual([seg for seg in segs if flow.crosses(seg[1], seg[2], box)], [], s)
                 self.assertEqual([(s, t) for i, (s, a) in enumerate(labels) for t, b in labels[i + 1:] if flow.overlap(a, b)], [])
+
+    def test_node_text_fits(self):
+        # A wrapped line wider than a node spills over its border; an em of 0.5 per character is the measured upper bound.
+        flow = kalah("figures.flow")
+        css = (SCRIPTS.parent / "studies/kalah-tdd-study/study.css").read_text()
+        for prefix, fig in (("f6", "award-flow"), ("f7", "test-flow")):
+            with self.subTest(prefix):
+                size = re.search(rf"#{fig} svg\.flow text\{{font-size:(\d+)px\}}", css) or re.search(r"\.flow text\{[^}]*font-size:(\d+)px", css)
+                lines = [w for n in charts()[prefix][0] for t in (n.label, n.note) for w in flow.wrap(t)]
+                self.assertEqual([w for w in lines if len(w) * int(size[1]) / 2 > flow.NODE_W - 2 * 6], [])
+
+    def test_page_styles_in_slot(self):
+        # Seven columns crush words at 1280, and a stacked table's caption shrinks to one word per line.
+        css = (SCRIPTS.parent / "studies/kalah-tdd-study/study.css").read_text()
+        slot = css.split(".flow .note{fill:var(--muted)}\n", 1)[1].split("\n\n/* Forced colours", 1)[0]
+        for rule in ("#test-flow svg.flow text{font-size:12px}",
+                     "@media (min-width:641px){#test-use + .table-scroll table{min-width:",
+                     "#test-use + .table-scroll :is(th,td){overflow-wrap:normal}",
+                     "#test-use + .table-scroll td:last-child{min-width:",
+                     "@media (max-width:640px){.cols caption{display:block}}"):
+            self.assertIn(rule, slot)
 
     def test_figures_wrapped(self):
         ids = parsed().ids
