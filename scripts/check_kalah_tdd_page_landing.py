@@ -4,12 +4,14 @@ framed figures, and a contents list of every page.
 
 Usage: check_kalah_tdd_page_landing.py
 """
+import collections
 import functools
 import importlib
 import importlib.util
 import re
 import sys
 import unittest
+import unittest.mock
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -73,17 +75,25 @@ def section(id):
 
 
 def missing_text(s):
-    """Each p, li, dt and dd text of the landing sources that the landing built from snapshot s leaves out."""
+    """Each p, li, dt and dd text of the landing sources that the landing built from snapshot s leaves out. A chunk
+    counts only as a whole element of its own kind, once per copy, so a dropped one-letter cell still shows."""
     snapshot, tree = kalah("snapshot"), module("check_kalah_tdd_study").Tree
     report = s.files[snapshot.REPORT]
     head, methods = snapshot.section(report, "kalah-tdd-experiment"), snapshot.section(report, "methods")
     sources = (snapshot.view(s.files[snapshot.SHOWCASE], "summary"), head[:head.index('<h3 id="awards"')],
                methods[:methods.index('<h3 id="classic-greedy-tdd"')])
-    page = text(tree(module("build_kalah_tdd_study").render_page(landing_page(), s, kalah("links").index(s))).root)
-    # Claim tag sentences render as a tag pill holding the kind.
-    chunks = [kalah("pages.landing").TAG.sub(r"\1", text(n)) for source in sources for n in tree(source).root.iter()
-              if n.tag in ("p", "li", "dt", "dd")]
-    return [c for c in chunks if c not in page and c not in ("Kalah TDD showcase", "Kalah TDD Experiment")]
+    kinds = ("p", "li", "dt", "dd")
+    page = tree(module("build_kalah_tdd_study").render_page(landing_page(), s, kalah("links").index(s))).root
+    left = collections.Counter((n.tag, text(n)) for n in page.iter() if n.tag in kinds)
+    out = []
+    for n in (n for source in sources for n in tree(source).root.iter() if n.tag in kinds):
+        # Claim tag sentences render as a tag pill holding the kind.
+        chunk = (n.tag, kalah("pages.landing").TAG.sub(r"\1", text(n)))
+        if left[chunk]:
+            left[chunk] -= 1
+        elif chunk[1] != "Kalah TDD showcase":
+            out.append(chunk[1])
+    return out
 
 
 def hrefs(nodes):
@@ -210,6 +220,13 @@ class LandingContent(unittest.TestCase):
                      summary, summary + "<h2>Caveats</h2><ul><li>An added showcase note.</li></ul>"),
                  snapshot.REPORT: report.replace(intro, intro + "<p>An added methods paragraph.</p>")}
         self.assertEqual(missing_text(s._replace(files=files)), [])
+
+    def test_dropped_short_text_reported(self):
+        build, page = module("build_kalah_tdd_study"), html()
+        for cell in ("<dt>E</dt>", "<dd>9</dd>"):
+            with self.subTest(cell), unittest.mock.patch.object(
+                    build, "render_page", lambda *_, cell=cell: page.replace(cell, cell[:4] + cell[5:], 1)):
+                self.assertEqual(missing_text(snap()), [cell[4]])
 
     def test_added_section_ids_stay_unique(self):
         s, snapshot = snap(), kalah("snapshot")
