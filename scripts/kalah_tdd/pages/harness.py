@@ -5,6 +5,7 @@ import re
 from html import escape
 
 from .. import links, pagemap, parts, snapshot
+from ..figures import flow
 
 KINDS = {"S": "once", "L": "repeat per unit", "F": "throughout", "starts": "for up to n starts", "H": "the harness does"}
 # Notation sentence that defines each kind.
@@ -253,14 +254,19 @@ def review(snap):
           f'<a href="{links.url("data/ratings")}">ratings page</a>.', "verified"))
 
 
+def dispositions(snap):
+    """(design, channel, high flags, verdict) of each audit flag disposition in the report."""
+    return re.findall(r"<b>([^<]+)</b>\. Channel: (\w+)\. High flags: (\d+)\. Verdict: ([^.]+)\.",
+                      snapshot.section(snap.files[snapshot.REPORT], "audit-flag-dispositions"))
+
+
 def collect(snap):
     steps = snap.facts["pipeline"]["collect"]
     lists = "".join(
         f'<p>{code(name)} runs {len(s)} steps in order.</p><ol class="collect" aria-label="{escape(name)} steps">' +
         "".join(f"<li>{code(x['name'])}{CHIP if x['skippable'] else ''}</li>" for x in s) +
         "</ol>" for name, s in steps.items())
-    found = re.findall(r"<b>([^<]+)</b>\. Channel: (\w+)\. High flags: (\d+)\. Verdict: ([^.]+)\.",
-                       snapshot.section(snap.files[snapshot.REPORT], "audit-flag-dispositions"))
+    found = dispositions(snap)
     rows = [[escape(x) for x in d] for d in found]
     return section(
         "collect-audit", "Collect and audit",
@@ -279,5 +285,65 @@ def intro():
               "source. Unchecked means written or judged by an agent and not checked."))
 
 
+def roles(snap):
+    """F8: the agents of one build and the collect steps after it, with counts from the facts."""
+    f = snap.facts
+    all_stages = [st for s in f["stages"].values() for st in s["stages"]]
+    n = {k: sum(1 for st in all_stages if st["kind"] == k) for k in KINDS}
+    units = sorted({st["unit"] for st in all_stages if st["kind"] == "L"})
+    separate = [st["id"] for st in all_stages if st.get("note", "").startswith("You are the separate agent")]
+    starts = {r["caps"]["starts"] for r in f["runs"].values()}.pop()
+    steps = {k: [s["name"] for s in v] for k, v in f["pipeline"]["collect"].items()}
+    found = dispositions(snap)
+    one = steps["collectOne"]
+    harness, method, other = "Harness and report", "Method agent", "Separate agent"
+    nodes = [
+        flow.node("clone", "Fresh clone and prompt", harness, 0,
+                  f"{sum(len(r['methods']) for r in f['runs'].values())} builds in {len(f['runs'])} runs"),
+        flow.node("throughout", "Throughout rule (F)", harness, 1, f"{n['F']} stages join every prompt"),
+        flow.node("once", "Once stage (S)", method, 1, f"{n['S']} stages"),
+        flow.node("harness", "Harness stage (H)", harness, 2, f"{n['H']} stage"),
+        flow.node("repeat", "Repeat stage (L)", method, 2, f"{n['L']} stages, units {joined(units)}"),
+        flow.node("starts", "Starts stage", method, 3, f"{n['starts']} stage, up to {starts} starts"),
+        flow.node("writer", "Held-out case writer", other, 3, f"{len(separate)} stages: {joined(separate)}"),
+        flow.node("collect", "Collect", harness, 4,
+                  f"collectOne {len(one)} steps, collectList {len(steps['collectList'])}"),
+        flow.node("audit", "Audit flags", harness, 5, f"collectOne step {one.index('audit') + 1}"),
+        flow.node("review", "Blind reviewer", other, 6, f"collectOne step {one.index('review') + 1}"),
+        flow.node("report", "Report", harness, 7,
+                  f"{len(found)} disposition rows judge {sum(int(d[2]) for d in found)} high flags"),
+    ]
+    edges = [flow.edge("clone", "throughout"), flow.edge("throughout", "once"), flow.edge("once", "repeat"),
+             flow.edge("harness", "repeat"), flow.edge("repeat", "starts"), flow.edge("repeat", "writer", "if hidden"),
+             flow.edge("starts", "collect"), flow.edge("collect", "audit"), flow.edge("audit", "review"),
+             flow.edge("review", "report")]
+    return nodes, edges, [flow.loop("repeat", "unit"), flow.loop("starts", "start")]
+
+
+def agent_roles(snap):
+    title = "Agents in one build and its collect steps"
+    nodes, edges, loops = roles(snap)
+    svg = flow.svg("f8", title, "A fresh clone takes throughout rules into each prompt. Method agents run once, "
+                   "repeat and starts stages, the harness runs its own stage, and a separate agent writes held-out "
+                   "cases. Collect then runs the audit, the blind reviewer and the report.", nodes, edges, loops)
+    n = next(parts.numbers("methodology"))
+    caption = (f"Stage counts are over all {len(snap.facts['stages'])} stage sets, so one design runs only some kinds. "
+               f"{parts.tag('recomputed')}")
+    rows = [["Method agent", code("<design>:<stage>"), "held-out:s1", "The build clone"],
+            ["Separate agent", code("<design>:<stage>"), "held-out:s2",
+             "The cases and scratch folders, outside the clone the method agents read"],
+            ["Harness agents", code("harness:<task>"), "harness:seed-multi-start-1, harness:winner-multi-start",
+             "Tasks the harness hands to an agent, such as seeding and ranking multi-start attempts"],
+            ["Blind reviewer", code("review:<blind id>"), "review:r01, review:r02",
+             "git diff refs/tags/starter..HEAD of src/ and test/, under a blind id"]]
+    return section(
+        "agent-roles", "Agent roles",
+        parts.figure(n, "f8", title, svg, caption, None, flow.text_version(title, nodes, edges, loops)),
+        grid("Agent roles", ["Role", "Label pattern", "Examples from run records", "Where it works"], rows),
+        p("Examples are agent labels in the full-1 report.", "recomputed"),
+        p("Where each role works is quoted from the stage notes and the review schema.", "verified"),
+        p("The harness agent tasks are read from their labels.", "unchecked"))
+
+
 def body(page, snap, idx):
-    return [intro(), notation(snap), stages(snap), prompts(snap), runs(snap), held_out(snap), review(snap), collect(snap)]
+    return [intro(), notation(snap), agent_roles(snap), stages(snap), prompts(snap), runs(snap), held_out(snap), review(snap), collect(snap)]
