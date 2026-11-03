@@ -224,7 +224,7 @@ class Merge(unittest.TestCase):
         # The report card name is replaced by "Report summary", so it must also equal the page title.
         h3 = f'<h3 id="{designs()[4][1]}">{page.title}</h3>'
         renamed = mutated(kalah("snapshot").REPORT, h3, h3.replace(page.title, "TPP"))
-        with self.assertRaisesRegex(ValueError, "tpp.*report"):
+        with self.assertRaisesRegex(ValueError, "tpp.*report card name"):
             d.design(page, renamed, kalah("links").index(snap()))
 
 
