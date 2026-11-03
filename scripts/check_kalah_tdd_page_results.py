@@ -38,6 +38,9 @@ CONTRAST_RUNS = {"planned-contrasts-rep-1": ("rep-1", "adjusted mutation"), "pla
 Q20 = re.compile(r"APFD-I on the calls basis was ([\d.]+) for (\w+), ([\d.]+) for (\w+), ([\d.]+) for (\w+), ([\d.]+) "
                  r"for (\w+) and ([\d.]+) for (\w+)\. APFDc-H was ([\d.]+), ([\d.]+), ([\d.]+), ([\d.]+) and ([\d.]+) "
                  r"in the same order\.")
+# Short number and id columns of the generated tables, which must not split mid-token at phone widths.
+SHORT = {"Run", "U", "Holm p", "Order", "APFD-I", "APFDc-H", "Clause", "Risk", "Usage", "Candidate", "Estimate",
+         "Stage", "Steps"}
 
 
 @functools.cache
@@ -252,6 +255,18 @@ class Results(unittest.TestCase):
         rep1 = [t for t in free if t.closest("div", "table-scroll").attrs.get("aria-label") == "Planned contrasts (rep-1)"]
         self.assertEqual(len(rep1), 2)
         self.assertEqual(len({id(t.closest("div", "table-scroll")) for t in rep1}), 1, "the rep-1 tables share one region")
+
+    def test_short_cells_nowrap(self):
+        seen = set()
+        for slug in ("results/contrasts", "results/test-order"):
+            made = [t for t in main_of(slug).iter() if t.tag == "table" and not t.closest("figure") and not t.classes()]
+            for table in made:
+                rows = [[c for c in tr.elements() if c.tag in ("th", "td")] for tr in table.iter() if tr.tag == "tr"]
+                for i, head in enumerate(" ".join(c.text().split()) for c in rows[0]):
+                    with self.subTest(slug, column=head):
+                        self.assertEqual({"nowrap" in r[i].classes() for r in rows}, {head in SHORT})
+                    seen.add(head)
+        self.assertEqual(SHORT - seen, set())
 
     def test_question_links(self):
         total = 0

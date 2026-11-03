@@ -34,6 +34,9 @@ Q20 = re.compile(r"APFD-I on the calls basis was ([\d.]+) for (\w+), ([\d.]+) fo
 # A tcp-1 stage kind's lane and its steps header, as G9's stage flow names them.
 LANE = {"F": "Throughout", "L": "Agent"}
 RUNS_AS = {"F": "throughout:", "L": "repeat per {unit} until none is open:"}
+# Columns of short numbers and ids, held on one line so a phone width does not split them mid-token.
+SHORT = frozenset({"Run", "U", "Holm p", "Order", "APFD-I", "APFDc-H", "Clause", "Risk", "Usage", "Candidate", "Estimate",
+                   "Stage", "Steps"})
 
 
 class Contrast(NamedTuple):
@@ -171,10 +174,11 @@ def holm(report):
     return out
 
 
-def table(columns, rows, label):
-    """A plain table of text cells in a labelled scroll region."""
-    head = "".join(f'<th scope="col">{escape(c)}</th>' for c in columns)
-    body = "".join("<tr>" + "".join(f"<td>{escape(str(v))}</td>" for v in row) + "</tr>" for row in rows)
+def table(columns, rows, label, short=SHORT):
+    """A plain table of text cells in a labelled scroll region. Cells of the short columns never wrap."""
+    keep = [' class="nowrap"' if c in short else "" for c in columns]
+    head = "".join(f'<th scope="col"{k}>{escape(c)}</th>' for c, k in zip(columns, keep))
+    body = "".join("<tr>" + "".join(f"<td{k}>{escape(str(v))}</td>" for v, k in zip(row, keep)) + "</tr>" for row in rows)
     return parts.table(f"<table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>", label)
 
 
