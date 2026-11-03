@@ -211,6 +211,21 @@ class LandingContent(unittest.TestCase):
                  snapshot.REPORT: report.replace(intro, intro + "<p>An added methods paragraph.</p>")}
         self.assertEqual(missing_text(s._replace(files=files)), [])
 
+    def test_added_section_ids_stay_unique(self):
+        s, snapshot = snap(), kalah("snapshot")
+        summary = snapshot.view(s.files[snapshot.SHOWCASE], "summary")
+        added = "<h2>Contents</h2><p>An added contents note.</p><h2><em>Notes</em> &amp; more</h2><p>A note.</p>"
+        s = s._replace(files={**s.files, snapshot.SHOWCASE: s.files[snapshot.SHOWCASE].replace(summary, summary + added)})
+        page = module("build_kalah_tdd_study").render_page(landing_page(), s, kalah("links").index(s))
+        ids = kalah("links").ID.findall(page)
+        self.assertEqual(sorted(i for i in set(ids) if ids.count(i) > 1), [])
+        self.assertIn("notes-more", ids)
+        # Every #contents link reaches the contents list, not the added section.
+        after = page.split('<h2 id="contents">', 1)[1]
+        self.assertTrue(after.startswith("Contents</h2>"))
+        self.assertIn('<div class="grid contents">', after.split("<h2", 1)[0])
+        self.assertIn('href="#contents"', page)
+
     def test_runs_come_from_the_text(self):
         named = kalah("pages.landing").named_runs
         self.assertEqual(named(snap(), "<p>Runs: rep-2 a, <b>full-1</b> b, tcp-1-list2 c. Again rep-2.</p>"),

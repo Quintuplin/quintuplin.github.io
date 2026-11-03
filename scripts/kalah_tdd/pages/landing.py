@@ -2,11 +2,11 @@
 list of every page."""
 
 import re
-from html import escape
+from html import escape, unescape
 
 from .. import pagemap, parts
-from ..links import rewrite, url
-from ..snapshot import REPORT, SHOWCASE, run_doc, section, view
+from ..links import rewrite, unique_ids, url
+from ..snapshot import ID, REPORT, SHOWCASE, run_doc, section, view
 
 TAG = re.compile(r"Tag: (recomputed|verified|unchecked)\.")
 CAPTIONED = re.compile(r'<figure id="[^"]+">.*?</figure>', re.S)
@@ -20,16 +20,19 @@ def body(page, snap, idx):
     summary = ShowcaseParts(on(showcase, SHOWCASE))
     head = section(report, "kalah-tdd-experiment")
     awards = section(report, "awards")
-    rest = [f for f in (
+    known = [
         summary.awards(on(awards, REPORT)),
         summary.designs(on(cut(section(report, "methods"), "<h2", '<h3 id="classic-greedy-tdd"'), REPORT)),
         headline(page, on(cut(head, '<h2 id="headline"', '<h3 id="awards"'), REPORT)),
         summary.about_data(),
         summary.terms(),
-        summary.rest(),
-        contents(page),
-    ) if f]
-    return [tags(f) for f in (intro(snap, on(cut(head, "<p>", '<h2 id="headline"'), REPORT), summary, rest), *rest)]
+    ]
+    extra, last = summary.rest(), contents(page)
+    first = intro(snap, on(cut(head, "<p>", '<h2 id="headline"'), REPORT), summary, [*known, extra, last])
+    if extra:
+        # Any id the page sets yields, so the #contents links keep their target.
+        extra, = unique_ids([extra], reserved=ID.findall("".join([first, *known, last])))
+    return [tags(f) for f in (first, *known, extra, last) if f]
 
 
 def tags(html):
@@ -89,8 +92,8 @@ class ShowcaseParts:
 
     def rest(self):
         """Any showcase section the calls above did not take, so none drops."""
-        return "\n".join(f'<h2 id="{re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")}">{title}</h2>\n{html}'
-                         for title, html in self.parts.items())
+        slug = lambda title: re.sub(r"[^a-z0-9]+", "-", unescape(re.sub(r"<[^>]+>", "", title)).lower()).strip("-")
+        return "\n".join(f'<h2 id="{slug(title)}">{title}</h2>\n{html}' for title, html in self.parts.items())
 
 
 def headline(page, html):
