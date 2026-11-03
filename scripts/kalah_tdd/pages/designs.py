@@ -55,12 +55,13 @@ def design(page, snap, idx):
     card = report_card(slug, section(snap.files[REPORT], heading), require_link=True)
     if unescape(card["name"]) != page.title:
         raise ValueError(f"{slug}: the report card name {card['name']!r} differs from the page map")
-    lead = shown["chip"] + shown["lead"] + "\n" + intro.group(1)
-    steps = (f'<section id="steps"><h2 id="how-it-works">How it builds code</h2>\n{shown["intro"]}\n'
-             f'<p>{union(slug, card["card"], how["family"])}</p>\n'
+    # Each part is rewritten against its own source before a union, so a kept link points where its source meant.
+    lead = links.rewrite(shown["chip"] + shown["lead"], SHOWCASE, here, idx) + "\n" + links.rewrite(intro.group(1), doc, here, idx)
+    family = union(slug, links.rewrite(card["card"], REPORT, here, idx), links.rewrite(how["family"], doc, here, idx))
+    steps = (f'<section id="steps"><h2 id="how-it-works">How it builds code</h2>\n{shown["intro"]}\n<p>{family}</p>\n'
              f'{merge_steps(slug, shown["steps"], how["code"])}\n{how["kinds"]}</section>')
     verdict = f'<h2 id="conclusion">Verdict</h2>\n<p>{union(slug, shown["verdict"], end.group(1))}</p>'
-    summary = f'<h2 id="{card["id"]}">Report summary</h2>\n{card["figure"]}\n{card["kv"] or ""}'
+    summary = links.rewrite(f'<h2 id="{card["id"]}">Report summary</h2>\n{card["figure"]}\n{card["kv"] or ""}', REPORT, here, idx)
     fragments = [lead, steps, links.rewrite(shown["kpis"], SHOWCASE, here, idx), verdict, summary,
                  *(links.rewrite(sections[s], doc, here, idx) for s in EVIDENCE), pointer()]
     return fragments, fragments.index(summary)

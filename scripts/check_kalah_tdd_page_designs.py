@@ -327,6 +327,19 @@ class Ids(unittest.TestCase):
                 self.assertEqual({a.attrs["href"] for a in pointer.iter() if a.tag == "a"},
                                  {BASE + "methodology/measures/", BASE + "glossary/"})
 
+    def test_lead_and_summary_links_rewritten(self):
+        s, d = kalah("snapshot"), kalah("pages.designs")
+        page, idx = kalah("pagemap").BY_SLUG["designs/tpp"], kalah("links").index(snap())
+        card, shown = report_section(designs()[4][1]), view("tpp")
+        cases = ((s.REPORT, card, card.replace("</svg>", '<a href="#classic-greedy-tdd">Classic</a></svg>', 1),
+                  f'<a href="{BASE}designs/classic/#classic-greedy-tdd">Classic</a>'),
+                 (s.SHOWCASE, shown, shown.replace("No award in this survey.", 'No <a href="#classic">award</a>.'),
+                  f'<a href="{BASE}designs/classic/">award</a>'))
+        for name, old, new, want in cases:
+            with self.subTest(name):
+                fragments, _ = d.design(page, mutated(name, old, new), idx)
+                self.assertTrue(want in "".join(fragments), want)
+
 
 class Reference(unittest.TestCase):
     def test_reference_page(self):
