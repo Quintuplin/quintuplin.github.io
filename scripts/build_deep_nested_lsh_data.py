@@ -1,7 +1,7 @@
 """Regenerate the Deep Nested LSH page data and its parity fixture from a study checkout.
 
 Usage: build_deep_nested_lsh_data.py --study <dir> [--sha <sha>]
-CI never runs this. It needs the study's Python environment and its corpus under <dir>/files.
+The site checks never run this. It needs the study's Python environment and its corpus under <dir>/files.
 """
 
 from __future__ import annotations
