@@ -309,15 +309,40 @@ class Tables(unittest.TestCase):
                 labels = [n.attrs.get("aria-label") for n in main(slug).iter() if n.attrs.get("role") == "region"]
                 self.assertEqual([k for k in set(labels) if labels.count(k) > 1], [])
         d = kalah("pages.designs")
-        self.assertIn('aria-label="Headline"', d.wrap_tables(['<h5 id="h">Headline</h5><table><tr><td>x</td></tr></table>'])[0])
+        self.assertIn('aria-label="Headline"', d.wrap_tables(['<h5 id="h">Headline</h5><table><tr><td>x</td></tr></table>'], "t")[0])
         table = "<table><tr><td>x</td></tr></table>"
         twice = d.wrap_tables([f"<h2>Records</h2><h4>Replicate r1</h4><h5>Headline</h5>{table}{table}",
-                               f"<h4>Replicate r2</h4><h5>Headline</h5>{table}<h3>Consistency</h3>{table}"])
+                               f"<h4>Replicate r2</h4><h5>Headline</h5>{table}<h3>Consistency</h3>{table}"], "t")
         self.assertEqual(re.findall(r'aria-label="([^"]*)"', "".join(twice)),
                          ["Headline, Replicate r1, table 1 of 2", "Headline, Replicate r1, table 2 of 2",
                           "Headline, Replicate r2", "Consistency"])
         with self.assertRaisesRegex(ValueError, "nested"):
-            d.wrap_tables(["<h3>T</h3><table><tr><td><table><tr><td>x</td></tr></table></td></tr></table>"])
+            d.wrap_tables(["<h3>T</h3><table><tr><td><table><tr><td>x</td></tr></table></td></tr></table>"], "t")
+
+
+class Shapes(unittest.TestCase):
+    def test_shape_refusals(self):
+        s, d, diagram = kalah("snapshot"), kalah("pages.designs"), kalah("figures.class_diagram")
+        page, idx = kalah("pagemap").BY_SLUG["designs/tpp"], kalah("links").index(snap())
+        doc, card, svg = f"{METHODS}tpp.html", report_section(designs()[4][1]), re.search(r"<svg\b.*?</svg>", method("tpp"), re.S).group(0)
+        table, unlabelled = "<table><tr><td>x</td></tr></table>", re.sub(r' aria-label="[^"]*"', "", svg, count=1)
+        how = '<h2 id="how-it-works">How it works</h2>'
+        refusals = {
+            "method page shape": lambda: d.design(page, mutated(doc, how, how.replace("works", "runs")), idx),
+            "report card shape": lambda: d.report_card("tpp", card, require_link=False),
+            "reference shape": lambda: d.reference(kalah("pagemap").BY_SLUG[A02],
+                                                   mutated(s.REPORT, "<summary>Reference</summary>", "<summary>Ref</summary>"), idx),
+            "showcase shape": lambda: d.showcase(page, view("tpp").replace("<h2>Verdict</h2>", "<h2>Outcome</h2>")),
+            "method sections": lambda: d.method_sections("tpp", method("tpp").replace("</main>", '<h2 id="extra">Extra</h2></main>')),
+            "unlabelled table": lambda: d.wrap_tables([table], "designs/tpp"),
+            "unlabelled diagram": lambda: diagram.frame_all([f'<figure class="diagram">{unlabelled}</figure>'], "designs/tpp"),
+        }
+        for name, refuse in refusals.items():
+            with self.subTest(name), self.assertRaisesRegex(ValueError, r"\b(tpp|a02-reference)\b"):
+                refuse()
+        link = re.search(r'data-entity-2="(ent\d+)"', svg).group(0)
+        with self.assertRaisesRegex(ValueError, "names no class"):
+            diagram.describe(svg.replace(link, 'data-entity-2="ent9999"', 1))
 
 
 class Ids(unittest.TestCase):

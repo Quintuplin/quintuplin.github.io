@@ -38,7 +38,7 @@ LABEL = re.compile(r"<(h[1-6]|summary)\b[^>]*>(.*?)</\1>|<table\b.*?</table>", r
 
 def body(page, snap, idx):
     fragments, report = (reference(page, snap, idx), None) if page.slug == A02 else design(page, snap, idx)
-    fragments = class_diagram.frame_all(wrap_tables(fragments), page.slug, report)
+    fragments = class_diagram.frame_all(wrap_tables(fragments, page.slug), page.slug, report)
     return [TAG.sub(lambda m: f"Tag: {parts.tag(m.group(1))}.", f) for f in fragments]
 
 
@@ -88,7 +88,7 @@ def reference(page, snap, idx):
             links.rewrite(f'<h2 id="{ref_id}">Reference</h2>\n{ref["rest"]}', REPORT, page.slug, idx)]
 
 
-def wrap_tables(fragments):
+def wrap_tables(fragments, slug):
     """Each table in a named scroll region, labelled by the latest heading or summary before it. A label used twice
     on the page names the nearest enclosing heading that tells the tables apart, or else counts them."""
     found, label, enclosing = [], "", []
@@ -99,7 +99,9 @@ def wrap_tables(fragments):
                 level = int(m.group(1)[1])
                 enclosing = [h for h in enclosing if h[0] < level] + [(level, label)]
         elif m.group(0).count("<table") > 1:
-            raise ValueError(f"a nested table under {label!r} cannot be wrapped")
+            raise ValueError(f"{slug}: a nested table under {label!r} cannot be wrapped")
+        elif not label:
+            raise ValueError(f"{slug}: a table before any heading or summary has no region label")
         else:
             found.append((label, [h for _, h in reversed(enclosing)]))
     labels = [base for base, _ in found]

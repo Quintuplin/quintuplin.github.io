@@ -74,13 +74,16 @@ def frame_all(fragments, slug, report=None):
             pieces.append(fragment[at:m.start()])
             n = target.get(k) or number[k]
             id = "fig-" + n.replace(".", "-")
-            pieces.append(SAME.format(id=id, n=n) if k in repeated else frame(n, id, m.group(2), enclosing + 1))
+            pieces.append(SAME.format(id=id, n=n) if k in repeated else frame(slug, n, id, m.group(2), enclosing + 1))
             at, k = m.end(), k + 1
         out.append("".join(pieces) + fragment[at:])
     return out
 
 
-def frame(n, id, svg, level):
-    title = unescape(re.search(r'aria-label="([^"]*)"', svg).group(1))
+def frame(slug, n, id, svg, level):
+    label = re.match(r'<svg\b[^>]*\baria-label="([^"]*)"', svg)
+    if not label:
+        raise ValueError(f"{slug}: class diagram for Figure {n} has no aria-label to title it")
+    title = unescape(label.group(1))
     classes, links, items = describe(svg)
     return parts.figure(n, id, title, svg, caption(classes, links), None, items, level=level)
