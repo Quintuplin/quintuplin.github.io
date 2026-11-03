@@ -152,8 +152,9 @@ class MetricDefs(unittest.TestCase):
         self.assertRegex(found, "table header 'Weighted tokens' has no dfn")
 
     def test_stub_measures_defines_nothing(self):
-        found = errors({"methodology/measures": [("<head>", f"<head>{STUB}")]})
-        self.assertEqual(len([e for e in found if "has no dfn" in e]), 7)
+        # Labels wait for a built measures page, as shared items do.
+        site = pages({"methodology/measures": [("<head>", f"<head>{STUB}")]})
+        self.assertEqual(study().metric_defs(site), ([], 0))
 
 
 class Stubs(unittest.TestCase):

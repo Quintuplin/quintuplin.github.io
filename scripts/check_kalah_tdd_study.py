@@ -335,15 +335,18 @@ def labels(root):
 def dfn_names(page):
     """Each dfn's text, its id read as words, and its data-alias names split on |."""
     names = set()
-    for dfn in (n for n in page.root.iter() if n.tag == "dfn") if not page.stub else ():
+    for dfn in (n for n in page.root.iter() if n.tag == "dfn"):
         names |= {spaced(dfn), dfn.attrs.get("id", "").replace("-", " ")}
         names |= set((dfn.attrs.get("data-alias") or "").split("|"))
     return {n.strip().casefold() for n in names if n.strip()}
 
 
 def metric_defs(pages):
-    """(errors, labels checked). A label is defined when a dfn name on measures appears in it as whole words."""
+    """(errors, labels checked). A label is defined when a dfn name on measures appears in it as whole words.
+    Labels wait while measures is a stub."""
     measures = parse(pages[MEASURES]) if MEASURES in pages else None
+    if measures and measures.stub:
+        return [], 0
     names = sorted(dfn_names(measures), key=len, reverse=True) if measures else []
     defined = re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, names)) + r")(?!\w)") if names else None
     errors, checked = [], 0
