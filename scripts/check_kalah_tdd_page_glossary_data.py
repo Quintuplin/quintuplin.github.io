@@ -173,6 +173,15 @@ class GlossaryData(unittest.TestCase):
         refused(self, {snapshot.REPORT: report().replace(entry("Planned contrast"), "")}, "Planned contrast")
         view = re.search(r'<main\b[^>]*id="classic".*?</main>', sc, re.S).group(0)
         refused(self, {snapshot.SHOWCASE: sc.replace(view, view.replace("<dt>U</dt>", "<dt>U value</dt>"))}, "classic")
+        summary = re.search(r'<main\b[^>]*id="summary".*?</main>', sc, re.S).group(0)
+        terms = re.search(r'<dl class="terms">.*?</dl>', summary, re.S).group(0)
+        refused(self, {snapshot.SHOWCASE: sc.replace(summary, summary.replace(terms, terms * 2))}, "view summary holds 2 term lists")
+        # Every view holds the list alike, so the stray p goes in each to reach the pair check.
+        stray = terms.replace('<dl class="terms">', '<dl class="terms"><p>stray</p>')
+        refused(self, {snapshot.SHOWCASE: sc.replace(terms, stray)}, "more than dt and dd pairs", "<p>stray</p>")
+        row = entry("Planned contrast")
+        refused(self, {snapshot.REPORT: report().replace(row, row.replace('<p class="sub">', "<p>", 1))},
+                "no known form", "<p><b>Planned contrast</b>")
         self.assertTrue(body().body(page("glossary"), snap(), kalah("links").index(snap())))
 
     def test_measures_links(self):
