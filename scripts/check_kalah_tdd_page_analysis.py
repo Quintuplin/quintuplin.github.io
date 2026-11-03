@@ -489,10 +489,12 @@ class Analysis(unittest.TestCase):
 
     def test_deterministic(self):
         # Set order follows the hash seed, so a second process with another seed shows any order the page relies on.
-        # -I would ignore PYTHONHASHSEED, so the child gets -s -P and an environment of the seed alone.
+        # -I would ignore PYTHONHASHSEED, so the child gets -s -P, the parent's -B and an environment of the seed alone.
         seed = "1" if os.environ.get("PYTHONHASHSEED") == "0" else "0"
-        child = subprocess.run([sys.executable, "-s", "-P", __file__, "--render"], env={"PYTHONHASHSEED": seed},
-                               capture_output=True, check=True)
+        flags = ["-s", "-P"] + ["-B"] * sys.flags.dont_write_bytecode
+        child = subprocess.run([sys.executable, *flags, __file__, "--render"], env={"PYTHONHASHSEED": seed},
+                               capture_output=True, check=False)
+        self.assertEqual(child.returncode, 0, child.stderr.decode())
         self.assertEqual(child.stdout, html().encode())
 
 
