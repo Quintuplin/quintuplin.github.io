@@ -20,14 +20,15 @@ def body(page, snap, idx):
     summary = ShowcaseParts(on(showcase, SHOWCASE))
     head = section(report, "kalah-tdd-experiment")
     awards = section(report, "awards")
-    rest = [
+    rest = [f for f in (
         summary.awards(on(awards, REPORT)),
         summary.designs(on(cut(section(report, "methods"), "<h2", '<h3 id="classic-greedy-tdd"'), REPORT)),
         headline(page, on(cut(head, '<h2 id="headline"', '<h3 id="awards"'), REPORT)),
         summary.about_data(),
         summary.terms(),
+        summary.rest(),
         contents(page),
-    ]
+    ) if f]
     return [tags(f) for f in (intro(snap, on(cut(head, "<p>", '<h2 id="headline"'), REPORT), summary, rest), *rest)]
 
 
@@ -68,23 +69,28 @@ class ShowcaseParts:
     def awards(self, report):
         """One Awards section: the report scoring rule, the showcase cards, then the report places in a fold."""
         rule, places = re.search(r'<h3 id="awards">Awards</h3>\s*(<p>.*?</p>)\s*(.*)', report, re.S).groups()
-        return (f'<h2 id="awards">Awards</h2>\n{rule}\n{self.parts["Awards"]}\n'
+        return (f'<h2 id="awards">Awards</h2>\n{rule}\n{self.parts.pop("Awards")}\n'
                 f"<details><summary>Award places as the report states them</summary>\n{places}\n</details>")
 
     def designs(self, report):
-        """The report methods paragraph over the showcase design cards, which link each design's page."""
-        intro = re.search(r"<p>.*?</p>", report, re.S).group(0)
+        """The report methods intro over the showcase design cards, which link each design's page."""
+        intro = report.split("</h2>", 1)[1].strip()
         return (f'<h2 id="methods">The designs</h2>\n{intro}\n<p>Here each card gives a design\'s headline scores. '
-                f"Its page holds the full method card and class diagram.</p>\n{self.parts['The designs']}")
+                f"Its page holds the full method card and class diagram.</p>\n{self.parts.pop('The designs')}")
 
     def about_data(self):
         """The showcase notes. Their full report link becomes the contents of these pages."""
-        notes = self.parts["About the data"].replace(f'href="{url("")}"', 'href="#contents"')
+        notes = self.parts.pop("About the data").replace(f'href="{url("")}"', 'href="#contents"')
         return f'<h2 id="about-the-data">About the data</h2>\n{notes}'
 
     def terms(self):
-        return (f'<h2 id="terms">Terms</h2>\n{self.parts["Terms"]}\n'
+        return (f'<h2 id="terms">Terms</h2>\n{self.parts.pop("Terms")}\n'
                 f'<p>The <a href="{url("glossary")}">glossary</a> defines every term the study pages use.</p>')
+
+    def rest(self):
+        """Any showcase section the calls above did not take, so none drops."""
+        return "\n".join(f'<h2 id="{re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")}">{title}</h2>\n{html}'
+                         for title, html in self.parts.items())
 
 
 def headline(page, html):

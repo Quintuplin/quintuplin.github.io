@@ -72,6 +72,20 @@ def section(id):
     return out
 
 
+def missing_text(s):
+    """Each p, li, dt and dd text of the landing sources that the landing built from snapshot s leaves out."""
+    snapshot, tree = kalah("snapshot"), module("check_kalah_tdd_study").Tree
+    report = s.files[snapshot.REPORT]
+    head, methods = snapshot.section(report, "kalah-tdd-experiment"), snapshot.section(report, "methods")
+    sources = (snapshot.view(s.files[snapshot.SHOWCASE], "summary"), head[:head.index('<h3 id="awards"')],
+               methods[:methods.index('<h3 id="classic-greedy-tdd"')])
+    page = text(tree(module("build_kalah_tdd_study").render_page(landing_page(), s, kalah("links").index(s))).root)
+    # Claim tag sentences render as a tag pill holding the kind.
+    chunks = [kalah("pages.landing").TAG.sub(r"\1", text(n)) for source in sources for n in tree(source).root.iter()
+              if n.tag in ("p", "li", "dt", "dd")]
+    return [c for c in chunks if c not in page and c not in ("Kalah TDD showcase", "Kalah TDD Experiment")]
+
+
 def hrefs(nodes):
     return [a.attrs["href"] for n in nodes for a in n.iter() if a.tag == "a" and "href" in a.attrs]
 
@@ -184,6 +198,18 @@ class LandingContent(unittest.TestCase):
         for run in named:
             with self.subTest(run):
                 self.assertEqual(docs[0].count(f"{run} {snapshot.run_doc(snap(), run)}"), 1)
+
+    def test_keeps_all_source_text(self):
+        self.assertEqual(missing_text(snap()), [])
+
+    def test_keeps_added_source_text(self):
+        s, snapshot = snap(), kalah("snapshot")
+        summary, report = snapshot.view(s.files[snapshot.SHOWCASE], "summary"), s.files[snapshot.REPORT]
+        intro = re.search(r'<h2 id="methods">Methods</h2>\s*<p>.*?</p>', report, re.S).group(0)
+        files = {**s.files, snapshot.SHOWCASE: s.files[snapshot.SHOWCASE].replace(
+                     summary, summary + "<h2>Caveats</h2><ul><li>An added showcase note.</li></ul>"),
+                 snapshot.REPORT: report.replace(intro, intro + "<p>An added methods paragraph.</p>")}
+        self.assertEqual(missing_text(s._replace(files=files)), [])
 
     def test_runs_come_from_the_text(self):
         named = kalah("pages.landing").named_runs
