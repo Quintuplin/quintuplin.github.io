@@ -389,7 +389,10 @@ class Measures(unittest.TestCase):
 
     def test_pipeline_from_sources(self):
         nodes, edges = measures().pipeline(snap())
-        sources = {name_of(e): source_field(e) for e in source_entries()}
+        sources = {}
+        for e in source_entries():  # a glossary row of the same name must not blank a column's Source
+            sources.setdefault(name_of(e), source_field(e))
+        self.assertTrue(sources["Functional mark /15"])
         for n in nodes:
             fields = " ".join(sources[c] for c in measures().LANES[n.lane])
             for name in FILE.findall(f"{n.label} {n.note}"):
