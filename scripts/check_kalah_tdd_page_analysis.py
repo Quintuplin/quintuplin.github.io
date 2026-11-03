@@ -226,6 +226,12 @@ class Analysis(unittest.TestCase):
         harness = spaced(by_id("gap-harness"))
         self.assertEqual({r for r in runs if has_run(harness, r)},
                          {r for r, v in runs.items() if not v.get("harness", {}).get("commit")})
+        limits = spaced(by_id("gap-code-limits"))
+        for group, file, name, phrase in analysis().CODE_LIMITS:
+            with self.subTest(name):
+                said = [s for s in re.split(r"(?<=[.?!])\s+", doc(snap(), group, name)["doc"]) if phrase in s]
+                self.assertEqual(len(said), 1, said)
+                self.assertIn(f"{file} {name} : “{' '.join(said[0].split())}”", limits)
         for gap in GAPS:
             with self.subTest(gap):
                 tags = [spaced(t) for t in by_id(gap).iter() if "tag" in t.classes()]
