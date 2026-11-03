@@ -134,7 +134,7 @@ def body(page, snap, idx):
                      for id in ("study-stage", "course-context"))
     return [
         question(snap),
-        '<h2 id="task">Task</h2>'
+        '<h2 id="task">Task and variants</h2>'
         f"<p>The agent builds the course's Kalah assignment. The brief below is docs/SPEC.md at tdd-experiment {sha} "
         f"{parts.tag('verified')}.</p>"
         + spec(snap, {"spec-variants": f"<p>The four variants that <code>play()</code> selects "

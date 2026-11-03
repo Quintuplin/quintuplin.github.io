@@ -141,6 +141,16 @@ class Design(unittest.TestCase):
                     with self.subTest(line=line[:50]):
                         self.assertIn(study.squash(line), text)
 
+    def test_sidebar_children_differ_from_parent(self):
+        """No sidebar entry repeats its parent's text, as Task under Task did."""
+        pairs = []
+        for li in (n for n in page().root.iter() if n.tag == "li" and n.closest(cls="toc")):
+            kids = li.elements()
+            if len(kids) == 2 and (kids[0].tag, kids[1].tag) == ("a", "ol"):
+                pairs += [(study.spaced(kids[0]), study.spaced(sub.elements()[0])) for sub in kids[1].elements()]
+        self.assertGreaterEqual(len(pairs), 10)
+        self.assertEqual([p for p in pairs if p[0] == p[1]], [])
+
     def test_variants_table_under_variants(self):
         """The play() variants table reads as part of the spec's Variants section, not of the last change case."""
         main = main_html()
