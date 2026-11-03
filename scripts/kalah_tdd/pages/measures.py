@@ -311,8 +311,20 @@ class MeasurePipeline:
             whose = f"the doc of function {name}" if kind == "function" else f"the glossary row {name}"
             said.append(f"{label} take{'' if ' and ' in label else 's'} {joined([t for terms in inputs.values() for t in terms])}, as {whose} states.")
         return ("Each lane reads left to right from raw input to collected file to measure to score. " + " ".join(said)
-                + " Size, speed and record columns are not drawn, and their cards below define them. On a narrow "
+                + f" {self.undrawn()} Their cards below define them. On a narrow "
                 "screen the diagram scrolls sideways and the text version holds the same steps.")
+
+    def undrawn(self):
+        """The sentence naming each card in no lane and on no node, by whole family where a family has none drawn."""
+        drawn = {c for names in LANES.values() for c in names} | {n.label for n in self.nodes}
+        whole, cards = [], []
+        for _, title, names in FAMILIES + (TEST_ORDER,):
+            left = [n for n in names if n not in drawn]
+            if len(left) == len(names):
+                whole.append(title)
+            else:
+                cards += left
+        return f"The {joined(whole)} families are not drawn, nor {'is' if len(cards) == 1 else 'are'} {joined(cards)}."
 
     def figure(self, n):
         title = "From raw inputs to scores"

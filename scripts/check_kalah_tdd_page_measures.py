@@ -395,6 +395,17 @@ class Measures(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, r"pmd\.txt"):
             body(snap()._replace(files={k: v.replace("pmd.txt", "lint.txt") for k, v in snap().files.items()}))
 
+    def test_caption_names_undrawn(self):
+        m = measures()
+        caption = check().spaced(next(n for n in page().ids["f4"].iter() if n.tag == "figcaption"))
+        drawn = {c for names in m.LANES.values() for c in names}
+        for _, title, names in m.FAMILIES + (m.TEST_ORDER,):
+            if not drawn & set(names) and title in caption:
+                continue
+            for name in (n for n in names if n not in drawn):
+                with self.subTest(name):
+                    self.assertRegex(caption, rf"(?<![\w-]){re.escape(name)}(?![\w-])")
+
     def test_pipeline_routes_and_limits(self):
         nodes, edges = measures().pipeline(snap())
         cols = kalah("figures.flow").COLS
