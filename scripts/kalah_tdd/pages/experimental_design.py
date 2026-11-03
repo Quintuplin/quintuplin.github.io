@@ -34,15 +34,19 @@ def spec_text(text):
     return "".join(out)
 
 
-def spec(snap):
-    """docs/SPEC.md as the task section: level 1 as its lead, levels 2 and 3 as h3 and h4."""
-    out = []
+def spec(snap, after):
+    """docs/SPEC.md as the task section: level 1 as its lead, levels 2 and 3 as h3 and h4.
+    after maps a section id to HTML that ends that section, refused when no section has the id."""
+    out, ids = [], set()
     for section in snap.facts["analysis"]["spec"]:
-        level = section["level"]
+        level, id = section["level"], None
         if level > 1:
             id = "spec-" + re.sub(r"[^a-z0-9]+", "-", section["title"].lower()).strip("-")
             out.append(f'<h{level + 1} id="{id}">{escape(section["title"])}</h{level + 1}>')
-        out.append(spec_text(section["text"]))
+            ids.add(id)
+        out.append(spec_text(section["text"]) + after.get(id, ""))
+    if missing := set(after) - ids:
+        raise ValueError(f"docs/SPEC.md has no section {sorted(missing)}")
     return "".join(out)
 
 
@@ -132,8 +136,9 @@ def body(page, snap, idx):
         question(snap),
         '<h2 id="task">Task</h2>'
         f"<p>The agent builds the course's Kalah assignment. The brief below is docs/SPEC.md at tdd-experiment {sha} "
-        f"{parts.tag('verified')}.</p>" + spec(snap)
-        + f"<p>The four variants that <code>play()</code> selects {parts.tag('verified')}.</p>" + variants(),
+        f"{parts.tag('verified')}.</p>"
+        + spec(snap, {"spec-variants": f"<p>The four variants that <code>play()</code> selects "
+                                       f"{parts.tag('verified')}.</p>" + variants()}),
         '<h2 id="pipeline">Harness pipeline</h2>'
         "<p>Every run goes through the same harness. Agents do the building, reviewing and rating. Harness scripts do the "
         "rest.</p>"

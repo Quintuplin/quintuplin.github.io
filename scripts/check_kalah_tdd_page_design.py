@@ -141,6 +141,12 @@ class Design(unittest.TestCase):
                     with self.subTest(line=line[:50]):
                         self.assertIn(study.squash(line), text)
 
+    def test_variants_table_under_variants(self):
+        """The play() variants table reads as part of the spec's Variants section, not of the last change case."""
+        main = main_html()
+        before = main[:main.index('<table id="variants"')]
+        self.assertEqual(re.findall(r'<h[2-6] id="([^"]+)"', before)[-1], "spec-variants")
+
     def test_runs_table_keeps_every_run(self):
         head, rows = table("runs-table")
         runs = facts()["runs"]
