@@ -1,7 +1,7 @@
 // Page scripts, study data and helpers shared by the Deep Nested LSH checks (#31). Each check takes the page as its argument.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { basename } from "node:path";
+import { basename, dirname, join } from "node:path";
 import vm from "node:vm";
 
 const PAGE = process.argv[2];
@@ -27,6 +27,15 @@ export const C = globalThis.Cascade;
 export const study = JSON.parse(PageScripts.read("sim-data"));
 export const MAX_DEPTH = study.provenance.grid.max_depth, PAIRS = study.facts.corpus?.pairs;
 export const SEARCH_WORK = Number(PageScripts.read("explorer-src").match(/\bSEARCH_WORK = ([\d.e]+)/)?.[1]);
+// The pair histograms file beside the page, which F1 fetches (#54).
+export const HIST_PATH = join(dirname(PAGE), "histograms.json");
+let hists;
+// Pairs [num, den, count] of the study dataset with N documents and cluster size c: the corpus or a decoded sibling histogram.
+export function histogramFor(n, c) {
+  if (n === study.facts.corpus.docs && c === study.tidy?.corpus_mix) return PAIRS;
+  hists ??= new Map(Object.values(JSON.parse(readFileSync(HIST_PATH, "utf8")).datasets).map((h) => [`${h.docs}|${h.mix}`, C.decodeHistogram(h)]));
+  return hists.get(`${n}|${c}`);
+}
 
 // ---- SharedHelpers ----
 export const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);

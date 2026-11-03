@@ -2,10 +2,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
+import { readFileSync } from "node:fs";
 import {
-  PageScripts, C, study, MAX_DEPTH, SEARCH_WORK, same, counts, tablesOf, drainSearch, realised,
+  PageScripts, C, study, MAX_DEPTH, SEARCH_WORK, HIST_PATH, same, counts, tablesOf, drainSearch, realised,
   quorumTable, retrievalOf, quorumCounts, verifyRows,
 } from "./deep_nested_lsh_support.mjs";
+
+const PARITY = JSON.parse(readFileSync(new URL("fixtures/deep-nested-lsh-parity.json", import.meta.url), "utf8"));
 
 // Measured errors over the seed draws of the table tree with these dims at t, or null when the study ran none.
 function measuredFor(d, t) {
@@ -89,8 +92,9 @@ class Element {
 // Runs the page's chart kit and explorer. Frames queue until flush() runs them. Reduced motion takes the instant path.
 // Missing ids are created on demand, so `looked` records every id the explorer asks for.
 // `saved` is the explorer state found in storage on load.
-function boot(saved, patch = (src) => src) {
-  const body = new Element("body"), frames = new Map(), looked = new Set();
+// fetch serves the histograms file beside the page. It waits for net.gate when set and fails while net.fail is true.
+function boot(saved, patch = (src) => src, net = {}) {
+  const body = new Element("body"), frames = new Map(), looked = new Set(), fetches = [];
   let nextFrame = 1;
   const add = (tag, cls) => { const e = body.appendChild(new Element(tag)); if (cls) e.className = cls; return e; };
   // The explorer finds its tree panel by class, so the fake page has it only when the real markup does.
@@ -117,6 +121,13 @@ function boot(saved, patch = (src) => src) {
     requestAnimationFrame: (f) => { frames.set(nextFrame, f); return nextFrame++; },
     cancelAnimationFrame: (id) => frames.delete(id),
     addEventListener: () => {},
+    fetch: async (url) => {
+      fetches.push(url);
+      await net.gate;
+      if (net.fail) throw new TypeError("Failed to fetch");
+      const ok = url === "/simulations/deep-nested-lsh/histograms.json";
+      return { ok, status: ok ? 200 : 404, json: async () => JSON.parse(readFileSync(HIST_PATH, "utf8")) };
+    },
   });
   // The explorer shares this realm's maths, as inside a vm context it runs about 9 times slower.
   // Its only state is the tidy rule's cache of exact results for the last sweep, so sharing it changes no result.
@@ -131,7 +142,7 @@ function boot(saved, patch = (src) => src) {
     return frames.size > 0;
   };
   const flush = () => { for (let i = 0; i < 100 && step(); i++); };
-  return { $: (id) => document.getElementById(id), body, flush, step, looked, store };
+  return { $: (id) => document.getElementById(id), body, flush, step, looked, store, fetches };
 }
 
 const depthInput = ($) => $("ex-depth").querySelector("input");
@@ -712,44 +723,55 @@ test("runOffAboveRunRows", () => {
   assert.ok(!rootChip($), "no pair climbs");
 });
 
-// ---- RetuneChecks: the Re-tune button applies the tidy rule at the shown N, c and t ----
+// ---- RetuneChecks: Re-tune F1 loads the tidy rule's tree for a study dataset, λ fit the fitted rule's for any N, c and t ----
 const TIDY = study.tidy, TOP = study.facts.top_budget;
 const enter = ($, id, v) => { const input = $(id); input.value = String(v); input.dispatch("change"); };
 const target = ($, t) => { const input = $("ex-t"); input.value = String(t); input.dispatch("input"); };
-const retune = ($, flush, step) => { $("ex-retune").dispatch("click"); drain(step); flush(); };
-// The rule's tuple for this dataset and target within the top budget.
-const ruleTuple = (N, c, t) => C.tidyTune(N, C.nearMass(N, c, TIDY), t, TOP, TIDY.gamma).dims;
+// One macrotask turn, after the histogram fetch and its decode have settled.
+const settle = () => new Promise(setImmediate);
+const fit = ($, flush, step) => { $("ex-fit").dispatch("click"); drain(step); flush(); };
+const retuneF1 = async ($, flush, step) => { $("ex-retune").dispatch("click"); await settle(); drain(step); flush(); };
+// The fitted rule's tuple for this dataset and target within the top budget.
+const ruleTuple = (N, c, t) => C.fitTune(N, C.nearMass(N, c, TIDY), t, TOP, TIDY.gamma).dims;
 const tidyRow = (n, mix, t) => TIDY?.rows.find((r) => r.n === n && r.mix === mix && r.t === t);
+// The study's F1 pick for this dataset and target within the top budget, from the parity fixture.
+const f1Row = (n, mix, t) => PARITY.tidy.rows.find((r) => r.n === n && r.mix === mix && r.t === t && r.b === TOP)?.f1;
+const terms = () => {
+  const block = PageScripts.markup().match(/<details class="terms"[\s\S]*?<\/details>/)?.[0] || "";
+  return new Map([...block.matchAll(/<dt>([\s\S]*?)<\/dt>\s*<dd>([\s\S]*?)<\/dd>/g)].map((m) => [m[1], m[2]]));
+};
 
-test("retuneLocksAfterTune", () => {
+test("fitLocksAfterTune", () => {
   const { $, flush, step } = boot(PINNED);
   flush();
-  assert.equal($("ex-retune").disabled, false, "a fresh page can tune");
-  $("ex-retune").dispatch("click");
+  assert.equal($("ex-fit").disabled, false, "a fresh page can tune");
+  $("ex-fit").dispatch("click");
   step();
-  assert.equal($("ex-retune").disabled, true, "the button waits while the rule runs");
+  assert.equal($("ex-fit").disabled, true, "the button waits while the rule runs");
+  assert.equal($("ex-retune").disabled, true, "F1 waits too");
   drain(step);
   flush();
-  assert.equal($("ex-retune").disabled, true, "a second tune at the same N, c and t would change nothing");
+  assert.equal($("ex-fit").disabled, true, "a second tune at the same N, c and t would change nothing");
+  assert.equal($("ex-retune").disabled, false, "F1 may still pick another tree");
 });
 
 // Guard: a resize that changed the tile count once cleared any status line, so a finished tune lost its result.
-test("resizeKeepsRetuneResult", () => {
+test("fitResizeKeepsResult", () => {
   const { $, flush, step } = boot(PINNED, withResize);
   flush();
-  retune($, flush, step);
-  assert.match($("ex-msg").textContent, /^Tidy rule tree/);
+  fit($, flush, step);
+  assert.match($("ex-msg").textContent, /^λ fit tree/);
   $("ex-ladder").dataset.w = "200";
   $("ex-ladder").dispatch("resize");
   flush();
-  assert.match($("ex-msg").textContent, /^Tidy rule tree/, "the tune result outlives the resize");
+  assert.match($("ex-msg").textContent, /^λ fit tree/, "the tune result outlives the resize");
 });
 
-test("retuneUnlocksOnInputChange", () => {
+test("fitUnlocksOnInputChange", () => {
   const { $, flush, step } = boot(PINNED);
   flush();
-  retune($, flush, step);
-  const locked = () => { flush(); return $("ex-retune").disabled; };
+  fit($, flush, step);
+  const locked = () => { flush(); return $("ex-fit").disabled; };
   for (const [change, back] of [
     [() => enter($, "ex-n", 2000), () => enter($, "ex-n", 1000)],
     [() => enter($, "ex-mix", 10), () => enter($, "ex-mix", 19)],
@@ -763,34 +785,40 @@ test("retuneUnlocksOnInputChange", () => {
 });
 
 // A tune started for the old inputs must not land after a change, also when the inputs come back (A to B to A).
-test("retuneCancelsOnInputChange", () => {
-  for (const changes of [
-    [($) => enter($, "ex-n", 2000)],
-    [($) => enter($, "ex-n", 2000), ($) => enter($, "ex-n", 1000)],
-    [($) => enter($, "ex-mix", 10)],
-    [($) => target($, 0.31), ($) => target($, 0.3)],
-  ]) {
-    const { $, flush, step } = boot(PINNED);
-    flush();
-    const before = arities($, PINNED.dims.length);
-    $("ex-retune").dispatch("click");
-    step();
-    assert.match($("ex-msg").textContent, /Tuning/, "the tune is still running");
-    for (const change of changes) change($);
-    drain(step);
-    flush();
-    assert.deepEqual(arities($, PINNED.dims.length), before, "the stale tune leaves the tree alone");
-    assert.doesNotMatch($("ex-msg").textContent, /Tidy rule tree|Tuning/);
-    assert.equal($("ex-retune").disabled, false, "the cancelled tune can run again");
+// The corpus histogram is in the page, so F1 starts there as the fit does, without a fetch.
+test("tuneCancelsOnInputChange", () => {
+  for (const id of ["ex-fit", "ex-retune"]) {
+    for (const changes of [
+      [($) => enter($, "ex-n", 2000)],
+      [($) => enter($, "ex-n", 2000), ($) => enter($, "ex-n", 1000)],
+      [($) => enter($, "ex-mix", 10)],
+      [($) => target($, 0.31), ($) => target($, 0.3)],
+    ]) {
+      const { $, flush, step } = boot(PINNED);
+      flush();
+      const before = arities($, PINNED.dims.length);
+      $(id).dispatch("click");
+      step();
+      assert.match($("ex-msg").textContent, /Tuning/, `${id}: the tune is still running`);
+      for (const change of changes) change($);
+      drain(step);
+      flush();
+      assert.deepEqual(arities($, PINNED.dims.length), before, `${id}: the stale tune leaves the tree alone`);
+      assert.doesNotMatch($("ex-msg").textContent, /fit tree|F1 tree|Tuning/);
+      assert.equal($("ex-tuned").textContent, "", "no rule names the hand-set tree");
+      const has = TIDY.datasets.some(([n, c]) => n === Number($("ex-n").value) && c === Number($("ex-mix").value));
+      assert.equal($("ex-fit").disabled, false, "the cancelled fit can run again");
+      assert.equal($("ex-retune").disabled, !has, "F1 can run again where a histogram exists");
+    }
   }
 });
 
 // An entry that rounds or clamps to the tuned value is no change, so the tune lands.
-test("retuneKeepsRunningOnSameValue", () => {
+test("fitKeepsRunningOnSameValue", () => {
   for (const [id, v] of [["ex-n", 1000.4], ["ex-n", 500], ["ex-mix", 19.2]]) {
     const { $, flush, step } = boot(PINNED);
     flush();
-    $("ex-retune").dispatch("click");
+    $("ex-fit").dispatch("click");
     step();
     assert.match($("ex-msg").textContent, /Tuning/, "the tune is still running");
     enter($, id, v);
@@ -798,11 +826,11 @@ test("retuneKeepsRunningOnSameValue", () => {
     flush();
     const d = ruleTuple(1000, 19, 0.3);
     assert.deepEqual(arities($, d.length), d, `${id} ${v} keeps N 1000 c 19, so the rule's tree loads`);
-    assert.match($("ex-msg").textContent, /Tidy rule tree/);
+    assert.match($("ex-msg").textContent, /^λ fit tree/);
   }
 });
 
-test("retuneLoadsRuleTuple", () => {
+test("fitLoadsRuleTuple", () => {
   assert.ok(TIDY, "the page embeds the tidy rule");
   for (const r of [tidyRow(1000, 19, 0.3), tidyRow(30000, 40, 0.5)]) {
     assert.ok(r, "a study row to tune for");
@@ -812,7 +840,7 @@ test("retuneLoadsRuleTuple", () => {
     enter($, "ex-mix", r.mix);
     target($, r.t);
     flush();
-    retune($, flush, step);
+    fit($, flush, step);
     const k = r.dims.length;
     assert.equal(Number(depthInput($).value), k, `N ${r.n} c ${r.mix} t ${r.t} loads a depth ${k} tree`);
     assert.deepEqual(arities($, k), r.dims, "the tree the study's rule picks");
@@ -822,7 +850,7 @@ test("retuneLoadsRuleTuple", () => {
   }
 });
 
-test("retuneShowsCountsOnlyWhenMeasured", () => {
+test("fitShowsCountsOnlyWhenMeasured", () => {
   const r = tidyRow(1000, 19, 0.3);
   assert.ok(r, "the study measured N 1000 c 19 at t 0.3");
   for (const [N, t, measured] of [[1000, 0.3, true], [1000, 0.33, false], [2000, 0.3, false]]) {
@@ -831,7 +859,7 @@ test("retuneShowsCountsOnlyWhenMeasured", () => {
     enter($, "ex-n", N);
     target($, t);
     flush();
-    retune($, flush, step);
+    fit($, flush, step);
     const msg = $("ex-msg").textContent, d = ruleTuple(N, 19, t);
     assert.ok(msg.includes(`(${d.join(", ")})`), `the message names the tuple: ${msg}`);
     assert.equal(/Expected errors \(study\)/.test(msg), measured, `N ${N} t ${t}: ${msg}`);
@@ -840,18 +868,179 @@ test("retuneShowsCountsOnlyWhenMeasured", () => {
 });
 
 // Guard: the rule scores every matched tree, so a cold run at t 0.95 must still yield to the frame.
-test("retuneStaysResponsive", () => {
+test("fitStaysResponsive", () => {
   const T = 0.95, { $, flush, step } = boot({ ...PINNED, T });
   flush();
   let worst = 0, frames = 0;
   const timed = (f) => { const t0 = performance.now(), more = f(); worst = Math.max(worst, performance.now() - t0); return more; };
-  timed(() => $("ex-retune").dispatch("click"));
+  timed(() => $("ex-fit").dispatch("click"));
   while (frames < 1e5 && timed(step)) frames++;
   flush();
   assert.ok(frames >= 3, `the tune ran in ${frames} frames`);
   assert.ok(worst < FRAME_BUDGET_MS, `a tune task took ${worst.toFixed(0)} ms at t ${T}`);
   const d = ruleTuple(1000, 19, T);
   assert.deepEqual(arities($, d.length), d);
+});
+
+// Guard: Re-tune applied the λ fit, so the page's tidy rule was not the paper's F1 (#54).
+test("retuneLoadsF1Tuple", async () => {
+  const cells = [[1000, 19, 0.3], [30000, 40, 0.5], [3000, 10, 0.8]];
+  assert.ok(cells.some(([n, c, t]) => !same(f1Row(n, c, t).dims, tidyRow(n, c, t).dims)), "F1 and the fit part on a checked cell");
+  for (const [n, c, t] of cells) {
+    const want = f1Row(n, c, t);
+    assert.ok(want, `the study's F1 pick at N ${n} c ${c} t ${t}`);
+    const { $, flush, step } = boot(PINNED);
+    flush();
+    enter($, "ex-n", n);
+    enter($, "ex-mix", c);
+    target($, t);
+    flush();
+    await retuneF1($, flush, step);
+    assert.deepEqual(arities($, want.dims.length), want.dims, `N ${n} c ${c} t ${t} loads the study's F1 tree`);
+    const msg = $("ex-msg").textContent;
+    assert.match(msg, /^F1 tree/);
+    assert.ok(msg.includes(`out of ${want.work} matched trees within ${TOP} rows`), msg);
+    assert.equal($("ex-retune").disabled, true, "a second F1 at the same N, c and t would change nothing");
+    assert.equal($("ex-auto").checked, false, "a tuned tree is set by hand");
+  }
+});
+
+// Guard: the F1 message rounded fp + fn as one sum while the readout rounds each, so one tree showed two counts (#54).
+test("retuneF1CountMatchesReadout", async () => {
+  const cells = [0.35, 0.5, 0.55].map((t) => [t, C.f1Tune(t, TOP, study.facts.corpus.pairs)]);
+  assert.ok(cells.some(([t, r]) => Math.round(r.fp + r.fn) !== counts(r.dims, t).errors), "a checked cell rounds the two ways apart");
+  for (const [t, want] of cells) {
+    const { $, flush, step } = boot(PINNED);
+    flush();
+    enter($, "ex-n", 1000);
+    enter($, "ex-mix", 19);
+    target($, t);
+    flush();
+    await retuneF1($, flush, step);
+    assert.deepEqual(arities($, want.dims.length), want.dims);
+    const errors = counts(want.dims, t).errors, msg = $("ex-msg").textContent;
+    assert.ok(shows($("ex-readout").textContent, errors), `the readout shows ${errors}`);
+    assert.ok(msg.includes(`Expected errors ${errors}.`), `t ${t} message matches the readout's ${errors}: ${msg}`);
+  }
+});
+
+test("retuneF1OffWithoutHistogram", () => {
+  for (const [n, c] of [[2000, 19], [1000, 12], [100000, 41]]) {
+    const { $, flush } = boot(PINNED);
+    flush();
+    const before = arities($, PINNED.dims.length);
+    enter($, "ex-n", n);
+    enter($, "ex-mix", c);
+    flush();
+    assert.equal($("ex-retune").disabled, true, `F1 is off at N ${n} c ${c}`);
+    assert.equal($("ex-retune").title, `No pair histogram for N ${n} c ${c}. F1 needs the exact pairs of a study dataset.`);
+    assert.equal($("ex-fit").disabled, false, "the fit covers every N and c");
+    $("ex-retune").dispatch("click");
+    flush();
+    assert.deepEqual(arities($, PINNED.dims.length), before, "a click on the off button changes nothing");
+    enter($, "ex-n", 1000);
+    enter($, "ex-mix", 19);
+    flush();
+    assert.equal($("ex-retune").disabled, false, "the corpus has its histogram");
+    assert.doesNotMatch($("ex-retune").title, /No pair histogram/);
+  }
+});
+
+// Guard: F1 scores matched trees on the largest histogram, so a cold run must still yield to the frame.
+test("retuneF1StaysResponsive", async () => {
+  const [N, c, T] = [100000, 40, 0.8], want = f1Row(N, c, T), { $, flush, step } = boot({ ...PINNED, N, c, T });
+  flush();
+  let worst = 0, frames = 0;
+  const timed = (f) => { const t0 = performance.now(), more = f(); worst = Math.max(worst, performance.now() - t0); return more; };
+  timed(() => $("ex-retune").dispatch("click"));
+  const t0 = performance.now();
+  await settle();
+  worst = Math.max(worst, performance.now() - t0);
+  while (frames < 1e5 && timed(step)) frames++;
+  flush();
+  assert.ok(frames >= 3, `F1 ran in ${frames} frames`);
+  assert.ok(worst < FRAME_BUDGET_MS, `an F1 task took ${worst.toFixed(0)} ms at N ${N} c ${c} t ${T}`);
+  assert.deepEqual(arities($, want.dims.length), want.dims);
+});
+
+// One fetch serves every dataset, and a tune for old inputs never lands, also when they come back (A to B to A).
+test("retuneF1CancelsDuringFetch", async () => {
+  for (const changes of [
+    [($) => enter($, "ex-n", 10000)],
+    [($) => enter($, "ex-n", 10000), ($) => enter($, "ex-n", 3000)],
+    [($) => enter($, "ex-mix", 40), ($) => enter($, "ex-mix", 10)],
+    [($) => target($, 0.31), ($) => target($, 0.3)],
+  ]) {
+    let open;
+    const net = { gate: new Promise((r) => { open = r; }) }, { $, flush, step, fetches } = boot({ ...PINNED, N: 3000, c: 10 }, undefined, net);
+    flush();
+    const before = arities($, PINNED.dims.length);
+    $("ex-retune").dispatch("click");
+    flush();
+    assert.match($("ex-msg").textContent, /^Loading the pair histograms/);
+    assert.equal($("ex-retune").disabled, true, "F1 waits for its histograms");
+    for (const change of changes) change($);
+    open();
+    await settle();
+    drain(step);
+    flush();
+    assert.deepEqual(arities($, PINNED.dims.length), before, "the stale tune leaves the tree alone");
+    assert.doesNotMatch($("ex-msg").textContent, /F1 tree|Tuning|Loading/);
+    assert.equal($("ex-retune").disabled, false, "the cancelled tune can run again");
+    await retuneF1($, flush, step);
+    const want = f1Row(Number($("ex-n").value), Number($("ex-mix").value), 0.3);
+    if (Number($("ex-t").value) === 0.3) assert.deepEqual(arities($, want.dims.length), want.dims, "a new F1 loads its tree");
+    assert.equal(fetches.length, 1, "the histograms load once");
+  }
+});
+
+// A second F1 at new inputs during the fetch wins, and the first one's continuation drops.
+test("retuneF1LatestClickWins", async () => {
+  let open;
+  const net = { gate: new Promise((r) => { open = r; }) }, { $, flush, step, fetches } = boot({ ...PINNED, N: 3000, c: 10 }, undefined, net);
+  flush();
+  $("ex-retune").dispatch("click");
+  enter($, "ex-n", 10000);
+  flush();
+  $("ex-retune").dispatch("click");
+  open();
+  await settle();
+  drain(step);
+  flush();
+  const want = f1Row(10000, 10, 0.3);
+  assert.deepEqual(arities($, want.dims.length), want.dims);
+  assert.match($("ex-tuned").textContent, /^Tree from F1 for N 10000 c 10 at t 0\.30/);
+  assert.equal(fetches.length, 1);
+});
+
+test("retuneF1ReportsLoadFailure", async () => {
+  const net = { fail: true }, { $, flush, step, fetches } = boot({ ...PINNED, N: 3000, c: 10 }, undefined, net);
+  flush();
+  const before = arities($, PINNED.dims.length);
+  await retuneF1($, flush, step);
+  assert.match($("ex-msg").textContent, /^F1 could not load the pair histograms/);
+  assert.deepEqual(arities($, PINNED.dims.length), before);
+  assert.equal($("ex-retune").disabled, false, "F1 can try again");
+  net.fail = false;
+  await retuneF1($, flush, step);
+  assert.deepEqual(arities($, f1Row(3000, 10, 0.3).dims.length), f1Row(3000, 10, 0.3).dims, "a retry after a failed load fetches again");
+  assert.equal(fetches.length, 2);
+});
+
+test("tunedLabelNamesRule", async () => {
+  const { $, flush, step } = boot(PINNED);
+  flush();
+  assert.equal($("ex-tuned").textContent, "", "a hand-set tree names no rule");
+  await retuneF1($, flush, step);
+  assert.match($("ex-tuned").textContent, /^Tree from F1 for N 1000 c 19 at t 0\.30/);
+  fit($, flush, step);
+  assert.match($("ex-tuned").textContent, /^Tree from the λ fit for N 1000 c 19 at t 0\.30/);
+  assert.doesNotMatch($("ex-tuned").textContent + $("ex-msg").textContent, /tidy/i, "the fit is never called the tidy rule");
+  const d0 = $("ex-ladder").querySelector('[aria-label="arity d0"]');
+  d0.value = String(ruleTuple(1000, 19, 0.3)[0] + 1);
+  d0.dispatch("change");
+  flush();
+  assert.equal($("ex-tuned").textContent, "", "a hand edit clears the label");
 });
 
 test("retuneInputsPersistValidated", () => {
@@ -890,55 +1079,65 @@ test("nPickerOptions", () => {
   assert.ok(options.every((v, i) => !i || v > options[i - 1]), `ascending: ${options}`);
   for (const lo of [1000, 10000]) assert.ok(options.filter((v) => v >= lo && v < 10 * lo).length >= 3, `at least 3 options from ${lo}: ${options}`);
   for (const n of new Set(TIDY.rows.map((r) => r.n))) assert.ok(options.includes(n), `the study's N ${n} is an option`);
-  retune($, flush, step);
-  assert.equal($("ex-retune").disabled, true);
+  fit($, flush, step);
+  assert.equal($("ex-fit").disabled, true);
   enter($, "ex-n", 3000);
   flush();
   assert.equal(String($("ex-n").value), "3000");
-  assert.equal($("ex-retune").disabled, false, "picking another N unlocks Re-tune");
+  assert.equal($("ex-fit").disabled, false, "picking another N unlocks the fit");
 });
 
 // The arity d0 box on the ladder set to v.
 const setD0 = ($, v) => { const input = $("ex-ladder").querySelector('[aria-label="arity d0"]'); input.value = String(v); input.dispatch("change"); };
+// Each rule's button, its run and its tree for the corpus at t 0.3.
+const RULES = [
+  { id: "ex-fit", run: async (...a) => fit(...a), dims: () => ruleTuple(1000, 19, 0.3) },
+  { id: "ex-retune", run: retuneF1, dims: () => f1Row(1000, 19, 0.3).dims },
+];
 
 // Guard: Re-tune stayed off after a hand edit of the tree, so the rule's tree came back only by nudging t (#52).
-test("retuneUnlocksOnTreeEdit", () => {
-  const { $, flush, step } = boot(PINNED);
-  flush();
-  retune($, flush, step);
-  const d = ruleTuple(1000, 19, 0.3), locked = () => { flush(); return $("ex-retune").disabled; };
-  assert.deepEqual(arities($, d.length), d);
-  assert.equal(locked(), true);
-  setD0($, d[0] + 1);
-  assert.equal(locked(), false, "an arity edit unlocks Re-tune");
-  setD0($, d[0]);
-  assert.equal(locked(), true, "the tuned tree set again by hand locks it");
-  setD0($, d[0] + 1);
-  flush();
-  retune($, flush, step);
-  assert.deepEqual(arities($, d.length), d, "Re-tune reloads the rule's tree");
-  assert.equal(locked(), true);
-});
-
-test("retuneUnlocksOnPresetAndDepth", () => {
-  const select = ($) => $("ex-preset"), d = ruleTuple(1000, 19, 0.3);
-  for (const change of [
-    ($, flush) => {
-      const o = select($).querySelectorAll("option").find((x) => x.textContent.startsWith("t 0.3 "));
-      assert.ok(o, "a preset at t 0.3");
-      select($).value = o.value;
-      select($).dispatch("change");
-      flush();
-    },
-    ($, flush) => setDepth($, flush, d.length === MAX_DEPTH ? d.length - 1 : d.length + 1),
-  ]) {
+test("tuneUnlocksOnTreeEdit", async () => {
+  for (const { id, run, dims } of RULES) {
     const { $, flush, step } = boot(PINNED);
     flush();
-    retune($, flush, step);
-    assert.equal($("ex-retune").disabled, true);
-    change($, flush);
-    assert.equal(Number($("ex-t").value), 0.3, "t stays at the tuned target");
-    assert.equal($("ex-retune").disabled, false, "a new tree unlocks Re-tune");
+    await run($, flush, step);
+    const d = dims(), locked = () => { flush(); return $(id).disabled; };
+    assert.deepEqual(arities($, d.length), d);
+    assert.equal(locked(), true);
+    setD0($, d[0] + 1);
+    assert.equal(locked(), false, `an arity edit unlocks ${id}`);
+    setD0($, d[0]);
+    assert.equal(locked(), true, "the tuned tree set again by hand locks it");
+    setD0($, d[0] + 1);
+    flush();
+    await run($, flush, step);
+    assert.deepEqual(arities($, d.length), d, `${id} reloads the rule's tree`);
+    assert.equal(locked(), true);
+  }
+});
+
+test("tuneUnlocksOnPresetAndDepth", async () => {
+  const select = ($) => $("ex-preset");
+  for (const { id, run, dims } of RULES) {
+    const d = dims();
+    for (const change of [
+      ($, flush) => {
+        const o = select($).querySelectorAll("option").find((x) => x.textContent.startsWith("t 0.3 "));
+        assert.ok(o, "a preset at t 0.3");
+        select($).value = o.value;
+        select($).dispatch("change");
+        flush();
+      },
+      ($, flush) => setDepth($, flush, d.length === MAX_DEPTH ? d.length - 1 : d.length + 1),
+    ]) {
+      const { $, flush, step } = boot(PINNED);
+      flush();
+      await run($, flush, step);
+      assert.equal($(id).disabled, true);
+      change($, flush);
+      assert.equal(Number($("ex-t").value), 0.3, "t stays at the tuned target");
+      assert.equal($(id).disabled, false, `a new tree unlocks ${id}`);
+    }
   }
 });
 
@@ -950,15 +1149,85 @@ test("savedOffListNMapsToNearest", () => {
   }
 });
 
-test("retuneTermsDefined", () => {
-  const terms = PageScripts.markup().match(/<details class="terms"[\s\S]*?<\/details>/)?.[0] || "";
-  const defined = new Map([...terms.matchAll(/<dt>([\s\S]*?)<\/dt>\s*<dd>([\s\S]*?)<\/dd>/g)].map((m) => [m[1], m[2]]));
-  for (const t of ["Dataset size N", "Cluster size c", "Near-pair mass m", "Tidy rule (Re-tune)", "Weight λ", "A_lo and A_hi", "Expected errors (study)"]) {
+test("termsNameBothRules", () => {
+  const defined = terms(), F1 = "Tidy rule F1 (Re-tune F1)", FIT = "Fitted λ rule (λ fit)";
+  for (const t of ["Dataset size N", "Cluster size c", "Near-pair mass m", F1, FIT, "Weight λ", "A_lo and A_hi", "Expected errors (study)"]) {
     assert.ok(defined.get(t)?.length > 20, `the terms define ${t}`);
   }
-  const rule = defined.get("Tidy rule (Re-tune)");
-  assert.match(rule, /3000[\s\S]*100000/, "the rule names its fitted N range");
-  assert.match(rule, /\b10\b[\s\S]*\b40\b/, "the rule names its fitted c range");
+  const f1 = defined.get(F1), fitText = defined.get(FIT), [lo, hi] = TIDY.depths;
+  assert.match(f1, new RegExp(`depths ${lo} to ${hi} within ${TOP} rows`), "F1 names its depths and budget");
+  assert.match(f1, /pair histogram/);
+  assert.doesNotMatch(f1, /λ/, "F1 has no fitted weight");
+  // The fit's ranges are the generated datasets', the corpus aside.
+  const gen = TIDY.datasets.filter(([n]) => n !== study.facts.corpus.docs), span = (i) => [Math.min(...gen.map((d) => d[i])), Math.max(...gen.map((d) => d[i]))];
+  assert.match(fitText, new RegExp(`N from ${span(0).join(" to ")} and c from ${span(1).join(" to ")}`), "the fit names its fitted ranges");
+  assert.doesNotMatch(fitText, /tidy/i, "the fit is never called the tidy rule");
+  assert.match(PageScripts.markup(), /<button[^>]*\bid="ex-retune"[^>]*>Re-tune F1<\/button>/);
+  const fitButton = PageScripts.markup().match(/<button[^>]*\bid="ex-fit"[^>]*>λ fit<\/button>/)?.[0];
+  assert.ok(fitButton, "the fit has its own button");
+  assert.doesNotMatch(fitButton, /tidy/i);
+  // The study numbers in both entries come from the page data.
+  const { $, flush } = boot(PINNED);
+  flush();
+  const sets = $("ex-f1-sets").textContent, facts = $("ex-fit-facts").textContent, sw = TIDY.switch;
+  assert.equal(TIDY.datasets.length, 13);
+  for (const [n, c] of TIDY.datasets) assert.ok(new RegExp(`\\bN ${n} c ${c}\\b`).test(sets), `F1 lists N ${n} c ${c}: ${sets}`);
+  assert.equal($("ex-fit-gamma").textContent, String(TIDY.gamma));
+  for (const r of ["KAlambda", "F1"]) {
+    assert.ok(facts.includes(`${sw[r].below} of ${sw[r].keys}`) && facts.includes(`p ${sw[r].p.toPrecision(2)}`), `${r}'s switch test: ${facts}`);
+  }
+  assert.equal(sw.KAlambda.clears, false);
+  assert.match(facts, /does not pass/);
+  const pct = TIDY.excess.map(([, x]) => 100 * x);
+  assert.ok(facts.includes(`${Math.min(...pct).toFixed(1)}% to ${Math.max(...pct).toFixed(1)}%`), `the excess range: ${facts}`);
+  assert.doesNotMatch(facts, /tidy/i);
+  // Guard: the excess range and the F1 sets read as the whole study, which also ran N 1000000 (#54).
+  const maxN = Math.max(...TIDY.datasets.map(([n]) => n));
+  assert.ok(facts.includes(`N up to ${maxN}`), `the excess range names its N cap: ${facts}`);
+  assert.ok(sets.startsWith(`${TIDY.datasets.length} study datasets with N up to ${maxN}`), `F1 names its dataset count and N cap: ${sets}`);
+});
+
+// Guard: Dataset size N typed the study's N values as every N the study ran, which went stale when it added N 1000000 (#54).
+test("datasetSizeNamesStudyCap", () => {
+  const entry = terms().get("Dataset size N");
+  assert.match(entry, /every N the study ran up to <span id="ex-n-ran"><\/span>/);
+  assert.doesNotMatch(entry, /\d{4}, \d{4}/, "the study's N values come from the page data");
+  const { $, flush } = boot(PINNED);
+  flush();
+  const ns = [...new Set(TIDY.datasets.map(([n]) => n))].sort((a, b) => a - b), ran = $("ex-n-ran").textContent;
+  assert.ok(ran.startsWith(`${ns.at(-1)} `), `the cap leads: ${ran}`);
+  for (const n of ns) assert.ok(shows(ran, n), `the study ran N ${n}: ${ran}`);
+});
+
+// Guard: a single study N rendered "1000 which are  and 1000" (#54).
+test("datasetSizeOneN", () => {
+  const RULE_DATA = "} = DATA.tidy, pct";
+  const one = (src) => {
+    assert.ok(src.includes(RULE_DATA), "ruleNotes reads DATA.tidy");
+    return src.replace(RULE_DATA, "} = { ...DATA.tidy, datasets: [[1000, 19]] }, pct");
+  };
+  const { $, flush } = boot(PINNED, one);
+  flush();
+  assert.equal($("ex-n-ran").textContent, "1000");
+  assert.ok($("ex-f1-sets").textContent.startsWith("1 study dataset with N up to 1000 which is N 1000 c 19"), $("ex-f1-sets").textContent);
+});
+
+// Guard: the page wrote P(s) for the cascade, tail cards and Measured slope, and defined an unused two-tier kind (#54).
+test("pageTermsMatchPaper", () => {
+  const markup = PageScripts.markup(), defined = terms();
+  assert.match(markup, /Cascade p\(s\) \(theory\)/, "the legend writes the cascade p(s)");
+  assert.ok(defined.has("S curve p(s)"));
+  assert.match(defined.get("Pipeline"), /P\(s\) = Q\(s\) − \(1 − s<sup>d0<\/sup>\)<sup>f−<\/sup> Pr\[A ≥ ⌈t n⌉\]/);
+  const others = [...defined].filter(([k]) => k !== "Pipeline").map((kv) => kv.join(" ")).join("\n");
+  assert.doesNotMatch(others, /\bP\(s/, "P(s) names the pipeline alone");
+  assert.match(markup, /tail insets/);
+  assert.ok(defined.get("Log-log slope")?.length > 20);
+  for (const gone of [/tail cards?\b/i, /two-tier/i, /Measured slope/]) assert.doesNotMatch(PageScripts.html, gone);
+  assert.match(markup, /<span>Re-tune for a dataset<\/span>/);
+  const { $, flush } = boot(PINNED);
+  flush();
+  assert.match($("ex-tail-fp-cap").textContent, /log10 p against log10 s\..*Log-log slope \d/);
+  assert.match($("ex-tail-fn-cap").textContent, /log10 \(1 − p\) against log10 \(1 − s\)\..*Log-log slope \d/);
 });
 
 test("pageNamesNoPrivateRepo", () => {
