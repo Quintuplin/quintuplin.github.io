@@ -451,8 +451,8 @@ class TableFields:
         groups = "\n".join(f'<h3 id="{id}">{escape(title)}</h3>\n<div class="shaped fields">'
                            + "".join(self.card(f) for f in fields) + "</div>" for id, title, fields in FIELDS)
         return ('<h2 id="table-fields">Table fields</h2>\n<p>Each card defines a table header or axis label of the '
-                "results and data pages that names no metric above. This site writes each definition, and a quoted line "
-                "keeps its source's tag. The Table header line names the report sections whose tables use the field. "
+                "results and data pages that names no metric above. This site writes each definition, and a quoted glossary "
+                "or report line keeps its source's tag. The Table header line names the report sections whose tables use the field. "
                 f"Tag: {parts.tag('unchecked')}.</p>\n{groups}")
 
 
