@@ -173,6 +173,18 @@ class LandingContent(unittest.TestCase):
             with self.subTest(run):
                 self.assertEqual(page.count(f"{run} {snapshot.run_doc(snap(), run)}"), 1)
 
+    def test_doc_versions_cover_every_named_run(self):
+        snapshot = kalah("snapshot")
+        docs = [text(n) for n in main_node().iter() if n.tag == "p" and text(n).startswith("The methods text")]
+        self.assertEqual(len(docs), 1)
+        rest = text(main_node()).replace(docs[0], "")
+        keys = "|".join(map(re.escape, sorted(snap().facts["runs"], key=len, reverse=True)))
+        named = set(re.findall(rf"(?<![\w/-])({keys})(?![\w/-])", rest))
+        self.assertIn("tcp-1", named)
+        for run in named:
+            with self.subTest(run):
+                self.assertEqual(docs[0].count(f"{run} {snapshot.run_doc(snap(), run)}"), 1)
+
     def test_runs_come_from_the_text(self):
         named = kalah("pages.landing").named_runs
         self.assertEqual(named(snap(), "<p>Runs: rep-2 a, <b>full-1</b> b, tcp-1-list2 c. Again rep-2.</p>"),

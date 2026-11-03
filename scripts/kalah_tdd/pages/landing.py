@@ -20,15 +20,15 @@ def body(page, snap, idx):
     summary = ShowcaseParts(on(showcase, SHOWCASE))
     head = section(report, "kalah-tdd-experiment")
     awards = section(report, "awards")
-    return [tags(f) for f in (
-        intro(snap, on(cut(head, "<p>", '<h2 id="headline"'), REPORT), summary),
+    rest = [
         summary.awards(on(awards, REPORT)),
         summary.designs(on(cut(section(report, "methods"), "<h2", '<h3 id="classic-greedy-tdd"'), REPORT)),
         headline(page, on(cut(head, '<h2 id="headline"', '<h3 id="awards"'), REPORT)),
         summary.about_data(),
         summary.terms(),
         contents(page),
-    )]
+    ]
+    return [tags(f) for f in (intro(snap, on(cut(head, "<p>", '<h2 id="headline"'), REPORT), summary, rest), *rest)]
 
 
 def tags(html):
@@ -36,15 +36,17 @@ def tags(html):
     return TAG.sub(lambda m: parts.tag(m.group(1)), html)
 
 
-def intro(snap, paragraphs, summary):
-    """The study question and the showcase winner and KPIs, then the run paragraph that defines the claim tags."""
+def intro(snap, paragraphs, summary, rest):
+    """The study question and the showcase winner and KPIs, then the run paragraph that defines the claim tags and
+    the doc version of every run the page names."""
     question, runs = re.findall(r"<p>.*?</p>", paragraphs, re.S)
-    docs = ", ".join(f"{run} {run_doc(snap, run)}" for run in named_runs(snap, runs))
+    named = named_runs(snap, "".join([question, summary.winner, runs, *rest]))
+    docs = ", ".join(f"{run} {run_doc(snap, run)}" for run in named)
     first, second, third = (f'<a href="{url(s)}">{escape(pagemap.BY_SLUG[s].title)}</a>' for s in READ_ON)
     read_on = f"{first}, {second} and {third}"
     return (f'<h2 id="kalah-tdd-experiment">The study</h2>\n{question}\n{summary.winner}\n{runs}\n'
-            f"<p>The methods text on these pages is from methods doc {snap.doc}. Each run was built under its own doc "
-            f"version, by short sha256: {docs}.</p>\n"
+            f"<p>The methods text on these pages is from methods doc {snap.doc}. The runs this page names were built "
+            f"under these doc versions, by short sha256: {docs}.</p>\n"
             f'<p>Read on with {read_on}, or pick any of the <a href="#contents">{len(pagemap.PAGES)} parts</a>.</p>')
 
 
