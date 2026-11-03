@@ -127,8 +127,9 @@ def slug(name):
     return re.sub(r"[^a-z0-9]+", "-", bare.lower()).strip("-")
 
 
-def link(name, text=None):
-    return f'<a href="#{slug(name)}">{escape(text or name)}</a>'
+def link(name, text=None, title=None):
+    hint = f' title="{escape(title)}"' if title else ""
+    return f'<a href="#{slug(name)}"{hint}>{escape(text or name)}</a>'
 
 
 def sub(html):
@@ -236,7 +237,8 @@ def formulas(src, cards):
                                         "unseen failures"), INPUT_ROWS["E"])]
     if absent := [t for t, _ in operands if t not in error_doc]:
         raise ValueError(f"error_count doc no longer names {absent}")
-    e = " + ".join(link(c, t) for t, c in operands)
+    # An operand is read from its column (a failure from a pass count), so the link says so.
+    e = " + ".join(link(c, t, f"read from {c}") for t, c in operands)
     return {"Weighted tokens": cited(tokens, weight_text, "Weighted tokens"), "M": cited(m, m_row, "M"),
             "E": cited(e, error_doc, "E")}
 
