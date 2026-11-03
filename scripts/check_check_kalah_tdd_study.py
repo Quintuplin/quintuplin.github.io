@@ -61,10 +61,11 @@ class Inventory(unittest.TestCase):
     def test_fixture_items(self):
         items, errs = study().inventory(sources())
         self.assertEqual(errs, [])
-        self.assertEqual(Counter(i.kind for i in items), {"figure": 1, "row": 5, "table": 4, "tile": 6, "term": 4})
+        self.assertEqual(Counter(i.kind for i in items), {"figure": 1, "row": 5, "table": 4, "tile": 6, "term": 6})
         shared = sorted(i.shown for i in items if i.page == study().SHARED)
         self.assertEqual(shared, ["PMD A static analysis tool for Java.",
-                                  "Replicate . Tag: verified. Definition: The replicate build id."])
+                                  "Replicate . Tag: verified. Definition: The replicate build id.",
+                                  "Seed One stone in a pit.", "Store The pit that keeps a player's seeds."])
         # A method page maps whole to its design page, even under its own h5 id "headline".
         self.assertEqual({i.page for i in items if "rep-1-r01" in i.shown}, {"designs/classic"})
         figure = next(i for i in items if i.kind == "figure")
@@ -157,6 +158,14 @@ class Coverage(unittest.TestCase):
         self.assertEqual(errors({"glossary": [(terms, "")], "methodology/measures": [("</main>", terms + "</main>")]}), [])
         moved = {"glossary": [(terms, "")], "questions": [("</main>", terms + "</main>")]}
         self.assertRegex(" ".join(errors(moved)), "glossary or measures lacks term 'PMD A static analysis tool for Java.'")
+
+    def test_droppedDdFails(self):
+        # In a dl of two pairs each dt with its dd is one term, which no single element holds.
+        dd = "<dd>One stone in a pit.</dd>"
+        self.assertRegex(" ".join(errors({"glossary": [(dd, "")]})), "glossary or measures lacks term 'Seed One stone in a pit.'")
+        # A term that one element already holds, a lone dt or a one-pair dl, counts once.
+        found = study().parse(read("page-glossary") + "<dl><dt>Lone</dt></dl>").texts
+        self.assertEqual([found[t] for t in ("PMDAstaticanalysistoolforJava.", "SeedOnestoneinapit.", "Lone")], [1, 1, 1])
 
 
 class MetricDefs(unittest.TestCase):
