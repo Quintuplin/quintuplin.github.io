@@ -19,6 +19,9 @@ from kalah_tdd import snapshot  # noqa: E402
 SLUG = "experimental-design"
 PAGE = SCRIPTS.parent / "studies/kalah-tdd-study" / SLUG / "index.html"
 CSS = SCRIPTS.parent / "studies/kalah-tdd-study/study.css"
+# Runs table columns that may hold one value for every run, by how a run's value is read.
+SHARED = {"Model": lambda r: r["model"], "Effort": lambda r: r["effort"],
+          "Cycles cap": lambda r: r["caps"]["cycles"], "Starts cap": lambda r: r["caps"]["starts"]}
 FIGURE = re.compile(r'<figure id="([^"]+)".*?</figure>', re.S)
 SVG = re.compile(r"<svg\b.*?</svg>", re.S)
 
@@ -166,16 +169,25 @@ class Design(unittest.TestCase):
         for row in rows:
             run = runs[row[0]]
             with self.subTest(run=row[0]):
-                caps = run["caps"]
-                self.assertEqual(row[col["Iterations cap"]], str(caps["iterations"]))
-                self.assertEqual(row[col["Cycles cap"]], str(caps["cycles"]))
-                self.assertEqual(row[col["Starts cap"]], str(caps["starts"]))
-                self.assertEqual(row[col["Model"]], run["model"])
-                self.assertEqual(row[col["Effort"]], run["effort"])
+                self.assertEqual(row[col["Iterations cap"]], str(run["caps"]["iterations"]))
+                for h, get in SHARED.items():
+                    if h in col:
+                        self.assertEqual(row[col[h]], str(get(run)))
+                    else:
+                        self.assertEqual({get(r) for r in runs.values()}, {get(run)}, f"{h} column dropped but differs")
                 self.assertEqual(row[col["Builds"]], str(len(run["methods"])))
                 self.assertEqual(row[col["Methods doc"]], snapshot.run_doc(snap(), row[0]))
                 commit = run.get("harness", {}).get("commit")
                 self.assertEqual(row[col["Harness commit"]], commit[:7] if commit else "not recorded")
+
+    def test_runs_table_no_constant_column(self):
+        """A value every run shares is one sentence above the table, so the varying columns fit the column."""
+        head, rows = table("runs-table")
+        self.assertEqual([h for i, h in enumerate(head) if len({r[i] for r in rows}) == 1], [])
+        run = next(iter(facts()["runs"].values()))
+        shared = (f"Every run used model {run['model']} at {run['effort']} effort with caps of {run['caps']['cycles']} "
+                  f"cycles per call and {run['caps']['starts']} starts")
+        self.assertIn(study.squash(shared), main_text())
 
     def test_collect_steps_table(self):
         head, rows = table("collect-steps")

@@ -88,17 +88,26 @@ def note(name, run, facts):
     return ""
 
 
+def shared(runs):
+    """The sentence of what every run shares: model, effort and the cycles and starts caps. Refused when one differs,
+    as its column would then belong in the runs table."""
+    values = {(r["model"], r["effort"], r["caps"]["cycles"], r["caps"]["starts"]) for r in runs.values()}
+    if len(values) != 1:
+        raise ValueError(f"runs differ in model, effort or the cycles or starts cap: {sorted(values)}")
+    (model, effort, cycles, starts), = values
+    return (f"Every run used model {escape(model)} at {escape(effort)} effort with caps of {cycles} cycles per call "
+            f"and {starts} starts.")
+
+
 def runs_table(snap):
     """The runs table, its cells unbroken so it scrolls in its region, then each run's note in a list."""
-    head = ("Run", "Kind", "Builds", "Arms", "Waves", "Iterations cap", "Cycles cap", "Starts cap", "Model", "Effort",
-            "Methods doc", "Harness commit")
+    head = ("Run", "Kind", "Builds", "Arms", "Waves", "Iterations cap", "Methods doc", "Harness commit")
     rows, notes = [], []
     for name, run in design.runs(snap.facts).items():
-        caps, commit = run["caps"], run.get("harness", {}).get("commit")
+        commit = run.get("harness", {}).get("commit")
         arms = len({design.arm(slug, e) for slug, e in run["methods"].items()})
-        cells = [design.RUNS[name], len(run["methods"]), arms, waves(run), caps["iterations"], caps["cycles"],
-                 caps["starts"], run["model"], run["effort"], snapshot.run_doc(snap, name),
-                 commit[:7] if commit else "not recorded"]
+        cells = [design.RUNS[name], len(run["methods"]), arms, waves(run), run["caps"]["iterations"],
+                 snapshot.run_doc(snap, name), commit[:7] if commit else "not recorded"]
         rows.append(f'<tr><th scope="row" class="nowrap">{escape(name)}</th>'
                     + "".join(f'<td class="nowrap">{escape(str(c))}</td>' for c in cells) + "</tr>")
         if text := note(name, run, snap.facts):
@@ -154,8 +163,9 @@ def body(page, snap, idx):
         + parts.figure(next(n), "arms-map", "Builds per arm and run", arms_svg,
                        "Each mark's area grows with its build count. The ring marks the rep-2 replicates rebuilt at a "
                        f"later harness. Counts come from facts.json {parts.tag('recomputed')}.", None, arms_text)
-        + f"<p>Every run of the study {parts.tag('recomputed')}. Methods doc is the short sha256 of the methods doc each "
-          f"run was built under. The methods text quoted on the study pages is doc {snap.doc}.</p>" + runs_table(snap),
+        + f"<p>Every run of the study {parts.tag('recomputed')}. {shared(snap.facts['runs'])} Methods doc is the short "
+          f"sha256 of the methods doc each run was built under. The methods text quoted on the study pages is doc "
+          f"{snap.doc}.</p>" + runs_table(snap),
         '<h2 id="replicate-protocol">Replicate protocol</h2>'
         "<p>rep-1 and rep-2 test planned contrasts between arms. Both follow one protocol, and the build refuses to run "
         "if their shapes differ.</p>"
