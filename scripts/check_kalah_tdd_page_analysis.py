@@ -400,14 +400,15 @@ class Analysis(unittest.TestCase):
                 self.assertEqual([(s, t) for i, (s, a) in enumerate(labels) for t, b in labels[i + 1:] if flow.overlap(a, b)], [])
 
     def test_node_text_fits(self):
-        # A wrapped line wider than a node spills over its border; an em of 0.5 per character is the measured upper bound.
+        # A wrapped line wider than a node spills over its border. Chrome drew the 26-character F7 line 157 to 158 units
+        # wide at 12px, so 0.51 em per character bounds it, with 4 units kept clear of each border.
         flow = kalah("figures.flow")
         css = (SCRIPTS.parent / "studies/kalah-tdd-study/study.css").read_text()
         for prefix, fig in (("f6", "award-flow"), ("f7", "test-flow")):
             with self.subTest(prefix):
                 size = re.search(rf"#{fig} svg\.flow text\{{font-size:(\d+)px\}}", css) or re.search(r"\.flow text\{[^}]*font-size:(\d+)px", css)
                 lines = [w for n in charts()[prefix][0] for t in (n.label, n.note) for w in flow.wrap(t)]
-                self.assertEqual([w for w in lines if len(w) * int(size[1]) / 2 > flow.NODE_W - 2 * 6], [])
+                self.assertEqual([w for w in lines if len(w) * int(size[1]) * 0.51 > flow.NODE_W - 2 * 4], [])
 
     def test_page_styles_in_slot(self):
         # Seven columns crush words at 1280, and a stacked table's caption shrinks to one word per line.
