@@ -62,6 +62,7 @@ COMPOSITES = {"s3": ("function", "error_count", {"t2": ("hidden failures", "unse
               "c3": ("glossary", "M and M_io", {"c2": ("cost to completion", "APFDc-H")}),
               "r3": ("glossary", "CQP and CQP accepted", {"r2": ("rating medians",)})}
 FILE = re.compile(r"[\w-]+\.(?:tsv|json|txt|csv|calls)\b")
+KINDS = ("input", "cache creation", "cache read", "output")  # the token kinds weight_text weighs
 
 
 class Row(NamedTuple):
@@ -221,9 +222,9 @@ def cited(code, sentence, what):
 def formulas(src, cards):
     """Typed expressions for weighted tokens, M and E, each from its source sentence."""
     weight_text = src.snap.facts["pipeline"]["weight_text"]
-    weights = re.findall(r"(input|cache creation|cache read|output) ([\d.]+)", weight_text)
-    if not weights:
-        raise ValueError(f"facts.pipeline.weight_text names no token weights: {weight_text!r}")
+    weights = re.findall(rf"({'|'.join(KINDS)}) ([\d.]+)", weight_text)
+    if sorted(kind for kind, _ in weights) != sorted(KINDS):
+        raise ValueError(f"facts.pipeline.weight_text does not weigh each of {', '.join(KINDS)} once: {weight_text!r}")
     if weight_text not in cards.source_text("Weighted tokens"):
         raise ValueError("the Weighted tokens row does not quote facts.pipeline.weight_text")
     tokens = " + ".join(f"{w} × {link('Tokens', kind)}" for kind, w in weights)

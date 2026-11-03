@@ -358,6 +358,12 @@ class Measures(unittest.TestCase):
         facts["pipeline"]["weight_text"] = "Weighted tokens count every token alike."
         with self.assertRaisesRegex(ValueError, "weight_text"):
             body(snap()._replace(facts=facts))
+        # One kind unparsed, quoted in the report too so only the weight parse can refuse it.
+        old, new = "and output 5 per token", "and output at a higher rate per token"
+        facts = copy.deepcopy(snap().facts)
+        facts["pipeline"]["weight_text"] = facts["pipeline"]["weight_text"].replace(old, new)
+        with self.assertRaisesRegex(ValueError, "weight_text"):
+            body(with_report(snap(), old, new)._replace(facts=facts))
 
     def test_pipeline_text_version_matches(self):
         fig, root = f4_svg()
