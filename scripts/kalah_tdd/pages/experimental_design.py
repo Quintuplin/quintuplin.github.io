@@ -103,6 +103,19 @@ def shared(runs):
             f"and {starts} starts.")
 
 
+def builds(runs):
+    """What a build is, the clones beyond builds per run and the build and rebuild totals."""
+    every = design.runs({"runs": runs})
+    clones = [f"{name} makes {len(run['methods'])} builds in {len(run['methods']) + extra} clones"
+              for name, run in every.items() if (extra := design.start_clones(run))]
+    rebuilds = sum(len(run["methods"]) for name, run in every.items() if name.endswith(design.REBUILD))
+    total = sum(len(run["methods"]) for run in every.values()) - rebuilds
+    return ("<p>A build is one final clone of a method or arm. Start clones and rebuilds are not builds. Multi-start "
+            "TDD runs each start in a clone of its own, up to the starts cap, so " + ", ".join(clones[:-1])
+            + f" and {clones[-1]}. The runs make {total} builds, the marks of Figure 2.2, and {rebuilds} rebuilds, "
+            f"the ring {parts.tag('recomputed')}.</p>")
+
+
 def runs_table(snap):
     """The runs table, its cells unbroken so it scrolls in its region, then each run's note in a list."""
     head = ("Run", "Kind", "Builds", "Arms", "Waves", "Iterations cap", "Methods doc", "Harness commit")
@@ -110,8 +123,9 @@ def runs_table(snap):
     for name, run in design.runs(snap.facts).items():
         commit = run.get("harness", {}).get("commit")
         arms = len({design.arm(slug, e) for slug, e in run["methods"].items()})
-        cells = [design.RUNS[name], len(run["methods"]), arms, waves(run), run["caps"]["iterations"],
-                 snapshot.run_doc(snap, name), commit[:7] if commit else "not recorded"]
+        n = len(run["methods"])
+        cells = [design.RUNS[name], f"{n} rebuilds" if name.endswith(design.REBUILD) else n, arms, waves(run),
+                 run["caps"]["iterations"], snapshot.run_doc(snap, name), commit[:7] if commit else "not recorded"]
         rows.append(f'<tr><th scope="row" class="nowrap">{escape(name)}</th>'
                     + "".join(f'<td class="nowrap">{escape(str(c))}</td>' for c in cells) + "</tr>")
         if text := note(name, run, snap.facts):
@@ -165,6 +179,7 @@ def body(page, snap, idx):
         + parts.figure(next(n), "arms-map", "Builds per arm and run", arms_svg,
                        "Each mark's area grows with its build count. The ring marks the rep-2 replicates rebuilt at a "
                        f"later harness. Counts come from facts.json {parts.tag('recomputed')}.", None, arms_text)
+        + builds(snap.facts["runs"])
         + f"<p>Every run of the study {parts.tag('recomputed')}. {shared(snap.facts['runs'])} Methods doc is the short "
           f"sha256 of the methods doc each run was built under. The methods text quoted on the study pages is doc "
           f"{snap.doc}.</p>" + runs_table(snap),

@@ -175,7 +175,8 @@ class Design(unittest.TestCase):
                         self.assertEqual(row[col[h]], str(get(run)))
                     else:
                         self.assertEqual({get(r) for r in runs.values()}, {get(run)}, f"{h} column dropped but differs")
-                self.assertEqual(row[col["Builds"]], str(len(run["methods"])))
+                n = len(run["methods"])
+                self.assertEqual(row[col["Builds"]], f"{n} rebuilds" if row[0].endswith("/rebuild") else str(n))
                 self.assertEqual(row[col["Methods doc"]], snapshot.run_doc(snap(), row[0]))
                 commit = run.get("harness", {}).get("commit")
                 self.assertEqual(row[col["Harness commit"]], commit[:7] if commit else "not recorded")
@@ -199,6 +200,27 @@ class Design(unittest.TestCase):
         self.assertEqual([t for n, t in heads if "nowrap" in n.classes() and len(t) > 10], [])
         self.assertEqual([t for n, t in heads if " " in t and "words" not in n.classes()], [])
         self.assertTrue(re.search(r"(^|\})\.words\{overflow-wrap:normal\}", CSS.read_text(encoding="utf-8"), re.M))
+
+    def test_build_defined_and_totals_agree(self):
+        """The page defines a build, so 11 builds in 14 clones and the runs table and Figure 2.2 totals agree."""
+        text, runs = main_text(), facts()["runs"]
+        self.assertIn(study.squash("A build is one final clone of a method or arm. Start clones and rebuilds are not "
+                                   "builds."), text)
+        for name, run in runs.items():
+            multi = sum(any(s["kind"] == "starts" for s in m["stages"]) for m in run["methods"].values())
+            if multi:
+                n = len(run["methods"])
+                with self.subTest(name):
+                    self.assertIn(study.squash(f"{name} makes {n} builds in {n + multi * run['caps']['starts']} clones"),
+                                  text)
+        builds = sum(len(r["methods"]) for k, r in runs.items() if not k.endswith("/rebuild"))
+        rebuilds = sum(len(r["methods"]) for k, r in runs.items() if k.endswith("/rebuild"))
+        head, rows = table("runs-table")
+        col = head.index("Builds")
+        self.assertEqual(sum(int(r[col]) for r in rows if r[col].isdigit()), builds)
+        self.assertEqual([r[col] for r in rows if not r[col].isdigit()], [f"{rebuilds} rebuilds"])
+        self.assertIn(study.squash(f"The runs make {builds} builds, the marks of Figure 2.2, and {rebuilds} rebuilds"),
+                      text)
 
     def test_collect_steps_table(self):
         head, rows = table("collect-steps")
