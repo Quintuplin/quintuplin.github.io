@@ -345,7 +345,9 @@ def roles(snap):
         flow.node("writer", "Case writer", other, 2, f"{always[0]}, every build"),
         flow.node("harness", "Harness stage (H)", harness, 3, f"{n['H']} stage"),
         flow.node("repeat", "Repeat stage (L)", method, 3, f"{n['L']} stages, units {joined(units)}"),
-        flow.node("transfers", "Harness transfer agents", harness, 4, "seed, winner and list by git"),
+        # An edge from once would cross the repeat wrap on the shared gap line, so the note names the input.
+        flow.node("transfers", "Harness transfer agents", harness, 4,
+                  f"Takes {stage_returning(snap, 'starts')} starts. Seed, winner and list by git"),
         flow.node("starts", "Starts stage", method, 5, f"{n['starts']} stage, parallel attempts"),
         flow.node("fresh", "Fresh case writer", other, 6, f"{when[0][0]} if {when[0][1]}"),
         flow.node("review", "Blind reviewer", other, 7, "Review phase, one per method"),
@@ -365,8 +367,8 @@ def roles(snap):
     return nodes, edges, [flow.loop("repeat", "unit")]
 
 
-def winner_stage(snap):
-    return next(st["id"] for st in snap.facts["stages"]["multi-start"]["stages"] if st.get("returns") == "winner")
+def stage_returning(snap, value):
+    return next(st["id"] for st in snap.facts["stages"]["multi-start"]["stages"] if st.get("returns") == value)
 
 
 def agent_roles(snap):
@@ -406,7 +408,7 @@ def agent_roles(snap):
         p("Where each role works paraphrases the stage notes, the review schema and the harness sources batch.js and "
           "rate.js.", "verified"),
         p(f"Transfer agents run fixed git commands. Ranking the starts is the method's own stage "
-          f"{escape(winner_stage(snap))}.", "verified"))
+          f"{escape(stage_returning(snap, 'winner'))}.", "verified"))
 
 
 def body(page, snap, idx):

@@ -418,7 +418,7 @@ class AgentRoles(unittest.TestCase):
                 "throughout": f"{kinds['F']} stages join every prompt", "once": f"{kinds['S']} stages",
                 "writer": "held-out s2, every build", "harness": f"{kinds['H']} stage",
                 "repeat": f"{kinds['L']} stages, units {', '.join(units)}",
-                "transfers": "seed, winner and list by git", "starts": f"{kinds['starts']} stage, parallel attempts",
+                "transfers": "Takes s3 starts. Seed, winner and list by git","starts": f"{kinds['starts']} stage, parallel attempts",
                 "fresh": "held-out s8-writer if hidden_failure", "review": "Review phase, one per method",
                 "measure": "Measure phase, one per method", "audit": f"collectOne steps 13, 14 of {len(one)}",
                 "copy": "collectOne steps 15, 16", "raters": "three per final, after collect",
@@ -447,6 +447,17 @@ class AgentRoles(unittest.TestCase):
             reach.add(at := todo.pop())
             todo += [e.dst for e in edges if e.src == at and not e.label.startswith("if ") and e.dst not in reach]
         self.assertIn("review", reach)
+
+    def test_transfers_input_named(self):
+        # Transfer agents had no visible input. An edge from once would cross the repeat wrap, so the note names it.
+        nodes, edges, _ = roles()
+        self.assertEqual([n.id for n in nodes if not any(e.dst == n.id for e in edges)], ["lister", "transfers"])
+        s3 = next(st["id"] for st in facts()["stages"]["multi-start"]["stages"] if st.get("returns") == "starts")
+        self.assertEqual(s3, "s3")
+        self.assertTrue(next(n for n in nodes if n.id == "transfers").note.startswith("Takes s3 starts."))
+        details = next(n for n in figure().iter() if n.tag == "details")
+        item = next(spaced(li) for li in details.iter() if li.tag == "li" and spaced(li).startswith("Harness transfer"))
+        self.assertIn("Takes s3 starts.", item)
 
     def test_routes_clear(self):
         flow = mod("check_kalah_tdd_flow")
