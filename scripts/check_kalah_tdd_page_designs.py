@@ -330,6 +330,7 @@ class Shapes(unittest.TestCase):
         doc, card, svg = f"{METHODS}tpp.html", report_section(designs()[4][1]), re.search(r"<svg\b.*?</svg>", method("tpp"), re.S).group(0)
         table, unlabelled = "<table><tr><td>x</td></tr></table>", re.sub(r' aria-label="[^"]*"', "", svg, count=1)
         how = '<h2 id="how-it-works">How it works</h2>'
+        undrawn = '<svg aria-label="t"><g class="entity" data-qualified-name="kalah.Lost.Outcome" id="d-ent0004"></g></svg>'
         refusals = {
             "method page shape": lambda: d.design(page, mutated(doc, how, how.replace("works", "runs")), idx),
             "report card shape": lambda: d.report_card("tpp", card, require_link=False),
@@ -339,6 +340,7 @@ class Shapes(unittest.TestCase):
             "method sections": lambda: d.method_sections("tpp", method("tpp").replace("</main>", '<h2 id="extra">Extra</h2></main>')),
             "unlabelled table": lambda: d.wrap_tables([table], "designs/tpp"),
             "unlabelled diagram": lambda: diagram.frame_all([f'<figure class="diagram">{unlabelled}</figure>'], "designs/tpp"),
+            "undrawn owner": lambda: diagram.frame_all([f'<figure class="diagram">{undrawn}</figure>'], "designs/tpp"),
         }
         for name, refuse in refusals.items():
             with self.subTest(name), self.assertRaisesRegex(ValueError, r"\b(tpp|a02-reference)\b"):

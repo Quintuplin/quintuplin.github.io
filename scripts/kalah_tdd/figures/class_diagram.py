@@ -17,9 +17,10 @@ SAME = ("<p>The report's class diagram for this design is identical to <a href=\
         "so it is shown once. Tag: " + parts.tag("recomputed") + ".</p>")
 
 
-def describe(svg):
+def describe(svg, slug=None):
     """(class count, link count, text version items): one item per package naming its classes, one per class nested
-    in another class, then one per link. A package is a drawn cluster."""
+    in another class, then one per link. A package is a drawn cluster. A refusal names slug when given."""
+    where = f"{slug}: " if slug else ""
     entities = dict((key, name) for name, key in ENTITY.findall(svg))
     shorts = [n.rpartition(".")[2] for n in entities.values()]
     short = {k: s if shorts.count(s) == 1 else n for (k, n), s in zip(entities.items(), shorts)}
@@ -32,15 +33,15 @@ def describe(svg):
         elif owner in clusters or not owner:
             packages.setdefault(owner, []).append(short[key])
         else:
-            raise ValueError(f"class diagram class {name} sits in {owner}, which is no drawn package or class")
+            raise ValueError(f"{where}class diagram class {name} sits in {owner}, which is no drawn package or class")
     items = [f"Package {p}: {', '.join(names)}" if p else f"No package: {', '.join(names)}" for p, names in packages.items()]
     items += nested
     links = LINK.findall(svg)
     for a, b, kind in links:
         if kind not in VERB:
-            raise ValueError(f"class diagram link type {kind!r} has no reading")
+            raise ValueError(f"{where}class diagram link type {kind!r} has no reading")
         if a not in short or b not in short:
-            raise ValueError(f"class diagram link {a} to {b} names no class")
+            raise ValueError(f"{where}class diagram link {a} to {b} names no class")
         items.append(f"{short[a]} {VERB[kind]} {short[b]}")
     return len(entities), len(links), items
 
@@ -85,5 +86,5 @@ def frame(slug, n, id, svg, level):
     if not label:
         raise ValueError(f"{slug}: class diagram for Figure {n} has no aria-label to title it")
     title = unescape(label.group(1))
-    classes, links, items = describe(svg)
+    classes, links, items = describe(svg, slug)
     return parts.figure(n, id, title, svg, caption(classes, links), None, items, level=level)
