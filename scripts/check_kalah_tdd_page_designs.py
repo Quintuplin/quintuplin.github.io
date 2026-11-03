@@ -472,7 +472,9 @@ class StageFlow(unittest.TestCase):
                 self.assertTrue(ids and all(i.startswith("f5-") for i in ids), ids)
                 data = next(a for a in fig.iter() if a.tag == "a" and text(a) == "Data")
                 self.assertEqual(data.attrs["href"], "#stages")
-                self.assertEqual([n.tag for n in main(f"designs/{slug}").iter() if n.attrs.get("id") == "stages"], ["h3"])
+                found = [n for n in main(f"designs/{slug}").iter() if n.attrs.get("id") == "stages"]
+                self.assertEqual([n.tag for n in found], ["h3"])
+                self.assertIsNone(found[0].closest("details"), "the Data link target sits inside a details element")
         self.assertNotIn('class="flow"', html(A02))
 
     def test_f5_refuses_mismatch(self):
