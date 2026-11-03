@@ -91,9 +91,18 @@ class Element {
 
 // ---- FrameHarness: a busy runner simulated by spinning per unit of work ----
 const spin = (ms) => { for (const end = performance.now() + ms; performance.now() < end;); };
-// A copy of Cascade whose pipeline, trial and search steps each spin env.spinMs real ms.
+// Virtual ms that advance only per unit of work, so frame times do not move with runner load (#92).
+const UNIT_MS = 1, FRAME_MS = 1000 / 60;
+class VirtualClock {
+  t = 0;
+  now() { return this.t; }
+  // Each frame gets a fresh stamp, since the page's shared slice keys on it.
+  frame() { this.t += FRAME_MS; }
+  spend(ms) { this.t += ms; }
+}
+// A copy of Cascade whose pipeline, trial and search steps each spin env.spinMs real ms and spend one unit on env.clock.
 function meteredCascade(C, env) {
-  const metered = (f) => (...a) => { spin(env.spinMs ?? 0); return f(...a); };
+  const metered = (f) => (...a) => { spin(env.spinMs ?? 0); env.clock?.spend(UNIT_MS); return f(...a); };
   return { ...C, quorumCurve: metered(C.quorumCurve), runTrials: metered(C.runTrials),
     treeSearch: (...a) => { const steps = C.treeSearch(...a); return { next: metered((v) => steps.next(v)) }; } };
 }
@@ -607,19 +616,19 @@ function searchBesidePipeline(env, patch) {
 }
 // Null when the frames stay within the slice, else what went wrong.
 function frameFault(ms) {
-  const mid = [...ms].sort((a, b) => a - b)[ms.length >> 1];
-  return ms.length >= 5 && mid < 1.5 * SLICE_MS ? null : `frames took ${mid.toFixed(1)} ms at the median over ${ms.length} frames, slice ${SLICE_MS} ms`;
+  const worst = Math.max(...ms);
+  return ms.length >= 5 && worst < 1.5 * SLICE_MS ? null : `the worst of ${ms.length} frames took ${worst.toFixed(1)} ms, slice ${SLICE_MS} ms`;
 }
 
 // ---- FrameTests ----
 // Guard: a wall-clock frame check once failed on a busy runner (#92), so this one runs with every unit of work slowed.
-test("sweepWithPipelineStaysInFrame", () => assert.equal(frameFault(sweepBesidePipeline({ spinMs: 8 })), null));
+test("sweepWithPipelineStaysInFrame", () => assert.equal(frameFault(sweepBesidePipeline({ clock: new VirtualClock(), spinMs: 8 })), null));
 // Guard: a depth search beside a pipeline count must share the slice too.
-test("searchWithPipelineStaysInFrame", () => assert.equal(frameFault(searchBesidePipeline({})), null));
+test("searchWithPipelineStaysInFrame", () => assert.equal(frameFault(searchBesidePipeline({ clock: new VirtualClock() })), null));
 // Guard for the check itself: it fails a pipeline count done in one frame.
-test("frameCheckCatchesOneFramePipeline", () => assert.notEqual(frameFault(sweepBesidePipeline({}, oneFramePipeline)), null));
+test("frameCheckCatchesOneFramePipeline", () => assert.notEqual(frameFault(sweepBesidePipeline({ clock: new VirtualClock() }, oneFramePipeline)), null));
 // Guard: the pipeline count and a sweep once each took a full slice per frame, so frames ran twice the slice.
-test("frameCheckCatchesSeparateSlices", () => assert.notEqual(frameFault(sweepBesidePipeline({}, ownSlices)), null));
+test("frameCheckCatchesSeparateSlices", () => assert.notEqual(frameFault(sweepBesidePipeline({ clock: new VirtualClock() }, ownSlices)), null));
 
 test("searchStopsWhenTreeChanges", () => {
   const { $, flush, step, k, dims } = bootDeepSearch();
