@@ -404,6 +404,8 @@ class Measures(unittest.TestCase):
                     self.assertIn(term, sentence, target)
         with self.assertRaisesRegex(ValueError, r"pmd\.txt"):
             body(snap()._replace(files={k: v.replace("pmd.txt", "lint.txt") for k, v in snap().files.items()}))
+        with self.assertRaisesRegex(ValueError, r"curve\.py"):
+            body(with_report(snap(), "curve.py", "curves.py"))
 
     def test_caption_names_undrawn(self):
         m = measures()
