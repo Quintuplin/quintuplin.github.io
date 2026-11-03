@@ -89,19 +89,42 @@ def reference(page, snap, idx):
 
 
 def wrap_tables(fragments):
-    """Each table in a named scroll region, labelled by the latest heading or summary before it."""
-    label, out = "", []
-    for fragment in fragments:
-        def wrap(m):
-            nonlocal label
-            if m.group(1):
-                label = " ".join(unescape(re.sub(r"<[^>]+>", "", m.group(2))).split())
-                return m.group(0)
-            if m.group(0).count("<table") > 1:
-                raise ValueError(f"a nested table under {label!r} cannot be wrapped")
-            return parts.table(m.group(0), label)
-        out.append(LABEL.sub(wrap, fragment))
-    return out
+    """Each table in a named scroll region, labelled by the latest heading or summary before it. A label used twice
+    on the page names the nearest enclosing heading that tells the tables apart, or else counts them."""
+    found, label, enclosing = [], "", []
+    for m in (m for fragment in fragments for m in LABEL.finditer(fragment)):
+        if m.group(1):
+            label = " ".join(unescape(re.sub(r"<[^>]+>", "", m.group(2))).split())
+            if m.group(1) != "summary":
+                level = int(m.group(1)[1])
+                enclosing = [h for h in enclosing if h[0] < level] + [(level, label)]
+        elif m.group(0).count("<table") > 1:
+            raise ValueError(f"a nested table under {label!r} cannot be wrapped")
+        else:
+            found.append((label, [h for _, h in reversed(enclosing)]))
+    labels = [base for base, _ in found]
+    for base in {b for b in labels if labels.count(b) > 1}:
+        qualify(labels, found, [k for k, (b, _) in enumerate(found) if b == base], 0)
+    names = iter(labels)
+    return [LABEL.sub(lambda m: m.group(0) if m.group(1) else parts.table(m.group(0), next(names)), f) for f in fragments]
+
+
+def qualify(labels, found, same, depth):
+    """Suffix labels[k] for k in same with the depth-th enclosing heading where those differ, else "table i of n"."""
+    keys = [found[k][1][depth] if depth < len(found[k][1]) else None for k in same]
+    if len(same) == 1:
+        return
+    if not any(keys):
+        for i, k in enumerate(same, 1):
+            labels[k] += f", table {i} of {len(same)}"
+    elif len(set(keys)) == 1:
+        qualify(labels, found, same, depth + 1)
+    else:
+        for key in dict.fromkeys(keys):
+            group = [k for k, kk in zip(same, keys) if kk == key]
+            for k in group:
+                labels[k] += f", {key}" if key else ""
+            qualify(labels, found, group, depth + 1)
 
 
 def showcase(page, html):

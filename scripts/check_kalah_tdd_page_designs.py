@@ -299,8 +299,16 @@ class Tables(unittest.TestCase):
                     self.assertEqual((region.attrs.get("class"), region.attrs.get("role")), ("table-scroll", "region"))
                     self.assertTrue(region.attrs.get("aria-label", "").strip())
                     self.assertFalse([n for n in t.iter() if n.tag == "th" and not n.attrs.get("scope")])
+                labels = [n.attrs.get("aria-label") for n in main(slug).iter() if n.attrs.get("role") == "region"]
+                self.assertEqual([k for k in set(labels) if labels.count(k) > 1], [])
         d = kalah("pages.designs")
         self.assertIn('aria-label="Headline"', d.wrap_tables(['<h5 id="h">Headline</h5><table><tr><td>x</td></tr></table>'])[0])
+        table = "<table><tr><td>x</td></tr></table>"
+        twice = d.wrap_tables([f"<h2>Records</h2><h4>Replicate r1</h4><h5>Headline</h5>{table}{table}",
+                               f"<h4>Replicate r2</h4><h5>Headline</h5>{table}<h3>Consistency</h3>{table}"])
+        self.assertEqual(re.findall(r'aria-label="([^"]*)"', "".join(twice)),
+                         ["Headline, Replicate r1, table 1 of 2", "Headline, Replicate r1, table 2 of 2",
+                          "Headline, Replicate r2", "Consistency"])
         with self.assertRaisesRegex(ValueError, "nested"):
             d.wrap_tables(["<h3>T</h3><table><tr><td><table><tr><td>x</td></tr></table></td></tr></table>"])
 
