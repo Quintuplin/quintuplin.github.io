@@ -107,8 +107,8 @@ def forced_flow(parsed):
 # Navigation controls meet the 44px touch target the rest of the site uses (#60).
 # Sidebar rows stay compact in the tall desktop rail and grow on touch or narrow screens.
 COARSE = "@media (max-width:899.98px), (pointer:coarse)"
-TOUCH = ((".toc > summary", None, 44), (".toc a", None, 24), (".toc a", COARSE, 44), (".pager a", None, 44),
-         ("details:not(.toc) > summary", None, 44))
+TOUCH = ((".toc > summary", None, 44, None), (".toc a", None, 24, 28), (".toc a", COARSE, 44, None),
+         (".pager a", None, 44, None), ("details:not(.toc) > summary", None, 44, None))
 
 
 def px(value):
@@ -128,18 +128,23 @@ def reaches(s, sel):
 
 def touch_targets(parsed):
     errors = []
-    for sel, media, need in TOUCH:
+    for sel, media, need, cap in TOUCH:
         meets = [(i, specificity(sel)) for i, (m, sels, decls) in enumerate(parsed)
-                 if same_media(m, media) and sel in sels and px(decls.get("min-height", "")) >= need]
+                 if same_media(m, media) and sel in sels and need <= px(decls.get("min-height", "")) <= (cap or float("inf"))]
         if not meets:
-            errors.append(f"{CSS}: {sel} has no min-height of {need}px or more{' under ' + media if media else ''}, "
-                          f"so it is a small touch target")
+            size = f"between {need}px and {cap}px" if cap else f"of {need}px or more"
+            errors.append(f"{CSS}: {sel} has no min-height {size}{' under ' + media if media else ''}, "
+                          f"so it is a small touch target{' or a tall desktop row' if cap else ''}")
             continue
         last, spec = max(meets)
-        # Any media counts, as a lowering rule in another query still wins where both apply.
-        errors += [f"{CSS}: later or more specific rule {s} lowers {sel} min-height to {decls['min-height']}, below {need}px"
-                   for i, (_, sels, decls) in enumerate(parsed) if px(decls.get("min-height", f"{need}px")) < need
-                   for s in sels if reaches(s, sel) and (i > last or specificity(s) > spec)]
+        # Any media counts for lowering, as a lowering rule in another query still wins where both apply.
+        # A raise counts only in the same media, since the coarse query raises the compact rows on purpose.
+        for i, (m, sels, decls) in enumerate(parsed):
+            value = px(decls.get("min-height", f"{need}px"))
+            verb = "lowers" if value < need else "raises" if cap and value > cap and same_media(m, media) else None
+            errors += [f"{CSS}: later or more specific rule {s} {verb} {sel} min-height to {decls['min-height']}, "
+                       f"outside {need}px{f' to {cap}px' if cap else ' or more'}"
+                       for s in sels if verb and reaches(s, sel) and (i > last or specificity(s) > spec)]
     return errors
 
 
