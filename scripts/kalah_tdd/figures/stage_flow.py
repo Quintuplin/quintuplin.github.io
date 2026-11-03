@@ -19,6 +19,8 @@ STEP = re.compile(r"(\d+)\. |with (.+?) step (\d+)\. ")
 COLUMNS = ("Stage", "Runs as", "Steps", "Details", "Note")
 # study.css breaks td and th anywhere, which beside the long Note split the short columns mid-word.
 KEEP = ' style="overflow-wrap:normal"'
+# study.css `.diagram svg.flow` min-width, which test 15 reads back.
+FLOW_MIN_WIDTH = 640
 
 
 def stages(slug, facts, pre):
@@ -121,10 +123,10 @@ def chart(checked):
 
 
 def sized(svg):
-    """The chart capped at its drawn size, and held there when narrower than study.css's 640px flow min-width.
+    """The chart capped at its drawn size, and held there when narrower than study.css's flow min-width.
     Scaled to the column, a one column chart drew 42px to 51px labels."""
     width = int(re.match(r'<svg [^>]*viewBox="0 0 (\d+) ', svg).group(1))
-    style = f"max-width:{width}px" + (f";min-width:{width}px" if width < 640 else "")
+    style = f"max-width:{width}px" + (f";min-width:{width}px" if width < FLOW_MIN_WIDTH else "")
     return svg.replace("<svg ", f'<svg style="{style}" ', 1)
 
 

@@ -450,6 +450,9 @@ def cross(s, t):
 
 class StageFlow(unittest.TestCase):
     def test_f5_from_facts(self):
+        least = kalah("figures.stage_flow").FLOW_MIN_WIDTH
+        css = (STUDY / "study.css").read_text(encoding="utf-8")
+        self.assertEqual(int(re.search(r"\.diagram svg\.flow\{min-width:(\d+)px", css).group(1)), least)
         for slug, *_ in designs():
             with self.subTest(slug):
                 fig, stages = f5(slug), stage_facts(slug)
@@ -458,10 +461,10 @@ class StageFlow(unittest.TestCase):
                 svg = next(n for n in fig.iter() if n.tag == "svg")
                 self.assertIn("flow", svg.classes())
                 self.assertEqual([k.tag for k in svg.elements()][:2], ["title", "desc"])
-                # A chart never scales past its drawn size, and one narrower than the 640px flow min-width keeps it,
-                # so labels stay 13px.
+                # A chart never scales past its drawn size, and one narrower than the study.css flow min-width keeps
+                # it, so labels stay 13px.
                 width = int(svg.attrs["viewbox"].split()[2])
-                self.assertEqual(svg.attrs.get("style"), f"max-width:{width}px" + (f";min-width:{width}px" if width < 640 else ""))
+                self.assertEqual(svg.attrs.get("style"), f"max-width:{width}px" + (f";min-width:{width}px" if width < least else ""))
                 nodes = [r for r in svg.iter() if r.tag == "rect" and "node" in r.classes()]
                 items = [li for li in fig.iter() if li.tag == "li"]
                 self.assertEqual((len(nodes), len(items)), (len(stages), len(stages)))
