@@ -163,12 +163,13 @@ def holm(report):
             (u, p), (u2, p2) = sides[(outcome, first, base)], sides[(outcome, base, first)]
             if p != p2 or u + u2 != reps.get(first, 0) * reps.get(base, 0):
                 raise ValueError(f"{where}: its sides give U {u} and {u2}, Holm p {p} and {p2}")
-            if f"Holm p {p}" not in lead:
+            if not re.search(rf"Holm p {re.escape(p)}(?!\d)", lead):
                 raise ValueError(f"{where}: Holm p {p} is not in the {run} lead")
             done |= {(outcome, first, base), (outcome, base, first)}
             pairs.append(Contrast(run, outcome, first, base, u, p))
         if len(pairs) != want:
-            raise ValueError(f"{run} gives {len(pairs)} planned contrasts, expected {want}")
+            said = "; ".join(f"{c.outcome} {c.method} against {c.against}" for c in pairs)
+            raise ValueError(f"{run} gives {len(pairs)} planned contrasts, expected {want}: {said}")
         order = list(dict.fromkeys(c.outcome for c in pairs))
         out += sorted(pairs, key=lambda c: order.index(c.outcome))
     return out

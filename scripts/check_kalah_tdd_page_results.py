@@ -326,7 +326,7 @@ class Results(unittest.TestCase):
                 other_u, other_p = clauses[(run, norm(outcome), b, a)]
                 self.assertEqual(other_p, p)
                 self.assertEqual(int(u) + int(other_u), 25, "U of both sides sums to 5 by 5 replicates")
-                self.assertIn(f"Holm p {p}", leads[run])
+                self.assertRegex(leads[run], rf"Holm p {re.escape(p)}(?!\d)")
         self.assertEqual({(r[0], norm(r[1]), frozenset(r[2].split(" against "))) for r in rows},
                          {(run, o, frozenset((a, b))) for run, o, a, b in clauses})
 
@@ -342,11 +342,20 @@ class Results(unittest.TestCase):
                 self.assertIn(old, report())
                 results.holm(report().replace(old, new))
             self.assertRegex(str(caught.exception), "Anchor Engineering|Coarse-to-fine TDD")
+        # Both sides of Held-out TDD's contrast give Holm p 0.02, which the lead's 0.024 must not pass for.
+        prefix = report()
+        for old in ("against Classic greedy TDD: U 0, Holm p 0.024", "against Held-out TDD: U 25, Holm p 0.024"):
+            self.assertEqual(prefix.count(old), 1)
+            prefix = prefix.replace(old, old.removesuffix("4"))
+        with self.assertRaises(ValueError) as caught:
+            results.holm(prefix)
+        self.assertIn("Held-out TDD", str(caught.exception))
         both = report().replace("; adjusted mutation against Coarse-to-fine TDD: U 14, Holm p 1.000", "").replace(
             "; adjusted mutation against Classic greedy TDD: U 11, Holm p 1.000", "")
         with self.assertRaises(ValueError) as caught:
             results.holm(both)
         self.assertIn("rep-2", str(caught.exception))
+        self.assertIn("Coarse-to-fine TDD", str(caught.exception))
 
     def test_f71_headline_first(self):
         main = main_of("results/contrasts")
