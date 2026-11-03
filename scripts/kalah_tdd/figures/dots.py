@@ -83,5 +83,7 @@ def svg(label, axis, series, marks, domain, ticks, refs=()):
     out += [text(x(t), bottom + 16, f"{t:g}") for t in ticks]
     # The axis label comes right after the axis line, where MetricDefs reads it.
     out += [f'<line class="axis" x1="{PAD}" x2="{W - PAD}" y1="{bottom}" y2="{bottom}"/>', text(W / 2, bottom + 36, axis)]
+    # Held at its drawn width, as scaled to a 320px column its 12px text drew under 6px; the figure region scrolls.
     return (f'<svg xmlns="http://www.w3.org/2000/svg" class="plot" viewBox="0 0 {W} {bottom + 46}" width="{W}" '
+            f'style="min-width:{W}px" '
             f'role="img" aria-label="{escape(label)}">{"".join(out)}</svg>')
