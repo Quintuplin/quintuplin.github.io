@@ -243,8 +243,18 @@ class Diagrams(unittest.TestCase):
                     self.assertEqual(len(said), len(lines))
                     self.assertEqual(sorted(re.search(r" (uses|holds|extends) ", i).group(1) for i in said),
                                      sorted(VERB[g.attrs["data-link-type"]] for g in lines))
-                    self.assertEqual(len(items) - len(said), len({g.attrs["data-qualified-name"].rpartition(".")[0]
-                                                                  for g in entities}))
+                    # A package is a drawn cluster. A class inside another class reads as nested in it.
+                    clusters = {g.attrs["data-qualified-name"] for g in svg.iter() if g.tag == "g" and "cluster" in g.classes()}
+                    packages = [re.match(r"Package (.*?): ", i).group(1) for i in items if i.startswith("Package ")]
+                    self.assertLessEqual(set(packages), clusters)
+                    rest = [i for i in items if i not in said and not i.startswith(("Package ", "No package: "))]
+                    self.assertTrue(all(", nested in " in i for i in rest), rest)
+        held = ('<svg aria-label="t"><g class="cluster" data-qualified-name="kalah" id="d-ent0002"></g>'
+                '<g class="entity" data-qualified-name="kalah.MoveResult" id="d-ent0003"></g>'
+                '<g class="entity" data-qualified-name="kalah.MoveResult.Outcome" id="d-ent0004"></g></svg>')
+        self.assertEqual(diagram.describe(held)[2], ["Package kalah: MoveResult", "Outcome, nested in MoveResult"])
+        with self.assertRaisesRegex(ValueError, "kalah.Lost.Outcome"):
+            diagram.describe(held.replace("kalah.MoveResult.Outcome", "kalah.Lost.Outcome"))
         svg = re.search(r"<svg\b.*?</svg>", method("tpp"), re.S).group(0)
         self.assertEqual(diagram.describe(svg)[:2], (3, 2))
         self.assertIn("Kalah uses Board", diagram.describe(svg)[2])

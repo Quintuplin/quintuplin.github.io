@@ -8,6 +8,7 @@ from .. import parts
 SOURCE = re.compile(r'<figure class="diagram">(<svg\b.*?</svg>)</figure>', re.S)
 HEADING = re.compile(r"<h([1-6])\b")
 ENTITY = re.compile(r'<g class="entity" data-qualified-name="([^"]+)" id="[^"]*-(ent\d+)"')
+CLUSTER = re.compile(r'<g class="cluster" data-qualified-name="([^"]+)"')
 LINK = re.compile(r'<g class="link" data-entity-1="(ent\d+)" data-entity-2="(ent\d+)"[^>]*data-link-type="([^"]+)"')
 # Entity 1 relates to entity 2. An aggregation diamond sits at entity 1.
 VERB = {"dependency": "uses", "aggregation": "holds", "extension": "extends"}
@@ -16,14 +17,23 @@ SAME = ("<p>The report's class diagram for this design is identical to <a href=\
 
 
 def describe(svg):
-    """(class count, link count, text version items): one item per package naming its classes, then one per link."""
+    """(class count, link count, text version items): one item per package naming its classes, one per class nested
+    in another class, then one per link. A package is a drawn cluster."""
     entities = dict((key, name) for name, key in ENTITY.findall(svg))
     shorts = [n.rpartition(".")[2] for n in entities.values()]
     short = {k: s if shorts.count(s) == 1 else n for (k, n), s in zip(entities.items(), shorts)}
-    packages = {}
+    owners, clusters = {n: short[k] for k, n in entities.items()}, set(CLUSTER.findall(svg))
+    packages, nested = {}, []
     for key, name in entities.items():
-        packages.setdefault(name.rpartition(".")[0], []).append(short[key])
+        owner = name.rpartition(".")[0]
+        if owner in owners:
+            nested.append(f"{short[key]}, nested in {owners[owner]}")
+        elif owner in clusters or not owner:
+            packages.setdefault(owner, []).append(short[key])
+        else:
+            raise ValueError(f"class diagram class {name} sits in {owner}, which is no drawn package or class")
     items = [f"Package {p}: {', '.join(names)}" if p else f"No package: {', '.join(names)}" for p, names in packages.items()]
+    items += nested
     links = LINK.findall(svg)
     for a, b, kind in links:
         if kind not in VERB:
