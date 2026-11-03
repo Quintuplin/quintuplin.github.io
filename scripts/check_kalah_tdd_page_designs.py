@@ -413,16 +413,16 @@ def stage_facts(slug):
     return snap().facts["stages"][slug]["stages"]
 
 
-def code_blocks(slug):
-    """The method page steps per stage as (header, [step line as the merged steps show it]), read from the source."""
-    blocks = []
+def code_steps(slug):
+    """Each method page step line as (its stage header, the line as the merged steps show it), read from the source."""
+    out, header = [], None
     for line in code_lines(slug):
         m = re.fullmatch(r'  (?:(\d+)\. |with )"(.*)"', line)
         if m:
-            blocks[-1][1].append(f"{m.group(1)}. {m.group(2)}" if m.group(1) else f"with {m.group(2)}")
+            out.append((header, f"{m.group(1)}. {m.group(2)}" if m.group(1) else f"with {m.group(2)}"))
         else:
-            blocks.append((line, []))
-    return blocks
+            header = line
+    return out
 
 
 def merged(slug):
@@ -485,8 +485,13 @@ class StageFlow(unittest.TestCase):
             with self.subTest(name), self.assertRaisesRegex(ValueError, r"tpp\b.*L2-7"):
                 sf.stages("tpp", bad, steps)
         one = {**facts, "tpp": {**facts["tpp"], "stages": facts["tpp"]["stages"][:1]}}
-        with self.assertRaisesRegex(ValueError, r"tpp\b.*stage"):
+        with self.assertRaisesRegex(ValueError, r"tpp\b.*in no facts stage"):
             sf.stages("tpp", one, pre)
+        extra = {**facts, "tpp": {**facts["tpp"], "stages": [*facts["tpp"]["stages"], {"id": "s8", "kind": "S", "steps": [8]}]}}
+        with self.assertRaisesRegex(ValueError, r"tpp\b.*s8.*no steps left"):
+            sf.stages("tpp", extra, pre)
+        # Stages in a row under one header share its block, as noun-verb's eight once stages do.
+        self.assertEqual(len(sf.stages("noun-verb", facts, merged("noun-verb"))), 8)
 
     def test_f5_routes_and_limits(self):
         sf, flow, fl = kalah("figures.stage_flow"), kalah("figures.flow"), check("check_kalah_tdd_flow")
@@ -523,16 +528,17 @@ class StageFlow(unittest.TestCase):
                 self.assertTrue(table.parent.attrs.get("aria-label", "").startswith("Stages"))
                 self.assertEqual([text(th) for th in table.iter() if th.attrs.get("scope") == "col"],
                                  ["Stage", "Runs as", "Steps", "Details", "Note"])
-                rows, stages, blocks = [r for r in table.iter() if r.tag == "tr"][1:], stage_facts(slug), code_blocks(slug)
-                self.assertEqual((len(rows), len(blocks)), (len(stages), len(stages)))
-                for row, stage, (header, steps) in zip(rows, stages, blocks):
+                rows, stages, shown = [r for r in table.iter() if r.tag == "tr"][1:], stage_facts(slug), []
+                self.assertEqual(len(rows), len(stages))
+                for row, stage in zip(rows, stages):
                     cells = [" ".join(c.text(" ").split()) for c in row.elements()]
-                    self.assertEqual(cells[1], header)
-                    self.assertEqual(cells[2], " ".join(" ".join(steps).split()))
+                    # Each step line in the Steps cell, with the stage header it runs under.
+                    shown += [(cells[1], " ".join(k.split())) for k in row.elements()[2].kids if isinstance(k, str)]
                     self.assertEqual(cells[4], " ".join(stage["note"].split()) if "note" in stage else "none")
                     for key in ("unit", "returns", "when", "commit_cap"):
                         if key in stage:
                             self.assertIn(f"{key.replace('_', ' ')} {stage[key]}", cells[3])
+                self.assertEqual(shown, [(h, " ".join(line.split())) for h, line in code_steps(slug)])
 
 
 if __name__ == "__main__":

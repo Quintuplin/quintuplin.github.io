@@ -51,15 +51,15 @@ def caption(classes, links):
             f"Tag: {parts.tag('recomputed')}.")
 
 
-def frame_all(fragments, slug, report=None):
+def frame_all(fragments, slug, report=None, numbers=None):
     """Each source class diagram framed as Figure P.k, its title one level below the enclosing heading. A diagram in
     fragments[report], the report summary, repeated later on the page is shown once and its first place links the
-    later figure. Any other repeat is refused."""
+    later figure. Any other repeat is refused. numbers continues the page's figure numbers when earlier figures took some."""
     found = [(i, m) for i, f in enumerate(fragments) for m in SOURCE.finditer(f)]
     repeated = {k for k, (_, m) in enumerate(found) if any(m.group(0) == later.group(0) for _, later in found[k + 1:])}
     if stray := [k for k in repeated if found[k][0] != report]:
         raise ValueError(f"{slug}: class diagram {stray[0] + 1} repeats outside the report summary")
-    numbers, number = parts.numbers(slug), {}
+    numbers, number = numbers or parts.numbers(slug), {}
     for k in range(len(found)):
         if k not in repeated:
             number[k] = next(numbers)
