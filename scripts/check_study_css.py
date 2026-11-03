@@ -213,12 +213,27 @@ def diagram_pull(parsed):
     return errors
 
 
+# A stacked card label inherits nowrap from its value cell, so a long label would scroll the card (#70).
+NARROW = "@media (max-width:640px)"
+
+
+def label_wrap(parsed):
+    """In stacked .cols cards the ::before label of a td.nowrap must wrap, and no later rule there may undo it."""
+    label = lambda s: re.fullmatch(r"\.cols\s+(?:td\s*\+\s*)?td\.nowrap::before", s) is not None
+    sets = [decls["white-space"] for m, sels, decls in parsed
+            if same_media(m, NARROW) and "white-space" in decls and any(label(s) for s in sels)]
+    if not sets or sets[-1] != "normal":
+        return [f"{CSS}: no rule under {NARROW} sets .cols td.nowrap::before{{white-space:normal}}, "
+                f"so a long card label inherits nowrap and scrolls the card"]
+    return []
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
     text = re.sub(r"/\*.*?\*/", "", (root / CSS).read_text(encoding="utf-8"), flags=re.S)
     parsed = list(rules(text))
     errors = summary_marker(parsed) + stacked_reset(parsed) + nested_card_reset(parsed) + forced_flow(parsed) + \
-        touch_targets(parsed) + kept_rules(parsed) + diagram_pull(parsed)
+        touch_targets(parsed) + kept_rules(parsed) + diagram_pull(parsed) + label_wrap(parsed)
     for e in errors:
         print("FAIL:", e, file=sys.stderr)
     if not errors:
