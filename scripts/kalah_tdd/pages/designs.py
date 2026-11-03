@@ -55,9 +55,9 @@ def design(page, snap, idx):
     card = report_card(slug, section(snap.files[REPORT], heading), require_link=True)
     if unescape(card["name"]) != page.title:
         raise ValueError(f"{slug}: the report card name {card['name']!r} differs from the page map")
-    # Each part is rewritten against its own source before a union, so a kept link points where its source meant.
-    lead = links.rewrite(shown["chip"] + shown["lead"], SHOWCASE, here, idx) + "\n" + links.rewrite(intro.group(1), doc, here, idx)
-    family = union(slug, links.rewrite(card["card"], REPORT, here, idx), links.rewrite(how["family"], doc, here, idx))
+    # The showcase lead and the report summary can hold links, so each is rewritten against its own source.
+    lead = shown["chip"] + links.rewrite(shown["lead"], SHOWCASE, here, idx) + "\n" + intro.group(1)
+    family = union(slug, card["card"], how["family"])
     steps = (f'<section id="steps"><h2 id="how-it-works">How it builds code</h2>\n{shown["intro"]}\n<p>{family}</p>\n'
              f'{merge_steps(slug, shown["steps"], how["code"])}\n{how["kinds"]}</section>')
     verdict = f'<h2 id="conclusion">Verdict</h2>\n<p>{union(slug, shown["verdict"], end.group(1))}</p>'
