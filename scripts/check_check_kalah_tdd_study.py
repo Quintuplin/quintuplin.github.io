@@ -48,10 +48,10 @@ def pages(edits=None):
     return edited({slug: read(f) for slug, f in PAGES.items()}, edits or {})
 
 
-def errors(edits=None, final=False):
+def errors(edits=None, final=False, src=None):
     """Coverage and MetricDefs errors on the fixture pages, after the fixture sources inventory cleanly."""
     s = study()
-    items, inventory_errors = s.inventory(sources())
+    items, inventory_errors = s.inventory(sources(**(src or {})))
     assert inventory_errors == [], inventory_errors
     site = pages(edits)
     return s.coverage(items, site, final)[0] + s.metric_defs(site)[0]
@@ -104,6 +104,16 @@ class Coverage(unittest.TestCase):
                          "glossary lacks term 'Family")
         summary = "Table view, 2 rows and 3 columns"
         self.assertRegex(" ".join(errors({"results/survey": [(summary, "Table view")]})), f"lacks table '{summary}'")
+
+    def test_droppedPrefixRowFails(self):
+        # Each item must be one element's whole text, so a row inside a longer row is no copy.
+        three = ("Table view, 2 rows", "Table view, 3 rows")
+        row = '<tr><th scope="row">classic</th><td>843,734</td><td>1</td></tr>'
+        src = {"runs/full-1/report.html": [three, ("<tbody>", "<tbody>" + row)]}
+        self.assertRegex(" ".join(errors({"results/survey": [three]}, src=src)), "results/survey lacks row 'classic 843,734 1'")
+        kpi = '<div class="kpi"><b>804,727</b><span>Cost to completion</span></div>'
+        dropped = {"designs/classic": [(kpi, "<p>804,727 Cost to completion so far</p>")]}
+        self.assertRegex(" ".join(errors(dropped)), "designs/classic lacks tile '804,727 Cost to completion'")
 
     def test_droppedMarkFails(self):
         mark = re.search(r'<path class="mk s2".*?</path>', read("page-results-survey")).group(0)

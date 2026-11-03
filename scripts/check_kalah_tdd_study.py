@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check that the Kalah TDD study pages keep all the snapshot data (#61).
 Inventory parses the snapshot sources on its own, without the generator's slicing, so a generator bug cannot hide.
-Coverage finds each item on its mapped page. MetricDefs finds each results and data page label defined on measures.
+Coverage finds each item on its mapped page as the whole text of an element. MetricDefs finds each results and data page label defined on measures.
 Stub pages are skipped, and --final fails on any stub.
 
 Usage: check_kalah_tdd_study.py [--final] [repo root]
@@ -142,6 +142,13 @@ def is_row(node):
     return (node.tag == "tr" and not node.closest("thead")) or "entry" in node.classes()
 
 
+def pair(dt):
+    """A dt's text with its following dd's, as one term."""
+    kids = dt.parent.elements()
+    dd = kids[kids.index(dt) + 1:][:1]
+    return " ".join([spaced(dt)] + [spaced(d) for d in dd if d.tag == "dd"])
+
+
 def figure(node):
     marks = tuple(sorted(spaced(t) for t in node.iter() if t.tag == "title" and t.parent is not node))
     return (node.attrs["aria-label"], marks)
@@ -160,9 +167,7 @@ def item(name, node, page):
     if "tile" in cls or "kpi" in cls or (node.tag == "li" and node.closest(cls="award")):
         return Item("tile", page, squash(node.text()), spaced(node))
     if node.tag == "dt" and node.closest("dl", "terms"):
-        dd = node.parent.elements()[node.parent.elements().index(node) + 1:][:1]
-        text = " ".join([spaced(node)] + [spaced(d) for d in dd if d.tag == "dd"])
-        return Item("term", SHARED, squash(text), text)
+        return Item("term", SHARED, squash(text := pair(node)), text)
     if re.fullmatch(r"q\d+", node.attrs.get("id") or ""):
         return Item("term", page, ("id", node.attrs["id"]), "#" + node.attrs["id"])
     return None
@@ -205,10 +210,31 @@ def inventory(files):
 
 class Page(NamedTuple):
     stub: bool
-    text: str
+    texts: Counter
     ids: set
     figures: Counter
     root: Node
+
+
+def squashed(node, out):
+    """Fill out with {id(element): squashed text} for node and the elements under it, in one pass."""
+    out[id(node)] = text = "".join(squash(k) if isinstance(k, str) else squashed(k, out) for k in node.kids
+                                   if isinstance(k, str) or k.tag not in ("script", "style"))
+    return text
+
+
+def texts(nodes, root):
+    """How many elements hold each whole squashed text. A wrapper around one same-text element adds no copy,
+    and a dt with its dd counts as one term."""
+    text = {}
+    squashed(root, text)
+    counts = Counter()
+    for n in nodes:
+        if (t := text.get(id(n))) and t not in {text.get(id(k)) for k in n.elements()}:
+            counts[t] += 1
+        if n.tag == "dt" and (p := squash(pair(n))) not in (text[id(n)], text[id(n.parent)]):
+            counts[p] += 1
+    return counts
 
 
 def parse(html):
@@ -216,7 +242,7 @@ def parse(html):
     nodes = list(root.iter())
     stub = any(n.tag == "meta" and n.attrs.get("name") == STUB for n in nodes)
     figures = Counter(figure(n) for n in nodes if n.tag == "svg" and n.attrs.get("aria-label"))
-    return Page(stub, squash(root.text()), {n.attrs["id"] for n in nodes if n.attrs.get("id")}, figures, root)
+    return Page(stub, texts(nodes, root), {n.attrs["id"] for n in nodes if n.attrs.get("id")}, figures, root)
 
 
 def label(slug):
@@ -240,7 +266,7 @@ def lacks(want, page):
         return None if page.figures[key] >= n else mark_diff(key, page)
     if isinstance(key, tuple):
         return None if key[1] in page.ids else "no such id"
-    have = page.text.count(key)
+    have = page.texts[key]
     return None if have >= n else f"found {have} of {n}"
 
 
