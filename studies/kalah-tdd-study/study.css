@@ -175,7 +175,7 @@ pre.steps{font:14px/1.6 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;
 .steps .st{padding-left:2ch}
 dl.terms{display:grid;grid-template-columns:max-content 1fr;gap:6px var(--space-4)}
 dl.terms dt{font-weight:600}
-dl.terms dd{margin:0;color:var(--muted)}
+dl.terms dd{overflow-wrap:anywhere;margin:0;color:var(--muted)}
 ul.notes{padding-left:1.2em;color:var(--muted)}
 @media (max-width:600px){dl.terms{grid-template-columns:1fr;gap:0} dl.terms dd{margin-bottom:var(--space-2)}}
 
@@ -245,6 +245,10 @@ table{border-collapse:collapse;font-size:.875rem;line-height:1.5;width:100%}
 .table-scroll > table{margin:0}
 /* A long cell no longer squeezes short columns to one letter a line; a wide table scrolls instead. */
 .table-scroll > table.cols :is(th,td){overflow-wrap:break-word}
+/* Code in a cell, such as a doc sha, breaks only when it alone overflows its line. */
+.table-scroll > table.cols code{overflow-wrap:break-word}
+/* Cell links, such as a stage table's design, are touch targets where nav rows are. */
+@media (max-width:899.98px), (pointer:coarse){.cols td a{display:inline-flex;align-items:center;min-height:44px}}
 caption{caption-side:top;text-align:left;font-weight:600;font-size:14px;color:var(--muted);padding:var(--space-1) var(--space-3)}
 th,td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
 th{background:var(--wash);color:var(--muted);font-weight:600}

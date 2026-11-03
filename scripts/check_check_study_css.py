@@ -84,6 +84,35 @@ class TouchTargets(unittest.TestCase):
         self.assertRegex(" ".join(errors), r"\.fig-foot a has no min-height of 44px or more")
         self.assertRegex(" ".join(touch(lambda t: t + ".fig-foot a:hover{min-height:20px}")), r"rule \.fig-foot a:hover lowers")
 
+    def test_cell_link_is_44px_on_touch(self):
+        # Design links in methodology table cells were 18px tall at 375px.
+        errors = touch(lambda t: re.sub(r"\.cols td a\{[^}]*\}", "", t))
+        self.assertRegex(" ".join(errors), r"\.cols td a has no min-height of 44px or more under @media")
+        self.assertRegex(" ".join(touch(lambda t: t + ".cols td a{min-height:20px}")), r"rule \.cols td a lowers")
+
+
+def kept(edit=lambda text: text):
+    """kept_rules on the committed study.css after edit."""
+    c = css()
+    text = re.sub(r"/\*.*?\*/", "", (SCRIPTS.parent / c.CSS).read_text(encoding="utf-8"), flags=re.S)
+    return c.kept_rules(list(c.rules(edit(text))))
+
+
+class KeptRules(unittest.TestCase):
+    def test_committed_passes(self):
+        self.assertEqual(kept(), [])
+
+    def test_each_rule_needed(self):
+        # A long stage note scrolled the 320px page sideways, a doc sha broke mid-token and the stacked caption hid.
+        for sel, media, prop, value in css().KEPT:
+            with self.subTest(sel):
+                errors = kept(lambda t: t.replace(f"{sel}{{{prop}:{value}", f"{sel}{{{prop}:normal"))
+                self.assertRegex(" ".join(errors), rf"no rule sets {re.escape(sel)} \{{{prop}:{value}\}}")
+
+    def test_caption_rule_must_be_in_the_stacked_query(self):
+        errors = kept(lambda t: t.replace(".cols caption{display:block}", "") + ".cols caption{display:block}")
+        self.assertRegex(" ".join(errors), r"\.cols caption \{display:block\} under @media \(max-width:640px\)")
+
 
 if __name__ == "__main__":
     unittest.main()
