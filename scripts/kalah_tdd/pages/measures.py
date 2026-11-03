@@ -301,6 +301,12 @@ class MeasurePipeline:
             for name in FILE.findall(f"{n.label} {n.note}"):
                 if name not in fields:
                     raise ValueError(f"Figure 4.1 node {n.label!r} names {name} but no {n.lane} card Source does")
+            # A module must be in a lane card, the glossary row its Module line cites, or the card the node is.
+            named = list(LANES[n.lane]) +[n.label] * (n.label in self.cards.by_name)
+            stated = " ".join(f"{self.cards.source_text(c)} {plain(self.cards.module(c))}" for c in named)
+            for name in MODULE.findall(f"{n.label} {n.note}"):
+                if name not in stated:
+                    raise ValueError(f"Figure 4.1 node {n.label!r} names {name} but no {n.lane} card or cited row does")
         for target, (kind, name, inputs) in COMPOSITES.items():
             text = self.sentence(kind, name)
             if absent := [t for terms in inputs.values() for t in terms if t not in text]:
