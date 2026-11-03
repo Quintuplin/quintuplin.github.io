@@ -448,9 +448,13 @@ class Results(unittest.TestCase):
         unknown["runs"]["tcp-1"]["tcp"]["orders"]["random"][0] = "T99"
         steps = copy.deepcopy(snap().facts)
         steps["runs"]["tcp-1"]["methods"]["tcp-1-r02"]["steps"][0] += " changed"
+        shared = copy.deepcopy(snap().facts)
+        self.assertEqual(shared["runs"]["tcp-1"]["methods"]["tcp-1-r01"]["order"], "random")
+        shared["runs"]["tcp-1"]["methods"]["tcp-1-r02"]["order"] = "random"
         for name, call, facts, said in (("stages", results.tcp_stages, stages, ["tcp-risk"]),
                                         ("steps", results.tcp_stages, steps, ["tcp-1-r02"]),
                                         ("arm order", results.tcp_orders, missing, ["tcp-1-r03"]),
+                                        ("shared order", results.tcp_orders, shared, ["tcp-1-r01", "tcp-1-r02"]),
                                         ("candidate", results.tcp_orders, unknown, ["T99"])):
             with self.subTest(name):
                 with self.assertRaises(ValueError) as caught:

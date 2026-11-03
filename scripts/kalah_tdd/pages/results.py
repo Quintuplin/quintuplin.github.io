@@ -218,8 +218,8 @@ def q20(report):
 
 
 def tcp_orders(facts):
-    """{order: its arm or None} for each tcp-1 list order. Every arm's order must be listed and every order may name
-    only list candidates."""
+    """{order: its arm or None} for each tcp-1 list order. Every arm's order must be listed and run by no other arm,
+    and every order may name only list candidates."""
     tcp = facts["runs"]["tcp-1"]["tcp"]
     known = {c["id"] for c in tcp["list"]["candidates"]}
     for name, order in tcp["orders"].items():
@@ -229,6 +229,8 @@ def tcp_orders(facts):
     for arm, m in facts["runs"]["tcp-1"]["methods"].items():
         if m["order"] not in tcp["orders"]:
             raise ValueError(f"tcp-1 arm {arm} runs order {m['order']}, which the list does not give")
+        if other := arms.get(m["order"]):
+            raise ValueError(f"tcp-1 arms {other} and {arm} both run order {m['order']}")
         arms[m["order"]] = arm
     return {name: arms.get(name) for name in tcp["orders"]}
 
