@@ -138,7 +138,7 @@ class MetricDefs(unittest.TestCase):
         found = " ".join(errors({"results/survey": [("Figure 1. PMD violations against weighted tokens", "Figure 1. Seeds sown")]}))
         self.assertRegex(found, "results/survey figure title 'Figure 1. Seeds sown' has no dfn")
         # The id names a dfn too, so "Weighted tokens" needs id weighted-tokens.
-        found = " ".join(errors({"methodology/measures": [('id="weighted-tokens"', 'id="tokens"')]}))
+        found = " ".join(errors({"methodology/measures": [('id="weighted-tokens"', 'id="wt"')]}))
         self.assertRegex(found, "table header 'Weighted tokens' has no dfn")
 
     def test_stub_measures_defines_nothing(self):
