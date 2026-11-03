@@ -367,6 +367,18 @@ class Refusals(unittest.TestCase):
             f["runs"]["full-1"]["caps"]["starts"] = 5
         self.refuses("starts", lambda h, s: h.roles(s), doctor)
 
+    def test_separate_agent_stages_conflict(self):
+        def doctor(f):
+            next(st for st in f["stages"]["held-out"]["stages"] if st["id"] == "s2")["when"] = "hidden_failure"
+        self.refuses("separate agent stage", lambda h, s: h.roles(s), doctor)
+
+    def test_missing_rater_count(self):
+        report = mod("kalah_tdd.snapshot").REPORT
+        text = snap().files[report]
+        self.assertIn("blind raters scored each final", text)
+        files = {**snap().files, report: text.replace("blind raters scored each final", "raters scored")}
+        self.refuses("blind raters scored each final", lambda h, s: h.raters(s), files=files)
+
 
 class AgentRoles(unittest.TestCase):
     NS = "{http://www.w3.org/2000/svg}"
