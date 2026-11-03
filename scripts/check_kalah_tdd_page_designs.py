@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """Check the Kalah TDD design pages (#87): the 12 designs and the A02 reference, built from the showcase view, the
-report card and the method page, with class diagrams as numbered figures.
+report card and the method page, with the stage flow (F5) and class diagrams as numbered figures.
 
 Usage: check_kalah_tdd_page_designs.py
 """
 import functools
 import importlib
 import importlib.util
+import itertools
 import re
 import sys
 import unittest
+import xml.etree.ElementTree as ET
 from html import unescape
 from pathlib import Path
 
@@ -31,11 +33,15 @@ def kalah(name):
 
 
 @functools.cache
-def study():
-    spec = importlib.util.spec_from_file_location("check_kalah_tdd_study", SCRIPTS / "check_kalah_tdd_study.py")
+def check(name):
+    spec = importlib.util.spec_from_file_location(name, SCRIPTS / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def study():
+    return check("check_kalah_tdd_study")
 
 
 @functools.cache
@@ -240,7 +246,9 @@ class Diagrams(unittest.TestCase):
             framed += len(figures)
             ids = {n.attrs.get("id") for n in tree(slug).iter()}
             with self.subTest(slug):
-                self.assertEqual([f.attrs["id"] for f, _ in figures], [f"fig-{part}-{k}" for k in range(1, len(figures) + 1)])
+                # On a design page Figure P.1 is the stage flow, so class diagrams start at P.2.
+                first = 1 if slug == A02 else 2
+                self.assertEqual([f.attrs["id"] for f, _ in figures], [f"fig-{part}-{k}" for k in range(first, len(figures) + first)])
                 for fig, enclosing in figures:
                     title = next(k for k in fig.elements() if level(k))
                     self.assertEqual(level(title), enclosing + 1, fig.attrs["id"])
@@ -399,6 +407,132 @@ class Reference(unittest.TestCase):
         rows = lambda label: len([r for r in regions[label].iter() if r.tag == "tr"])
         self.assertEqual(rows("Reference"), 32)
         self.assertEqual(rows(unescape(re.search(r"<h3[^>]*>(.*?)</h3>", report_section(page.anchors[0])).group(1))), 12)
+
+
+def stage_facts(slug):
+    return snap().facts["stages"][slug]["stages"]
+
+
+def code_blocks(slug):
+    """The method page steps per stage as (header, [step line as the merged steps show it]), read from the source."""
+    blocks = []
+    for line in code_lines(slug):
+        m = re.fullmatch(r'  (?:(\d+)\. |with )"(.*)"', line)
+        if m:
+            blocks[-1][1].append(f"{m.group(1)}. {m.group(2)}" if m.group(1) else f"with {m.group(2)}")
+        else:
+            blocks.append((line, []))
+    return blocks
+
+
+def merged(slug):
+    pre = re.search(r'<pre class="steps">.*?</pre>', view(slug), re.S).group(0)
+    code = re.search(r"<pre><code>.*?</code></pre>", method(slug), re.S).group(0)
+    return kalah("pages.designs").merge_steps(slug, pre, code)
+
+
+def f5(slug):
+    part = kalah("pagemap").number(f"designs/{slug}")
+    return next((n for n in main(f"designs/{slug}").iter() if n.attrs.get("id") == f"fig-{part}-1"), None)
+
+
+def f5_svg(slug):
+    return ET.fromstring(re.search(r'<svg xmlns="http://www.w3.org/2000/svg" class="flow".*?</svg>', html(f"designs/{slug}"), re.S).group(0))
+
+
+def cross(s, t):
+    """Whether a horizontal and a vertical segment cross inside both."""
+    if (s[0][1] == s[1][1]) == (t[0][1] == t[1][1]):
+        return False
+    (h0, h1), (v0, v1) = (s, t) if s[0][1] == s[1][1] else (t, s)
+    return min(h0[0], h1[0]) < v0[0] < max(h0[0], h1[0]) and min(v0[1], v1[1]) < h0[1] < max(v0[1], v1[1])
+
+
+class StageFlow(unittest.TestCase):
+    def test_f5_from_facts(self):
+        for slug, *_ in designs():
+            with self.subTest(slug):
+                fig, stages = f5(slug), stage_facts(slug)
+                self.assertIsNotNone(fig, "no Figure P.1")
+                self.assertEqual(fig.closest("section").attrs.get("id"), "steps")
+                svg = next(n for n in fig.iter() if n.tag == "svg")
+                self.assertIn("flow", svg.classes())
+                self.assertEqual([k.tag for k in svg.elements()][:2], ["title", "desc"])
+                nodes = [r for r in svg.iter() if r.tag == "rect" and "node" in r.classes()]
+                items = [li for li in fig.iter() if li.tag == "li"]
+                self.assertEqual((len(nodes), len(items)), (len(stages), len(stages)))
+                ids = [n.attrs["id"] for n in svg.iter() if n.attrs.get("id")]
+                self.assertTrue(ids and all(i.startswith("f5-") for i in ids), ids)
+                data = next(a for a in fig.iter() if a.tag == "a" and text(a) == "Data")
+                self.assertEqual(data.attrs["href"], "#stages")
+                self.assertEqual([n.tag for n in main(f"designs/{slug}").iter() if n.attrs.get("id") == "stages"], ["h3"])
+        self.assertNotIn('class="flow"', html(A02))
+
+    def test_f5_refuses_mismatch(self):
+        sf, facts, pre = kalah("figures.stage_flow"), snap().facts["stages"], merged("tpp")
+        self.assertEqual([s["id"] for s, _, _ in sf.stages("tpp", facts, pre)], ["s1", "L2-7"])
+
+        def changed(**kw):
+            stages = [dict(s) for s in facts["tpp"]["stages"]]
+            stages[1].update(kw)
+            return {**facts, "tpp": {**facts["tpp"], "stages": stages}}
+        last = pre.rpartition('<span class="st">')[0] + "</pre>"
+        cases = {"wrong kind": (changed(kind="S"), pre), "unknown kind": (changed(kind="Q"), pre),
+                 "step missing from the steps": (changed(steps=[2, 3, 4, 5, 6, 7, 9]), pre),
+                 "step dropped from the steps": (facts, last), "unknown when": (changed(when="timeout"), pre),
+                 "line of unknown form": (facts, pre.replace('<span class="st">2. ', '<span class="st">', 1))}
+        for name, (bad, steps) in cases.items():
+            with self.subTest(name), self.assertRaisesRegex(ValueError, r"tpp\b.*L2-7"):
+                sf.stages("tpp", bad, steps)
+        one = {**facts, "tpp": {**facts["tpp"], "stages": facts["tpp"]["stages"][:1]}}
+        with self.assertRaisesRegex(ValueError, r"tpp\b.*stage"):
+            sf.stages("tpp", one, pre)
+
+    def test_f5_routes_and_limits(self):
+        sf, flow, fl = kalah("figures.stage_flow"), kalah("figures.flow"), check("check_kalah_tdd_flow")
+        for slug, *_ in designs():
+            with self.subTest(slug):
+                nodes, edges, loops = sf.chart(sf.stages(slug, snap().facts["stages"], merged(slug)))
+                self.assertTrue(all(n.col is not None for n in nodes))
+                row = {id: col // flow.COLS for id, (_, col) in flow.cells(nodes)[1].items()}
+                self.assertTrue(all(row[lp.node] == row[lp.back_to or lp.node] for lp in loops))
+                breaks = [row[e.src] for e in edges if row[e.src] != row[e.dst]]
+                self.assertEqual(len(breaks), len(set(breaks)), "two wrap edges share one gap line")
+                self.assertTrue(all(len(e.label) <= 10 for e in edges), edges)
+                throughout = {n.id for n in nodes if n.lane == "Throughout"}
+                self.assertEqual([e for e in edges if {e.src, e.dst} & throughout], [])
+                self.assertEqual(len(loops), len([s for s in stage_facts(slug) if s["kind"] == "L"]))
+                root = f5_svg(slug)
+                boxes = fl.node_boxes(root)
+                segs = [s for p in root.iter(fl.NS + "path") if p.get("class") in ("edge", "loop")
+                        for s in itertools.pairwise(fl.points(p.get("d")))]
+                self.assertEqual([s for s in segs for box in boxes if fl.crosses(*s, box)], [])
+                labels = fl.label_boxes(root)
+                for s, box in labels:
+                    self.assertEqual([n for n in boxes if fl.overlap(box, n)], [], s)
+                    self.assertEqual([g for g in segs if fl.crosses(*g, box)], [], s)
+                self.assertEqual([(s, t) for i, (s, a) in enumerate(labels) for t, b in labels[i + 1:] if fl.overlap(a, b)], [])
+                self.assertEqual([(s, t) for i, s in enumerate(segs) for t in segs[i + 1:] if cross(s, t)], [])
+
+    def test_stage_table_verbatim(self):
+        for slug, *_ in designs():
+            with self.subTest(slug):
+                kids = list(main(f"designs/{slug}").iter())
+                at = next(i for i, n in enumerate(kids) if n.attrs.get("id") == "stages")
+                table = next(n for n in kids[at:] if n.tag == "table")
+                self.assertTrue(table.parent.attrs.get("aria-label", "").startswith("Stages"))
+                self.assertEqual([text(th) for th in table.iter() if th.attrs.get("scope") == "col"],
+                                 ["Stage", "Runs as", "Steps", "Details", "Note"])
+                rows, stages, blocks = [r for r in table.iter() if r.tag == "tr"][1:], stage_facts(slug), code_blocks(slug)
+                self.assertEqual((len(rows), len(blocks)), (len(stages), len(stages)))
+                for row, stage, (header, steps) in zip(rows, stages, blocks):
+                    cells = [" ".join(c.text(" ").split()) for c in row.elements()]
+                    self.assertEqual(cells[1], header)
+                    self.assertEqual(cells[2], " ".join(" ".join(steps).split()))
+                    self.assertEqual(cells[4], " ".join(stage["note"].split()) if "note" in stage else "none")
+                    for key in ("unit", "returns", "when", "commit_cap"):
+                        if key in stage:
+                            self.assertIn(f"{key.replace('_', ' ')} {stage[key]}", cells[3])
 
 
 if __name__ == "__main__":
