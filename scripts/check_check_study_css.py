@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the study stylesheet touch target check (#60) on edited copies of study.css.
+"""Check the study stylesheet touch target (#60) and figure pull (#69) checks on edited copies of study.css.
 
 Usage: check_check_study_css.py
 """
@@ -112,6 +112,38 @@ class KeptRules(unittest.TestCase):
     def test_caption_rule_must_be_in_the_stacked_query(self):
         errors = kept(lambda t: t.replace(".cols caption{display:block}", "") + ".cols caption{display:block}")
         self.assertRegex(" ".join(errors), r"\.cols caption \{display:block\} under @media \(max-width:640px\)")
+
+
+FIX = ".diagram .qlegend{display:grid;grid-template-columns:max-content max-content;gap:8px 6px}.diagram .qlegend .cnt{margin-left:0}"
+
+
+def pull(edit=lambda text: text):
+    """diagram_pull on the committed study.css after edit."""
+    c = css()
+    text = re.sub(r"/\*.*?\*/", "", (SCRIPTS.parent / c.CSS).read_text(encoding="utf-8"), flags=re.S)
+    return c.diagram_pull(list(c.rules(edit(text))))
+
+
+class DiagramPull(unittest.TestCase):
+    def test_committed_passes(self):
+        self.assertEqual(pull(), [])
+
+    def test_count_without_diagram_reset_fails(self):
+        # The legend count pulls 8px left, which a figure's scroll region clips at a line start.
+        errors = pull(lambda t: t.replace(FIX, ""))
+        self.assertRegex(" ".join(errors), r"\.cnt sets margin-left:-8px and no \.diagram rule resets it")
+
+    def test_negative_reset_or_weaker_earlier_reset_fails(self):
+        for probe in (lambda t: t.replace(FIX, "") + ".diagram .cnt{margin-inline-start:-1px}",
+                      lambda t: ".diagram .cnt{margin-left:0}" + t.replace(FIX, "") + ".a .cnt{margin-left:-2px}"):
+            with self.subTest():
+                self.assertRegex(" ".join(pull(probe)), r"\.cnt sets margin")
+
+    def test_reset_and_sidebar_pass(self):
+        # The sidebar never sits inside a figure, so its current-page pull needs no reset.
+        for probe in (".x{margin-inline-start:-4px}.diagram .x{margin-inline-start:0}", ".toc li a{margin-left:-2px}"):
+            with self.subTest(probe):
+                self.assertEqual(pull(lambda t: t + probe), [])
 
 
 if __name__ == "__main__":

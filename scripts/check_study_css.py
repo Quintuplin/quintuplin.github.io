@@ -179,12 +179,35 @@ def kept_rules(parsed):
             if not any(same_media(m, media) and sel in sels and decls.get(prop) == value for m, sels, decls in parsed)]
 
 
+# .diagram scrolls sideways, so content pulled left of its edge is clipped for good (#69). The sidebar never sits in a figure.
+PULL = ("margin-left", "margin-inline-start")
+
+
+def diagram_pull(parsed):
+    """A negative left margin on anything a figure can hold needs a later or stronger .diagram rule that clears it."""
+    negative = lambda v: re.match(r"\s*(-|calc\(\s*-)", v) is not None
+    errors = []
+    for i, (media, sels, decls) in enumerate(parsed):
+        for prop in (p for p in PULL if negative(decls.get(p, ""))):
+            for s in sels:
+                if re.search(r"[.#]toc(?![\w-])", s) or s.startswith(".diagram"):
+                    continue
+                tail = s.split()[-1]
+                if not any(m is None and r.startswith(".diagram ") and r.split()[-1] == tail
+                           and any(p in d and not negative(d[p]) for p in PULL)
+                           and (specificity(r) > specificity(s) or (specificity(r) == specificity(s) and j > i))
+                           for j, (m, rs, d) in enumerate(parsed) for r in rs):
+                    errors.append(f"{CSS}: {s} sets {prop}:{decls[prop]} and no .diagram rule resets it, "
+                                  f"so it is clipped at the edge of a figure's scroll region")
+    return errors
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
     text = re.sub(r"/\*.*?\*/", "", (root / CSS).read_text(encoding="utf-8"), flags=re.S)
     parsed = list(rules(text))
     errors = summary_marker(parsed) + stacked_reset(parsed) + nested_card_reset(parsed) + forced_flow(parsed) + \
-        touch_targets(parsed) + kept_rules(parsed)
+        touch_targets(parsed) + kept_rules(parsed) + diagram_pull(parsed)
     for e in errors:
         print("FAIL:", e, file=sys.stderr)
     if not errors:
