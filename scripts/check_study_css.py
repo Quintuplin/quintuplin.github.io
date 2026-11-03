@@ -121,6 +121,12 @@ def same_media(a, b):
     return re.sub(r"\s+", "", a or "") == re.sub(r"\s+", "", b or "")
 
 
+def coarse(m):
+    """Whether every query in media m is one of the COARSE queries, so it only applies where touch rows are allowed."""
+    parts = lambda q: set(re.sub(r"\s+", "", q or "").removeprefix("@media").split(","))
+    return m is not None and parts(m) <= parts(COARSE)
+
+
 def reaches(s, sel):
     """Whether selector s styles the same element as sel inside the same container, such as .toc ol ol a for .toc a."""
     head, tail = sel.split()[0], sel.split()[-1]
@@ -142,10 +148,10 @@ def touch_targets(parsed):
             continue
         last, spec = max(meets)
         # Any media counts for lowering, as a lowering rule in another query still wins where both apply.
-        # A raise counts only in the same media, since the coarse query raises the compact rows on purpose.
+        # A raise counts in any media but the coarse query, which raises the compact rows on purpose.
         for i, (m, sels, decls) in enumerate(parsed):
             value = px(decls.get("min-height", f"{need}px"))
-            verb = "lowers" if value < need else "raises" if cap and value > cap and same_media(m, media) else None
+            verb = "lowers" if value < need else "raises" if cap and value > cap and not coarse(m) else None
             errors += [f"{CSS}: later or more specific rule {s} {verb} {sel} min-height to {decls['min-height']}, "
                        f"outside {need}px{f' to {cap}px' if cap else ' or more'}"
                        for s in sels if verb and reaches(s, sel)

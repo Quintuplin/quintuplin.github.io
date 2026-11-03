@@ -42,6 +42,12 @@ class TouchTargets(unittest.TestCase):
     def test_later_base_raise_fails(self):
         self.assertRegex(" ".join(touch(lambda t: t + ".toc a{min-height:44px}")), r"rule \.toc a raises \.toc a")
 
+    def test_desktop_query_raise_fails(self):
+        # Only the coarse query may raise the compact row, so a desktop or fine pointer query fails.
+        for probe in ("@media (min-width:900px){.toc a{min-height:44px}}", "@media (pointer:fine){.toc ol a{min-height:44px}}"):
+            with self.subTest(probe):
+                self.assertRegex(" ".join(touch(lambda t: t + probe)), r"rule \.toc (ol )?a raises \.toc a")
+
     def test_later_override_fails(self):
         for probe in ("@media (max-width:899.98px){.toc a{min-height:20px}}", ".toc ol ol a{min-height:20px}",
                       ".pager a:hover{min-height:auto}"):
