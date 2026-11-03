@@ -242,7 +242,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
         <label class="toggle">Cluster size c <input type="number" id="ex-mix" min="2" max="50" step="1" class="mono"></label>
         <span class="toggle">Near-pair mass m <output id="ex-m-out"></output></span>
         <button class="btn primary" id="ex-retune" type="button" title="Load the tree the fitted λ rule picks for any N, c and t">Re-tune</button>
-        <button class="btn" id="ex-f1" type="button" title="Load the exact best tree F1 picks on the pair histogram of a static study dataset">F1 exact best for static data</button>
+        <button class="btn" id="ex-f1" type="button" title="Load the exact best tree F1 picks on the pair histogram of a study dataset">F1 exact best</button>
         <output id="ex-tuned" class="ex-tuned"></output>
       </div>
     </div>
@@ -351,8 +351,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       <dt>Dataset size N</dt><dd>The number of documents in the dataset to tune for. The list runs from 1000 to 100000 in steps of 1, 2, 3 and 5 per power of ten. It holds every N the study ran up to <span id="ex-n-ran"></span>. The study corpus has 1000.</dd>
       <dt>Cluster size c</dt><dd>Documents per cluster of near duplicates in the generated dataset to tune for. The box takes 2 to 50. The study corpus has 19.</dd>
       <dt>Near-pair mass m</dt><dd>Near pairs per document in that dataset. Members of a cluster pair with each other. 5% of the documents are noise. Up to 1000 of them share one filler pool and the rest share pools of 50. Documents of one pool also count as near pairs. The λ fit reads it.</dd>
-      <dt>Tidy rule F1 (F1 exact best for static data)</dt><dd>F1 exact best for static data loads the tree the tidy rule F1 picks for N, c and t. Among the matched trees at depths 2 to 10 within 10000 rows it takes the one with the least expected false positives plus false negatives on the exact pair histogram of the dataset. That makes it the exact best tree. It has no fitted constant. The pair histogram holds the similarity of every pair. Computing it is the all-pairs similarity join that LSH exists to avoid. So F1 suits only a static dataset where that pass is already paid. The page holds the pair histograms of <span id="ex-f1-sets"></span>. F1 runs for those alone and stays off with its reason for any other N or c. It fetches them on first use and computes the expected errors it reports. The button stays off after a tune until N, c, t or the tree changes.</dd>
-      <dt>Fitted λ rule (Re-tune)</dt><dd>Re-tune loads the tree the fitted λ rule picks for any N, c and t. The study names it KAlambda. It is the preferred rule for any dataset that is not static. Among the same matched trees it takes the one with the least λ A_lo + A_hi, which needs only N, c and t. The page takes m from the generator. The study fitted it on generated datasets with N from 3000 to 100000 and c from 10 to 40. Outside those ranges it extrapolates. On real data m must be estimated. No run tests an estimated m, drift or an uneven similarity spread. <span id="ex-fit-facts"></span> The button stays off after a fit until N, c, t or the tree changes.</dd>
+      <dt>Tidy rule F1 (F1 exact best)</dt><dd>F1 exact best loads the tree the tidy rule F1 picks for N, c and t. Among the matched trees at depths 2 to 10 within 10000 rows it takes the one with the least expected false positives plus false negatives on the exact pair histogram of the dataset. That makes it the exact best tree. It has no fitted constant. The pair histogram holds the similarity of every pair. Computing it is the all-pairs similarity join that LSH exists to avoid. The study also tested drift. F1 tuned on an older dataset stays near its best after the dataset grows or its cluster mix changes. The page holds the pair histograms of <span id="ex-f1-sets"></span>. F1 runs for those alone and stays off with its reason for any other N or c. It fetches them on first use and computes the expected errors it reports. The button stays off after a tune until N, c, t or the tree changes.</dd>
+      <dt>Fitted λ rule (Re-tune)</dt><dd>Re-tune loads the tree the fitted λ rule picks for any N, c and t. The study names it KAlambda. It needs no pair histogram. Among the same matched trees it takes the one with the least λ A_lo + A_hi, which needs only N, c and t. The page takes m from the generator. The study fitted it on generated datasets with N from 3000 to 100000 and c from 10 to 40. Outside those ranges it extrapolates. On real data m must be estimated. With m counted in a sample of the documents its trees score close to those from the generator m. No run tests real data or an uneven similarity spread. <span id="ex-fit-facts"></span> The button stays off after a fit until N, c, t or the tree changes.</dd>
       <dt>Weight λ</dt><dd>λ = R<sup>γ</sup> with the fitted γ <span id="ex-fit-gamma"></span>. R = ((N − 1)/2 − m)(1 − t)/(m t) is the ratio of non-near to near pairs per document with each spread evenly over its side of t. A larger λ weighs false positives more. When m is small beside N a twofold error in m moves λ by about 2<sup>γ</sup> − 1. That is <span id="ex-fit-m2"></span>.</dd>
       <dt>A_lo and A_hi</dt><dd>The two parts of the error area E. A_lo is the FP area below t. A_hi is the FN area above t.</dd>
       <dt>Expected errors (study)</dt><dd>E[FP] + E[FN] the study computed for the λ fit's tree on its generated dataset of N documents with cluster size c. Re-tune shows it only for an N, c and t the study ran.</dd>
@@ -1316,8 +1316,8 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
     const locked = (rule) => tuneRunning() || (lastTune?.rule === rule && same(lastTune.key, tuneKey())), has = hasHistogram(state.N, state.c);
     $("ex-retune").disabled = locked("fit");
     $("ex-f1").disabled = !has || locked("f1");
-    $("ex-f1").title = has ? "Load the exact best tree F1 picks on the pair histogram of a static study dataset"
-      : `No pair histogram for N ${state.N} c ${state.c}. F1 needs the similarity of every pair of a static dataset.`;
+    $("ex-f1").title = has ? "Load the exact best tree F1 picks on the pair histogram of a study dataset"
+      : `No pair histogram for N ${state.N} c ${state.c}. F1 needs the similarity of every pair in the dataset.`;
     $("ex-tuned").textContent = lastTune?.dims && same(lastTune.dims, state.dims) ? `Tree from ${RULE_NAMES[lastTune.rule]} for ${lastTune.at}` : "";
     $("ex-flat").checked = state.flat;
     $("ex-d2").checked = state.d2;
@@ -1454,7 +1454,7 @@ details > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-
       });
   }
 
-  // ---- Re-tune: the λ fit takes any N, c and t and F1 scores the exact pairs of a static study dataset ----
+  // ---- Re-tune: the λ fit takes any N, c and t and F1 scores the exact pairs of a study dataset ----
   const RULE_NAMES = { f1: "F1", fit: "the λ fit" }, HIST_URL = "/simulations/deep-nested-lsh/histograms.json";
   const histKey = (N, c) => `${N}|${c}`;
   const hasHistogram = (N, c) => DATA.tidy.datasets.some(([n, m]) => n === N && m === c);
