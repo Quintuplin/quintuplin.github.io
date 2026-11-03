@@ -17,6 +17,8 @@ LANE = {"F": "Throughout", "H": "Harness"}
 SPAN = re.compile(r'<span class="(hd|st)">(.*?)</span>', re.S)
 STEP = re.compile(r"(\d+)\. |with (.+?) step (\d+)\. ")
 COLUMNS = ("Stage", "Runs as", "Steps", "Details", "Note")
+# study.css breaks td and th anywhere, which beside the long Note split the short columns mid-word.
+KEEP = ' style="overflow-wrap:normal"'
 
 
 def stages(slug, facts, pre):
@@ -134,9 +136,9 @@ def figure(n, slug, facts, pre):
                f"Details and notes are in the stage table. Tag: {parts.tag('recomputed')}.")
     fig = parts.figure(n, "fig-" + n.replace(".", "-"), title, sized(flow.svg("f5", title, desc, nodes, edges, loops)), caption,
                        "#stages", flow.text_version(title, nodes, edges, loops))
-    rows = "".join(f'<tr><th scope="row">{escape(label(s))}</th><td>{escape(header)}</td><td>{"<br>".join(lines)}</td>'
-                   f'<td>{escape(details(s))}</td><td>{escape(s.get("note", "none"))}</td></tr>' for s, header, lines in found)
-    head = "".join(f'<th scope="col">{c}</th>' for c in COLUMNS)
+    rows = "".join(f'<tr><th scope="row"{KEEP}>{escape(label(s))}</th><td{KEEP}>{escape(header)}</td><td>{"<br>".join(lines)}</td>'
+                   f'<td{KEEP}>{escape(details(s))}</td><td>{escape(s.get("note", "none"))}</td></tr>' for s, header, lines in found)
+    head = "".join(f'<th scope="col"{KEEP}>{c}</th>' for c in COLUMNS)
     return (f'{fig}\n<h3 id="stages">Stages</h3>\n<p>Each stage as the run facts list it. Runs as and Note are quoted '
             f'verbatim and Steps repeats the steps above. Tag: {parts.tag("verified")}.</p>\n'
             f"<table><thead><tr>{head}</tr></thead><tbody>{rows}</tbody></table>")

@@ -532,8 +532,12 @@ class StageFlow(unittest.TestCase):
                 self.assertTrue(table.parent.attrs.get("aria-label", "").startswith("Stages"))
                 self.assertEqual([text(th) for th in table.iter() if th.attrs.get("scope") == "col"],
                                  ["Stage", "Runs as", "Steps", "Details", "Note"])
-                rows, stages, shown = [r for r in table.iter() if r.tag == "tr"][1:], stage_facts(slug), []
+                head, *rows = [r for r in table.iter() if r.tag == "tr"]
+                stages, shown = stage_facts(slug), []
                 self.assertEqual(len(rows), len(stages))
+                # study.css breaks td and th anywhere, so beside the long Note the short columns split mid-word.
+                keep = [c.attrs.get("style") == "overflow-wrap:normal" for r in (head, *rows) for c in r.elements()]
+                self.assertEqual(keep, [True] * 5 + [True, True, False, True, False] * len(rows))
                 for row, stage in zip(rows, stages):
                     cells = [" ".join(c.text(" ").split()) for c in row.elements()]
                     # Each step line in the Steps cell, with the stage header it runs under.
