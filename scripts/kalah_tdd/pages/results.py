@@ -98,15 +98,15 @@ def own(html, id):
     return sec[:nested.start()] if nested else sec
 
 
-def section(snap, idx, slug, id, numbers, extra=""):
+def section(snap, idx, slug, id, numbers, extra=lambda numbers: ""):
     """The report section id on page slug: its heading as h2, its links pointed at the study pages, figures numbered,
-    then extra HTML."""
+    then the HTML of extra(numbers), built after the section's figures so its own figures number after theirs."""
     html = links.rewrite(own(snap.files[snapshot.REPORT], id), snapshot.REPORT, slug, idx)
     title = TITLE.match(html).group(3)
     framed = {"p": str, "entries": str, "figure": lambda b: parts.source_figure(next(numbers), b),
               "tables": lambda b: parts.table(b.removeprefix('<div class="shaped">').removesuffix("</div>"), title)}
     body = "".join(framed[k](b) for k, b in split(id, html))
-    return f'<section aria-labelledby="{id}"><h2 id="{id}">{title}</h2>{body}{extra}</section>'
+    return f'<section aria-labelledby="{id}"><h2 id="{id}">{title}</h2>{body}{extra(numbers)}</section>'
 
 
 def lead(snap, idx):
@@ -318,8 +318,10 @@ def tcp_design(snap, n):
 def body(page, snap, idx):
     numbers, report = parts.numbers(page.slug), snap.files[snapshot.REPORT]
     if page.slug == TEST_ORDER:
+        if len(page.anchors) != 1:
+            raise ValueError(f"{page.slug} lists report sections {list(page.anchors)}; the Q20 figures follow exactly one")
         sec = section(snap, idx, page.slug, page.anchors[0], numbers,
-                      tcp_results(report, snap.facts, page.slug, idx, next(numbers)))
+                      lambda n: tcp_results(report, snap.facts, page.slug, idx, next(n)))
         return [sec, tcp_design(snap, next(numbers))]
     out = [lead(snap, idx), contrast_holm(report, next(numbers))] if page.slug == CONTRASTS else []
     return out + [section(snap, idx, page.slug, id, numbers) for id in page.anchors]

@@ -467,6 +467,13 @@ class Results(unittest.TestCase):
             results.tcp_results(report(), q20, "results/test-order", kalah("links").index(snap()), "9.1")
         self.assertIn("Q20 orders", str(caught.exception))
 
+    def test_test_order_one_section(self):
+        results, two = kalah("pages.results"), page("results/test-order")
+        two = two._replace(anchors=(*two.anchors, *page("results/survey").anchors[:1]))
+        with self.assertRaises(ValueError) as caught:
+            results.body(two, snap(), kalah("links").index(snap()))
+        self.assertIn("results/test-order", str(caught.exception))
+
     def test_q20_values(self):
         results = kalah("pages.results")
         want = q20_values()
