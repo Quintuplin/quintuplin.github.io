@@ -145,7 +145,7 @@ def tagged_texts(root):
     """{(tag, squashed text)} for every element under root."""
     text = {}
     check().squashed(root, text)
-    return {(n.tag, text[id(n)]) for n in root.iter()}
+    return {(n.tag, text.get(id(n))) for n in root.iter()}
 
 
 def lead():
@@ -167,7 +167,7 @@ def f4_svg():
 
 def with_report(s, old, new):
     files = dict(s.files)
-    files[kalah("snapshot").REPORT] = files[kalah("snapshot").REPORT].replace(old, new, 1)
+    files[kalah("snapshot").REPORT] = files[kalah("snapshot").REPORT].replace(old, new)
     return s._replace(files=files)
 
 
@@ -200,7 +200,7 @@ class Measures(unittest.TestCase):
         root = check().Tree(html()).root
         text = {}
         check().squashed(root, text)
-        node = next(n for n in root.iter() if text[id(n)] == key and n.parent and text[id(n.parent)] != key)
+        node = next(n for n in root.iter() if text.get(id(n)) == key and text.get(id(n.parent)) != key)
         node.parent.kids.remove(node)
         dropped = check().Page(False, check().texts(list(root.iter()), root), {}, Counter(), root)
         self.assertIsNotNone(check().lacks((("row", key, rows[key]), 1), dropped))
@@ -234,7 +234,7 @@ class Measures(unittest.TestCase):
             sub = first_p(card)
             with self.subTest(check().spaced(sub)):
                 self.assertIn(check().squash(sub.text()), lines)
-                kind = re.search(r"Tag: (\w+)\.", check().spaced(sub)).group(1)
+                kind = re.search(r"Tag:(\w+)\.", check().squash(sub.text())).group(1)
                 pills = [check().spaced(n) for n in sub.iter() if "tag" in n.classes()]
                 self.assertEqual(pills, [kind])
                 if "Source:" not in check().spaced(sub):
@@ -242,9 +242,9 @@ class Measures(unittest.TestCase):
         rows = {name_of(e): e for e in entries(kalah("snapshot").section(report(), "columns"))}
         for tr in (n for n in index_section().iter() if n.tag == "tr" and n.closest("tbody")):
             cells = [check().spaced(c) for c in tr.elements()]
-            sub = check().spaced(first_p(rows[cells[0]]))
+            sub = check().squash(first_p(rows[cells[0]]).text())
             with self.subTest(cells[0]):
-                self.assertIn(f"Source: {cells[1]}. Tag: {cells[2]}.", sub)
+                self.assertIn(check().squash(f"Source: {cells[1]}. Tag: {cells[2]}."), sub)
 
     def test_module_named_or_absent(self):
         rows = glossary()
