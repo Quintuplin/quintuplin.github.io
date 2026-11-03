@@ -103,16 +103,23 @@ def shared(runs):
             f"and {starts} starts.")
 
 
+def listed(items):
+    """One or more items as "a", "a and b" or "a, b and c"."""
+    return " and ".join(filter(None, (", ".join(items[:-1]), items[-1])))
+
+
 def builds(runs):
     """What a build is, the clones beyond builds per run and the build and rebuild totals."""
     every = design.runs({"runs": runs})
     clones = [f"{name} makes {len(run['methods'])} builds in {len(run['methods']) + extra} clones"
               for name, run in every.items() if (extra := design.start_clones(run))]
+    if not clones:
+        raise ValueError("no multi-start run, so the start clones sentence has nothing to state")
     rebuilds = sum(len(run["methods"]) for name, run in every.items() if name.endswith(design.REBUILD))
     total = sum(len(run["methods"]) for run in every.values()) - rebuilds
     return ("<p>A build is one final clone of a method or arm. Start clones and rebuilds are not builds. Multi-start "
-            "TDD runs each start in a clone of its own, up to the starts cap, so " + ", ".join(clones[:-1])
-            + f" and {clones[-1]}. The runs make {total} builds, the marks of Figure 2.2, and {rebuilds} rebuilds, "
+            "TDD runs each start in a clone of its own, up to the starts cap, so " + listed(clones)
+            + f". The runs make {total} builds, the marks of Figure 2.2, and {rebuilds} rebuilds, "
             f"the ring {parts.tag('recomputed')}.</p>")
 
 

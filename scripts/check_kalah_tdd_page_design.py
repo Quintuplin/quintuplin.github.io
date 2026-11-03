@@ -399,6 +399,23 @@ class Refusals(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "no design"):
             design.arms_grid(f)
 
+    def test_builds_sentence_per_multi_start_count(self):
+        """No multi-start run is refused. One or many read as one sentence with no empty list item."""
+        def starts_only_in(keep):
+            f = self.facts()
+            for name, run in f["runs"].items():
+                for m in run["methods"].values():
+                    m["stages"] = [s for s in m["stages"] if s["kind"] != "starts" or name in keep]
+            return experimental_design.builds(f["runs"])
+        with self.assertRaisesRegex(ValueError, "no multi-start run"):
+            starts_only_in(())
+        one = starts_only_in(("full-1",))
+        self.assertIn("cap, so full-1 makes 11 builds in 14 clones. The runs", one)
+        many = starts_only_in(("pilot-1", "full-1"))
+        self.assertIn("cap, so pilot-1 makes 3 builds in 6 clones and full-1 makes 11 builds in 14 clones. The", many)
+        for text in (one, many):
+            self.assertNotRegex(text, r"so ,| and  | and \.")
+
     def test_spec_refuses_unknown_section(self):
         with self.assertRaisesRegex(ValueError, "has no section"):
             experimental_design.spec(snap(), {"spec-nope": "x"})
