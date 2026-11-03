@@ -73,6 +73,13 @@ addEventListener("load", () => {
       check("nested-border", [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth].every(b => b === "0px"),
         n.className);
     }
+    // Study dot charts hold their drawn width, so chart text stays at its 12px size and the region scrolls instead.
+    for (const svg of d.querySelectorAll(".diagram svg.plot")) {
+      counts.charts = (counts.charts || 0) + 1;
+      const scale = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+      for (const t of svg.querySelectorAll("text"))
+        check("chart-text", parseFloat(cs(t).fontSize) * scale >= 11.5, svg.closest("figure").id + " " + t.textContent.slice(0, 30));
+    }
     const root = d.documentElement;
     check("sideways-scroll", root.scrollWidth <= root.clientWidth, root.scrollWidth + " > " + root.clientWidth);
     out[f.dataset.name] = {counts, fails};
@@ -196,6 +203,12 @@ class ResultsCss(unittest.TestCase):
         for name in real() + ["fixture 375"]:
             with self.subTest(name):
                 self.assertEqual(fails(name, "sideways-scroll"), [])
+
+    def test_chart_text_full_size(self):
+        for name in real():
+            with self.subTest(name):
+                self.assertEqual(fails(name, "chart-text"), [])
+        self.assertEqual([probe()[f"{s} 375"]["counts"].get("charts", 0) for s in SLUGS], [0, 1, 0, 1])
 
     def test_probe_catches_regression(self):
         failed = {n: {f[0] for f in fails(n)} for n in ("mutated contrasts 375", "mutated fixture 375")}
