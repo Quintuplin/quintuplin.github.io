@@ -21,7 +21,7 @@ class Snapshot(NamedTuple):
     run: str
     files: dict
     facts: dict
-    # Short sha256 of the methods doc at the snapshot commit.
+    # Short sha256 of the methods doc the snapshot was fetched with.
     doc: str
 
 
