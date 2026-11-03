@@ -277,8 +277,11 @@ class Analysis(unittest.TestCase):
             a = award(s, "Most consistent design")
             a["rule"] = a["rule"].replace(" {limit}", "")
 
+        def dropped(s):
+            s.facts["analysis"]["awards"].remove(award(s, "Most consistent design"))
+
         for change, name in ((criterion, "fastest"), (renamed, "Fewer errors"), (second, "Cheapest"),
-                             (absent, "Most consistent design")):
+                             (absent, "Most consistent design"), (dropped, "Most consistent design")):
             refuses(self, change, name)
 
     def test_code_tables_verbatim(self):

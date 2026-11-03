@@ -113,6 +113,8 @@ def rules(facts):
     for name in {c["name"] for c in a["criteria"]}:
         if COUNTED[name] not in titles:
             raise ValueError(f"awards.py criterion {name!r} scores {COUNTED[name]!r}, which the award list lacks")
+    if missing := [t for t in (OVERALL, *BADGES) if t not in titles]:
+        raise ValueError(f"the award list lacks {', '.join(map(repr, missing))}, which this page places")
     out = []
     for w in a["awards"]:
         if (LIMIT in w["rule"]) != (w["title"] == LIMITED):
