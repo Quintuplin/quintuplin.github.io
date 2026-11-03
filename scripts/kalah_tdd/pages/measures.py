@@ -5,7 +5,7 @@ import re
 from html import escape, unescape
 from typing import NamedTuple
 
-from .. import parts, snapshot
+from .. import pagemap, parts, snapshot
 from ..figures import flow
 
 ENTRY = re.compile(r'<div class="entry">(<p class="sub"><b>(.*?)</b>\. (?:Source: (.*?)\. )?Tag: (\w+)\.</p>.*?)</div>', re.S)
@@ -63,6 +63,114 @@ COMPOSITES = {"s3": ("function", "error_count", {"t2": ("hidden failures", "unse
               "r3": ("glossary", "CQP and CQP accepted", {"r2": ("rating medians",)})}
 FILE = re.compile(r"[\w-]+\.(?:tsv|json|txt|csv|calls)\b")
 KINDS = ("input", "cache creation", "cache read", "output")  # the token kinds weight_text weighs
+# The other names results and data pages give a metric card, as labels or as a figure title's words.
+ALIASES = {"Classes": ("Classes in src/", "Median classes"), "Static analysis violations": ("PMD violations",),
+           "Mutation score": ("Mutants killed", "Score %"), "K/N": ("Killed", "Compiled mutants"),
+           "Adjusted mutation": ("Adjusted %", "Adjusted mutation score", "Median adjusted mutation"),
+           "Bench median ms": ("Bench run time", "Bench run times", "Median ms"),
+           "Cost to completion": ("Weighted tokens to completion", "Median cost to completion"),
+           "M": ("M, weighted tokens per hidden test passed",), "CQP": ("Median CQP",), "Planned contrast": ("Contrast",),
+           "Consistency score C": ("Consistency score",)}
+
+
+def slug(name):
+    """The dfn id: lower case, less a "(...)" note and a trailing " /N" total."""
+    bare = re.sub(r"\s*\(.*?\)|\s*/\s*\d+$", "", name)
+    return re.sub(r"[^a-z0-9]+", "-", bare.lower()).strip("-")
+
+
+def link(name, text=None, title=None):
+    hint = f' title="{escape(title)}"' if title else ""
+    return f'<a href="#{slug(name)}"{hint}>{escape(text or name)}</a>'
+
+
+class Field(NamedTuple):
+    name: str
+    text: str  # this site's definition, HTML
+    quote: tuple = ()  # (kind, where, sentence): glossary row, report section id, function, or a list phase phrase
+    aliases: tuple = ()
+
+
+RATING = "rating-agreement-full-1"
+# Table fields: results and data page labels that name no metric, grouped as h3 sections.
+FIELDS = (
+    ("builds-and-methods", "Builds and methods", (
+        Field("Slug", "The method's short lowercase name.",
+              ("glossary", "Method and slug", "Its slug is its short lowercase name, which the Branch column shows after method/.")),
+        Field("Build", "The build a method's row stands for.", ("section", "replicate-table-rep-1",
+              "Build names the best, median and worst of each method by adjusted mutation, then lower cost to completion.")),
+        Field("Source", "The run a build comes from, and whether it is its method's representative build."),
+        Field("Replicate", "One build of a method in a replicated run. A Replicates column counts them.",
+              ("glossary", "Replicate and representative build",
+               "A replicate is one of the 5 builds of a method in run rep-1 or rep-2."), ("Replicates",)),
+        Field("Representative build", "The one build of a method that a per-method row reports.",
+              ("glossary", "Replicate and representative build", "The representative build is the middle replicate by "
+               "adjusted mutation score, then by lower cost to completion.")),
+        Field("Run ms", f"The time of each bench run of a build in milliseconds. Their median is the "
+              f"{link('Bench median ms')}."))),
+    ("contrasts-and-tests", "Contrasts and tests", (
+        Field("Outcome", f"The measure a {link('Planned contrast', 'planned contrast')} compares.",
+              ("glossary", "Planned contrast", "A pair of methods and an outcome fixed before any build of its run.")),
+        Field("n", "The count of builds or items a statistic is computed over, one count per group when it compares two."),
+        Field("U", "The Mann-Whitney U statistic of a contrast.", ("function", "mann_whitney_exact")),
+        Field("p", f"The p value of a test before Holm correction. The {link('Holm p')} column corrects it."),
+        Field("Permutation p", "The p value of a seeded permutation test.", ("function", "brown_forsythe_permutation")),
+        Field("Metric", "The measure a row's statistic is computed on."),
+        Field("Statistic", "The test statistic a row reports, named with its value, such as a Brown-Forsythe F.",
+              ("function", "brown_forsythe")),
+        Field("Value", "The number a row reports for its statistic or its cap."),
+        Field("95% interval", "A 95% interval around a row's value. A percent interval of a mutation score is a Wilson "
+              "interval.", ("function", "wilson"), ("95% interval %",)))),
+    ("ratings", "Ratings", (
+        Field("Principle", "One of the review principles each build is rated on.", ("section", RATING,
+              "Three blind raters scored each item from 1 to 5 on each cqp.html principle.")),
+        Field("Alpha", "Rater agreement on a principle. A Finals or All prefix names the set of rated items it covers.",
+              ("section", RATING, "Alpha is Krippendorff's ordinal alpha over the three rater slots, with a seeded "
+               "bootstrap 95% interval in brackets."), ("Finals alpha [95% CI]", "All alpha [95% CI]")),
+        Field("Finals q", "The bootstrap shares that show how sure a principle's status is.",
+              ("section", RATING, "q is the share of bootstrap alphas below 0.8 and below 0.7."), ("Finals q 0.8, 0.7",)),
+        Field("Status", "Whether a principle's ratings are accepted, tentative or unchecked.", ("section", RATING,
+              "The finals alpha sets each status: accepted at 0.8 or more, tentative at 0.7 or more and unchecked below.")),
+        Field("LOC and PMD rho", "How closely a principle's ratings follow code size and PMD violations.",
+              ("section", RATING, "LOC and PMD rho are Spearman correlations of the finals medians with lines of code and "
+               "with distinct PMD violations, with Holm-adjusted q."), ("LOC rho (q)", "PMD rho (q)")),
+        Field("Round", "One rating round of the blind raters, such as round-a."),
+        Field("Role", "What a rating round was for, such as a calibration that passed or failed.",
+              ("section", RATING, "A calibration round's role comes from its committed verdict.json.")),
+        Field("Agent time", f"The time the agents of a round ran, beside its {link('Wall time')}. The snapshot report "
+              "states no definition of it."))),
+    ("run-records", "Run records", (
+        Field("Label", "The harness label of an agent call, such as review:r18."),
+        Field("Cap", "The harness limit a labelled call reached, such as cycles."),
+        Field("Agent id", "The id of an agent transcript that the cost records attribute to no method."))),
+    ("test-list-and-stages", "Test list and stages", (
+        Field("Rating", "The list phase rating a reliability row checks, such as Risk.", ("section", "list-reliability",
+              "A second lister in run tcp-1-list2 rated the clauses and candidate tests of the list of run tcp-1-list blind.")),
+        Field("Run", "The snapshot run a row belongs to."),
+        Field("Setting", "A setting of run tcp-1."),
+        Field("Arm", "One arm of run tcp-1.", ("glossary", "Arm", "In tcp-1 each arm follows one order of the same test list.")),
+        Field("Order", "The order of the test list an arm follows."),
+        Field("Clause", "A numbered functional rule of the spec.", ("list", "as a clause R1 to Rn")),
+        Field("Risk", "A clause's 1 to 3 rating of the chance a first implementation gets it wrong.",
+              ("list", "chance a first implementation gets it wrong")),
+        Field("Usage", "A clause's 1 to 100 rating of how much of a game exercises it.", ("list", "Rate its usage")),
+        Field("Candidate", "A candidate test of the list.", ("list", "candidate tests")),
+        Field("Checks", "The clauses a candidate's assertions observe.", ("list", "checks lists every clause")),
+        Field("Relies", "The clauses a candidate needs and does not assert.", ("list", "relies lists clauses")),
+        Field("Estimate", "The production lines a candidate needs on the starter alone.",
+              ("list", "Estimate the production lines each candidate needs")),
+        Field("Stage", "One stage of an arm's harness flow."),
+        Field("Runs as", "How a stage runs, once throughout an arm or repeated per unit."),
+        Field("Steps", "The steps a stage takes."),
+        Field("Details", "Further detail of a stage."),
+        Field("Note", "A note on a row."),
+        Field("Hidden-pass curve area", f"The area under an arm's curve of hidden tests passed, which {link('APFD-I')} "
+              "scores."))),
+)
+# Fields whose only label is on the tcp-1 results page, which builds them from facts, and the label kind.
+LATER = ("results/test-order", {**dict.fromkeys(("Run", "Setting", "Arm", "Order", "Clause", "Risk", "Usage", "Candidate",
+                                                 "Checks", "Relies", "Estimate", "Stage", "Runs as", "Steps", "Details",
+                                                 "Note"), "Table header"), "Hidden-pass curve area": "Axis label"})
 
 
 class Row(NamedTuple):
@@ -129,17 +237,6 @@ class MetricSources:
         return m.group(0)
 
 
-def slug(name):
-    """The dfn id: lower case, less a "(...)" note and a trailing " /N" total."""
-    bare = re.sub(r"\s*\(.*?\)|\s*/\s*\d+$", "", name)
-    return re.sub(r"[^a-z0-9]+", "-", bare.lower()).strip("-")
-
-
-def link(name, text=None, title=None):
-    hint = f' title="{escape(title)}"' if title else ""
-    return f'<a href="#{slug(name)}"{hint}>{escape(text or name)}</a>'
-
-
 def sub(html):
     return f'<p class="sub">{html}</p>'
 
@@ -177,7 +274,7 @@ class MetricCards:
         """The entry HTML with its dfn and its claim tag as a pill. A term's dfn marks its words in the definition."""
         r = self.by_name[name]
         inner = r.inner.replace(f"Tag: {r.tag}.</p>", f"Tag: {parts.tag(r.tag)}.</p>", 1)
-        dfn = lambda words: f'<dfn id="{slug(name)}">{words}</dfn>'
+        dfn = lambda words: f'<dfn id="{slug(name)}"{alias_attr(ALIASES.get(name, ()))}>{words}</dfn>'
         if name not in TERMS or TERMS[name][1] == r.name:
             return inner.replace(f"<b>{r.head}</b>", f"<b>{dfn(r.head)}</b>", 1)
         words = escape(TERMS[name][1], quote=False)
@@ -212,8 +309,16 @@ class MetricCards:
         if name in FUNCTIONS:
             fn = FUNCTIONS[name]
             lines.append(f"Function <code>{fn}</code> doc: {escape(self.src.fact_doc(fn))}")
-        lines.append(self.module(name))
+        lines += [self.module(name), also(ALIASES.get(name, ()))]
         return f'<div class="entry"><div>{self.marked(name)}</div>{"".join(sub(l) for l in lines if l)}</div>'
+
+
+def alias_attr(aliases):
+    return f' data-alias="{escape("|".join(aliases))}"' if aliases else ""
+
+
+def also(aliases):
+    return f"Also labelled: {escape('; '.join(aliases))}." if aliases else None
 
 
 def joined(items):
@@ -262,10 +367,93 @@ def lead(snap, rest):
     docs = joined([f"{run} {snapshot.run_doc(snap, run)}" for run in named_runs(snap, rest)])
     return ("<p>Each card quotes a column or term definition from the snapshot with its claim tag. The lines under it "
             "give the typed formula where the page has one, the inputs when the definition names no Source, and the "
-            "module that computes it. Formula, Inputs and Module lines, this lead and the Figure 4.1 caption are "
-            f"written by this site. Tag: {parts.tag('unchecked')}.</p>\n"
+            "module that computes it. Formula, Inputs, Module and Also labelled lines, this lead and the Figure 4.1 "
+            f"caption are written by this site. Tag: {parts.tag('unchecked')}.</p>\n"
             f"<p>The methods text on these pages is from methods doc {snap.doc}. The runs this page names were built "
             f"under these doc versions, by short sha256: {docs}.</p>")
+
+
+def heading_text(html):
+    return plain(m.group(2)) if (m := re.search(r"<h([1-6])\b[^>]*>(.*?)</h\1>", html, re.S)) else ""
+
+
+class TableFields:
+    """A card per results or data page label that names no metric: this site's definition, a quoted source line
+    where the snapshot defines it, and the report sections whose tables head a column with it."""
+
+    def __init__(self, src, taken):
+        self.src, self.heads = src, self.table_heads(src.report)
+        ids = list(taken) + [slug(f.name) for _, _, fields in FIELDS for f in fields]
+        if dup := sorted({i for i in ids if ids.count(i) > 1}):
+            raise ValueError(f"dfn ids {dup} are on two cards")
+
+    @staticmethod
+    def table_heads(report):
+        """{header, case folded: [section titles]} over the results and data page anchors. An anchor holds its own
+        section less the sections of anchors under it."""
+        anchors = [a for p in pagemap.PAGES for a in p.anchors]
+        heads = {}
+        for p in pagemap.PAGES:
+            for a in p.anchors if p.part in ("Results", "Data") else ():
+                own = snapshot.section(report, a)
+                for b in anchors:
+                    if b != a and re.search(rf'<h[1-6]\b[^>]*{snapshot.ID_ATTR}{re.escape(b)}"', own):
+                        own = own.replace(snapshot.section(report, b), "")
+                for thead in re.findall(r"<thead\b.*?</thead>", own, re.S):
+                    for th in re.findall(r"<th\b[^>]*>(.*?)</th>", thead, re.S):
+                        titles = heads.setdefault(plain(th).casefold(), [])
+                        if (title := heading_text(own)) not in titles:
+                            titles.append(title)
+        return heads
+
+    def quote(self, f):
+        if not f.quote:
+            return None
+        kind, where, *said = f.quote
+        if kind == "function":
+            return f"Function <code>{where}</code> doc: {escape(self.src.fact_doc(where))}"
+        if kind == "list":
+            runs = self.src.snap.facts["runs"]
+            run = runs["tcp-1"]["tcp"]["list_tag"]
+            for k, step in enumerate(runs[run]["list_phase"], 1):
+                if where in step:
+                    return f"List phase step {k} of run <code>{run}</code>: {escape(step)}"
+            raise ValueError(f"field '{f.name}': no list phase step of run {run} says {where!r}")
+        if kind == "glossary":
+            row = self.src.glossary.get(where)
+            if row and said[0] in plain(row.inner):
+                return f"The glossary row <i>{escape(row.name)}</i> says: {escape(said[0])} Tag: {parts.tag(row.tag)}."
+            raise ValueError(f"field '{f.name}': the glossary row {where!r} no longer says {said[0]!r}")
+        section = snapshot.section(self.src.report, where)
+        for para in re.findall(r"<p\b[^>]*>.*?</p>", section, re.S):
+            if said[0] in plain(para) and (tag := re.search(r"Tag: (\w+)\.", plain(para))):
+                return (f"The report section <i>{escape(heading_text(section))}</i> says: {escape(said[0])} "
+                        f"Tag: {parts.tag(tag.group(1))}.")
+        raise ValueError(f"field '{f.name}': no tagged paragraph of report section {where!r} says {said[0]!r}")
+
+    def where(self, f):
+        titles = list(dict.fromkeys(t for n in (f.name,) + f.aliases for t in self.heads.get(n.casefold(), [])))
+        if titles:
+            return f"Table header in: {escape(joined(titles))}."
+        page, kinds = LATER
+        if f.name in kinds:
+            return f"{kinds[f.name]} on {escape(pagemap.BY_SLUG[page].title)}."
+        raise ValueError(f"field '{f.name}' heads no table on a results or data page")
+
+    def card(self, f):
+        head = (f'<b><dfn id="{slug(f.name)}"{alias_attr(f.aliases)}>{escape(f.name)}</dfn></b>. '
+                f"Tag: {parts.tag('unchecked')}.")
+        lines = [self.quote(f), self.where(f), also(f.aliases)]
+        return (f'<div class="entry">{sub(head)}<p><b>Definition:</b> {f.text}</p>'
+                + "".join(sub(l) for l in lines if l) + "</div>")
+
+    def section(self):
+        groups = "\n".join(f'<h3 id="{id}">{escape(title)}</h3>\n<div class="shaped fields">'
+                           + "".join(self.card(f) for f in fields) + "</div>" for id, title, fields in FIELDS)
+        return ('<h2 id="table-fields">Table fields</h2>\n<p>Each card defines a table header or axis label of the '
+                "results and data pages that names no metric above. This site writes each definition, and a quoted line "
+                "keeps its source's tag. The Table header line names the report sections whose tables use the field. "
+                f"Tag: {parts.tag('unchecked')}.</p>\n{groups}")
 
 
 def column_index(src, cards):
@@ -379,5 +567,6 @@ def body(page, snap, idx):
     rest = [f'<h2 id="measurement-pipeline">Measurement pipeline</h2>\n{figure}',
             f'<h2 id="columns">Columns</h2>\n{intro}\n'
             + "\n".join(family(id, title, names, cards, typed) for id, title, names in FAMILIES),
-            family(*TEST_ORDER, cards, typed, level=2), column_index(src, cards)]
+            family(*TEST_ORDER, cards, typed, level=2), TableFields(src, map(slug, cards.by_name)).section(),
+            column_index(src, cards)]
     return [lead(snap, "\n".join(rest))] + rest
