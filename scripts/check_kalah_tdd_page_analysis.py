@@ -431,6 +431,8 @@ class Analysis(unittest.TestCase):
         paras = [p for id in ("award-scoring", "statistical-tests", "threats")
                  for p in by_id(id).closest("section").elements() if p.tag == "p" and squash(spaced(p)) not in quoted]
         paras += [next(p for p in figure(n).iter() if p.tag == "p" and p.closest("figcaption")) for n in ("5.1", "5.2")]
+        main = next(n for n in root().iter() if n.tag == "main")
+        paras += [p for p in main.iter() if p.tag == "p" and "The medals are" in spaced(p)]
         tagged = {}
         for p in paras:
             last = p.elements()[-1:]
@@ -439,6 +441,9 @@ class Analysis(unittest.TestCase):
                 tagged[spaced(p)] = spaced(last[0]) if last else None
         # The Award column is the page's criterion to award mapping, which awards.py does not state.
         self.assertEqual([t for s, t in tagged.items() if s.startswith("The Award column")], ["unchecked"])
+        # The landing page is a stub in this tree, so what it states stays unchecked.
+        for start in ("The Most consistent design rule", "The medals are"):
+            self.assertEqual([t for s, t in tagged.items() if s.startswith(start)], ["unchecked"], start)
 
     def test_figures_wrapped(self):
         ids = parsed().ids

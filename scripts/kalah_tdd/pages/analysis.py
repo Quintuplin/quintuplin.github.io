@@ -86,9 +86,10 @@ def lead():
     return p(f"This page sets out how the study scores its awards, which test answers each question and what the study "
              f"cannot show. It defines no metric. M, E, C and every other measure are defined on "
              f"{link('methodology/measures', 'Methodology: measures')}, and short labels such as CQP and PMD in the "
-             f"{link('glossary', 'Glossary')}. The medals are on the {link('', 'landing page')}. The test results are on "
-             f"the results pages for the {link('results/survey', 'survey')}, the "
-             f"{link('results/contrasts', 'planned contrasts')} and {link('results/consistency', 'consistency')}.")
+             f"{link('glossary', 'Glossary')}. The test results are on the results pages for the "
+             f"{link('results/survey', 'survey')}, the {link('results/contrasts', 'planned contrasts')} and "
+             f"{link('results/consistency', 'consistency')}.") + p(f"The medals are on the {link('', 'landing page')}.",
+                                                                   "unchecked")
 
 
 def grid(caption, head, rows):
@@ -149,7 +150,7 @@ def award_scoring(snap, numbers):
           "mapping in the Award column below.", "unchecked"),
         table,
         p(f"The {escape(LIMITED)} rule carries a consistency limit, which the {link('', 'landing page')} states with "
-          f"the award.", "verified"),
+          f"the award.", "unchecked"),
         '<h3 id="awards-code">awards.py functions and constants</h3>',
         p("Criterion names and returns, docstrings and constants are quoted verbatim from awards.py at the snapshot "
           "sha.", "verified"),
