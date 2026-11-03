@@ -164,6 +164,20 @@ class LandingContent(unittest.TestCase):
         self.assertEqual([a.attrs["href"] for a in notes], ["#contents"])
         self.assertEqual(links.count(kalah("links").url("")), 1, "only the contents entry links the landing itself")
 
+    def test_doc_versions_cover_the_report_runs(self):
+        snapshot = kalah("snapshot")
+        listed = re.search(r"Runs: (.*?)\.", snap().files[snapshot.REPORT]).group(1)
+        page = text(main_node())
+        self.assertIn(f"methods doc {snap().doc}", page)
+        for run in (r.split()[0] for r in listed.split(", ")):
+            with self.subTest(run):
+                self.assertEqual(page.count(f"{run} {snapshot.run_doc(snap(), run)}"), 1)
+
+    def test_runs_come_from_the_text(self):
+        named = kalah("pages.landing").named_runs
+        self.assertEqual(named(snap(), "<p>Runs: rep-2 a, <b>full-1</b> b, tcp-1-list2 c. Again rep-2.</p>"),
+                         ["rep-2", "full-1", "tcp-1-list2"])
+
 
 if __name__ == "__main__":
     unittest.main()

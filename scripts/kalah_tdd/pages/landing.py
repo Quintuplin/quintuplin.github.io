@@ -10,8 +10,6 @@ from ..snapshot import REPORT, SHOWCASE, run_doc, section, view
 
 TAG = re.compile(r"Tag: (recomputed|verified|unchecked)\.")
 CAPTIONED = re.compile(r'<figure id="[^"]+">.*?</figure>', re.S)
-# The report runs, as its run paragraph names them.
-RUNS = ("full-1", "tcp-1-list2", "rep-1", "rep-2")
 READ_ON = ("experimental-design", "methodology", "results/survey")
 
 
@@ -41,13 +39,20 @@ def tags(html):
 def intro(snap, paragraphs, summary):
     """The study question and the showcase winner and KPIs, then the run paragraph that defines the claim tags."""
     question, runs = re.findall(r"<p>.*?</p>", paragraphs, re.S)
-    docs = ", ".join(f"{run} {run_doc(snap, run)}" for run in RUNS)
+    docs = ", ".join(f"{run} {run_doc(snap, run)}" for run in named_runs(snap, runs))
     first, second, third = (f'<a href="{url(s)}">{escape(pagemap.BY_SLUG[s].title)}</a>' for s in READ_ON)
     read_on = f"{first}, {second} and {third}"
     return (f'<h2 id="kalah-tdd-experiment">The study</h2>\n{question}\n{summary.winner}\n{runs}\n'
             f"<p>The methods text on these pages is from methods doc {snap.doc}. Each run was built under its own doc "
             f"version, by short sha256: {docs}.</p>\n"
             f'<p>Read on with {read_on}, or pick any of the <a href="#contents">{len(pagemap.PAGES)} parts</a>.</p>')
+
+
+def named_runs(snap, html):
+    """Each snapshot run the text of html names, in first-mention order. tcp-1 inside tcp-1-list2 is no mention."""
+    keys = "|".join(map(re.escape, sorted(snap.facts["runs"], key=len, reverse=True)))
+    found = re.findall(rf"(?<![\w/-])({keys})(?![\w/-])", re.sub(r"<[^>]+>", " ", html))
+    return list(dict.fromkeys(found))
 
 
 class ShowcaseParts:
