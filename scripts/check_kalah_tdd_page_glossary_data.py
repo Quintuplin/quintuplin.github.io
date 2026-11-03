@@ -146,7 +146,8 @@ class GlossaryData(unittest.TestCase):
         self.assertEqual(terms.closest("section").attrs.get("aria-labelledby"), "glossary")
         heads = [n for n in main("glossary").iter() if n.tag == "h3"]
         self.assertEqual([h.attrs.get("id") for h in heads], ["showcase-terms"])
-        want = re.findall(r"<dt>(.*?)</dt><dd>(.*?)</dd>", kalah("snapshot").view(showcase(), "summary"), re.S)
+        terms_html = re.search(r'<dl class="terms">(.*?)</dl>', kalah("snapshot").view(showcase(), "summary"), re.S)
+        want = re.findall(r"<dt>(.*?)</dt><dd>(.*?)</dd>", terms_html.group(1), re.S)
         self.assertEqual(len(want), 15)
         squash = study().squash
         dts = [k for k in terms.elements() if k.tag == "dt"]
@@ -187,7 +188,7 @@ class GlossaryData(unittest.TestCase):
                 if linked:
                     hrefs = [a.attrs["href"] for a in after.iter() if a.tag == "a"]
                     self.assertEqual(hrefs, [MEASURES])
-                    self.assertEqual(study().spaced(after), "Its formula and inputs are on Measures.")
+                    self.assertEqual(" ".join(after.text().split()), "Its formula and inputs are on Measures.")
         refused(self, {kalah("snapshot").REPORT: report().replace(entry("Kendall distance"), "")}, "Kendall distance")
 
     def test_ids_kept(self):
