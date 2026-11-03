@@ -594,14 +594,16 @@ class Measures(unittest.TestCase):
     def test_aliases_are_labels(self):
         texts = [t for _, _, t in snapshot_labels()] + [t for ts in G10B_LABELS.values() for t in ts]
         wanted = {check().folded(t) for t in texts} | {check().bare(t) for t in texts}
+        titles = [t.casefold() for _, what, t in snapshot_labels() if what == "figure title"]
+        in_title = lambda alias: any(re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", t) for t in titles)
         dfns = [n for n in page().root.iter() if n.tag == "dfn"]
         self.assertGreater(sum(bool(aliases(d)) for d in dfns), 15)
         for dfn in dfns:
             card = dfn.closest(cls="entry")
             lines = subs(card, "Also labelled:")
             with self.subTest(dfn.attrs["id"]):
-                for alias in aliases(dfn):
-                    self.assertIn(alias.casefold(), wanted)
+                for alias in aliases(dfn):  # a label, or the words a figure title names a metric by
+                    self.assertTrue(alias.casefold() in wanted or in_title(alias.casefold()), alias)
                 self.assertEqual([check().spaced(n) for n in lines],
                                  [f"Also labelled: {'; '.join(aliases(dfn))}."] if aliases(dfn) else [])
                 if dfn.closest(cls="fields") is not None and not aliases(dfn):
@@ -656,7 +658,7 @@ class Measures(unittest.TestCase):
         for old, new, name in (("Its slug is its short lowercase name", "Its slug is its short name", "Slug"),
                                ("q is the share of bootstrap alphas", "q is the fraction of bootstrap alphas", "Finals q"),
                                ("Agent id</th>", "Agent key</th>", "Agent id")):
-            with self.subTest(name), self.assertRaisesRegex(ValueError, rf"field {re.escape(name)!r}"):
+            with self.subTest(name), self.assertRaisesRegex(ValueError, rf"field '{re.escape(name)}'"):
                 body(with_report(snap(), old, new))
         facts = copy.deepcopy(snap().facts)
         facts["runs"]["tcp-1-list"]["list_phase"][4] = "Guess each candidate's size."
