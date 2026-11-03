@@ -72,6 +72,31 @@ class Parts(unittest.TestCase):
         self.assertTrue(html.endswith("</details></figcaption></figure>"), html)
         self.assertNotRegex(html, r"<h3\b[^>]*\bid=", "a figure title with an id would join the sidebar")
 
+    def test_figure_level_default_unchanged(self):
+        pinned = ('<figure id="loop" aria-label="Figure 3.1: The loop"><p class="fig-n">Figure 3.1</p><h3>The loop</h3>'
+                  f'<div class="diagram" role="region" tabindex="0" aria-label="Figure 3.1 diagram">{SVG}</div>'
+                  '<figcaption><p>How a stage <em>runs</em>.</p>'
+                  '<div class="fig-foot"><a href="#loop-data" aria-label="Data for Figure 3.1">Data</a></div>'
+                  '<details id="loop-data"><summary>Text version: The loop</summary>'
+                  '<ol><li>One</li><li>a &lt;b&gt; &amp; &quot;c&quot;</li></ol></details></figcaption></figure>')
+        self.assertEqual(frame(), pinned)
+        self.assertEqual(kalah("parts").figure("3.1", "loop", "The loop", SVG, "How a stage <em>runs</em>.", None,
+                                               ("One", UNSAFE), level=3), pinned)
+
+    def test_figure_level_sets_title_heading(self):
+        figure = functools.partial(kalah("parts").figure, "3.1", "loop", "The loop", SVG, "", None, ["x"])
+        html = figure(level=5)
+        self.assertIn('<p class="fig-n">Figure 3.1</p><h5>The loop</h5><div class="diagram"', html)
+        self.assertNotRegex(html, r"<h3\b")
+        for level in (1, 2, 7):
+            with self.subTest(level), self.assertRaises(ValueError):
+                figure(level=level)
+        lines = (STUDY / "study.css").read_text(encoding="utf-8").splitlines()
+        at = lines.index("figure > :is(h4,h5,h6){margin:0;font-size:1rem}")
+        self.assertEqual(lines[at - 1], ".legend svg{width:14px;height:14px}")
+        self.assertEqual(lines[at + 1], "")
+        self.assertTrue(lines[at + 2].startswith("/* Flowcharts "), lines[at + 2])
+
     def test_figure_data_link_reaches_text_version(self):
         html = frame()
         self.assertIn('<details id="loop-data"><summary>Text version: The loop</summary>', html)
