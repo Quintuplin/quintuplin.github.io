@@ -200,7 +200,12 @@ class Questions(unittest.TestCase):
                  "legend count": ('<b class="cnt">14</b>', '<b class="cnt">15</b>', "qlegend"),
                  "no chip": ('<td class="st"><span class="chip" data-k="good"><i></i>answered</span></td>',
                              '<td class="st"></td>', "Q1"),
-                 "unknown status": ("<i></i>answered</span></td>", "<i></i>maybe</span></td>", "maybe")}
+                 "unknown status": ("<i></i>answered</span></td>", "<i></i>maybe</span></td>", "maybe"),
+                 "row href": ('<td class="num">Q1</td><td class="q"><a href="#q1">',
+                              '<td class="num">Q1</td><td class="q"><a href="#q2">', "no known form 'Q1"),
+                 "two chip kinds": ('defect?</a></td><td class="st"><span class="chip" data-k="good">',
+                                    'defect?</a></td><td class="st"><span class="chip" data-k="warn">',
+                                    "Q3 draws answered as warn")}
         for name, (old, new, said) in cases.items():
             with self.subTest(name):
                 self.assertIn(old, source())
@@ -215,7 +220,8 @@ class Questions(unittest.TestCase):
                  "swapped": (sec.replace(q2 + q3, q3 + q2), "q2"),
                  "reworded": (sec.replace("<b>Q3</b> Does the", "<b>Q3</b> Did the"), "q3"),
                  "no tag": (sec.replace(q3, q3.replace(tag, "")), "q3"),
-                 "two tags": (sec.replace(q3, q3.replace(tag, tag + tag)), "q3")}
+                 "two tags": (sec.replace(q3, q3.replace(tag, tag + tag)), "q3"),
+                 "unknown tag kind": (sec.replace(q3, q3.replace(tag, '<span class="tag">checked</span>')), "answer q3: claim tag")}
         for name, (html, said) in cases.items():
             with self.subTest(name):
                 self.assertNotEqual(html, sec)
@@ -230,6 +236,13 @@ class Questions(unittest.TestCase):
             with self.subTest(extra):
                 refused(self, source().replace('<div class="answer" id="q1">', extra + '<div class="answer" id="q1">'),
                         "questions", extra[:12])
+        sec = source()
+        first = sec.index('<div class="answer"')
+        for name, html, said in (("wrong h2", sec.replace('<h2 id="questions">', '<h2 id="answers">', 1), "open with its h2"),
+                                 ("no h2", sec[sec.index("</h2>") + 5:], "open with its h2"),
+                                 ("no answers", sec[:first], "lacks its answers")):
+            with self.subTest(name):
+                refused(self, html, said)
 
 
 if __name__ == "__main__":
