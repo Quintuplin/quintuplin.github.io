@@ -28,6 +28,8 @@ FAMILIES = (
     ("records", "Records", ("Method", "Branch", "Audit flags", "Family", "Planned contrast", "Holm p")),
 )
 TEST_ORDER = ("test-order-measures", "Test order measures", ("APFD-I", "APFDc-H", "Kendall distance"))
+SECTIONS = {"measurement-pipeline": "Measurement pipeline", "columns": "Columns", "table-fields": "Table fields",
+            "column-index": "Column index"}  # the h2 ids beside TEST_ORDER
 # Metrics with no column row, quoted from a report glossary row: (row name, the words the dfn marks in it).
 TERMS = {"Seen tests": ("Hidden, seen, unseen and acceptance tests", "Seen tests"),
          "K/N": ("Mutation score and K/N", "K/N"), "E": ("Awards and E", "E"),
@@ -77,6 +79,10 @@ def slug(name):
     """The dfn id: lower case, less a "(...)" note and a trailing " /N" total."""
     bare = re.sub(r"\s*\(.*?\)|\s*/\s*\d+$", "", name)
     return re.sub(r"[^a-z0-9]+", "-", bare.lower()).strip("-")
+
+
+def h2(id):
+    return f'<h2 id="{id}">{SECTIONS[id]}</h2>'
 
 
 def link(name, text=None, title=None):
@@ -387,7 +393,7 @@ class TableFields:
 
     def __init__(self, src, taken):
         self.src, self.heads = src, self.table_heads(src.report)
-        groups = [id for id, _, _ in FAMILIES + (TEST_ORDER,) + FIELDS]  # h3 ids a field dfn must not repeat
+        groups = [*SECTIONS] + [id for id, _, _ in FAMILIES + (TEST_ORDER,) + FIELDS]  # heading ids a field dfn must not repeat
         ids = list(taken) + groups + [slug(f.name) for _, _, fields in FIELDS for f in fields]
         if dup := sorted({i for i in ids if ids.count(i) > 1}):
             raise ValueError(f"dfn ids {dup} are on two cards")
@@ -464,7 +470,7 @@ class TableFields:
     def section(self):
         groups = "\n".join(f'<h3 id="{id}">{escape(title)}</h3>\n<div class="shaped fields">'
                            + "".join(self.card(f) for f in fields) + "</div>" for id, title, fields in FIELDS)
-        return ('<h2 id="table-fields">Table fields</h2>\n<p>Each card defines a table header or axis label of the '
+        return (f'{h2("table-fields")}\n<p>Each card defines a table header or axis label of the '
                 "results and data pages that names no metric above. This site writes each definition, and a quoted glossary "
                 "or report line keeps its source's tag. The Table header line names the report sections whose tables use the field. "
                 f"Tag: {parts.tag('unchecked')}.</p>\n{groups}")
@@ -484,7 +490,7 @@ def column_index(src, cards):
     body = "".join("<tr>" + "".join(f'<td data-th="{h}">{c}</td>' for h, c in zip(names, (
         escape(r.name, quote=False), r.source, parts.tag(r.tag), escape(family[r.name])))) + "</tr>" for r in src.columns)
     table = f'<table class="cols"><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>'
-    return ('<h2 id="column-index">Column index</h2>\n<p>Each report column with its source file, its claim tag and '
+    return (f'{h2("column-index")}\n<p>Each report column with its source file, its claim tag and '
             f"the section of this page that defines it.</p>\n<details><summary>{escape(summary)}</summary>"
             f"{parts.table(table, 'Column index')}</details>")
 
@@ -578,8 +584,8 @@ def body(page, snap, idx):
     typed = formulas(src, cards)
     intro = src.intro()
     figure = MeasurePipeline(src, cards).figure(next(parts.numbers(page.slug)))
-    rest = [f'<h2 id="measurement-pipeline">Measurement pipeline</h2>\n{figure}',
-            f'<h2 id="columns">Columns</h2>\n{intro}\n'
+    rest = [f'{h2("measurement-pipeline")}\n{figure}',
+            f'{h2("columns")}\n{intro}\n'
             + "\n".join(family(id, title, names, cards, typed) for id, title, names in FAMILIES),
             family(*TEST_ORDER, cards, typed, level=2), TableFields(src, map(slug, cards.by_name)).section(),
             column_index(src, cards)]

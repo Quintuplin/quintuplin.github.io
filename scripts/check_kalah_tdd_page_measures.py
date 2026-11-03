@@ -698,7 +698,8 @@ class Measures(unittest.TestCase):
     def test_refuses_duplicate_dfn_id(self):
         m = measures()
         (id, title, fields), *rest = m.FIELDS
-        for extra, says in ((m.Field("Slug", "Again."), r"dfn ids \['slug'\]"), (m.Field("Cost", "A heading."), "'cost'")):
+        for extra, says in ((m.Field("Slug", "Again."), r"dfn ids \['slug'\]"), (m.Field("Cost", "A heading."), "'cost'"),
+                            (m.Field("Columns", "A heading."), "'columns'")):
             with self.subTest(says), mock.patch.object(m, "FIELDS", ((id, title, fields + (extra,)), *rest)):
                 with self.assertRaisesRegex(ValueError, says):
                     body(snap())
