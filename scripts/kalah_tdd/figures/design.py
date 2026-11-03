@@ -20,10 +20,26 @@ REBUILD = "/rebuild"
 WIDTH, LABEL_X, X0, STEP, Y0, ROW, MARK = 312, 8, 32, 50, 44, 40, 14
 
 
+def kind(name, run):
+    """The kind a run's facts pin: rebuild suffix, tcp role, replicate waves, else the run name prefix."""
+    tcp = run.get("tcp", {})
+    if name.endswith(REBUILD):
+        return "Rebuild"
+    if tcp:
+        return "List reliability" if "rates" in tcp else "Test-list order" if "list_tag" in tcp else "Test list"
+    if run.get("waves") and all("replicate" in m for m in run["methods"].values()):
+        return "Planned contrasts"
+    return {"pilot": "Pilot", "full": "Survey"}.get(name.split("-", 1)[0])
+
+
 def runs(facts):
-    """facts.json runs in study order, refused when RUNS and facts name different runs."""
+    """facts.json runs in study order, refused when RUNS and facts name different runs or a RUNS kind differs from the
+    kind the run's facts pin."""
     if set(RUNS) != set(facts["runs"]):
         raise ValueError(f"RUNS {sorted(RUNS)} and facts.json runs {sorted(facts['runs'])} differ")
+    for name, run in facts["runs"].items():
+        if (pinned := kind(name, run)) != RUNS[name]:
+            raise ValueError(f"RUNS kind {RUNS[name]} of {name} differs from the kind {pinned} its facts pin")
     return {run: facts["runs"][run] for run in RUNS}
 
 

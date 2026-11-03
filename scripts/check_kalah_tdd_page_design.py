@@ -378,11 +378,14 @@ class Refusals(unittest.TestCase):
             with self.subTest(sorted(f["runs"])), self.assertRaisesRegex(ValueError, "RUNS"):
                 design.runs(f)
 
-    def test_runs_refuses_renamed_entry(self):
-        """A RUNS entry renamed under its kind no longer names a facts run."""
-        renamed = {("tcp-2" if k == "tcp-1" else k): v for k, v in design.RUNS.items()}
-        with mock.patch.object(design, "RUNS", renamed), self.assertRaisesRegex(ValueError, "RUNS"):
-            design.runs(self.facts())
+    def test_runs_refuses_kind_mismatch(self):
+        """Every run refuses every kind but the one its facts pin, rep-2 as a Pilot among them."""
+        kinds = set(design.RUNS.values())
+        for name, kind in design.RUNS.items():
+            for wrong in sorted(kinds - {kind}):
+                with self.subTest(name, kind=wrong), mock.patch.dict(design.RUNS, {name: wrong}), \
+                        self.assertRaisesRegex(ValueError, f"RUNS kind {wrong} of {name}"):
+                    design.runs(self.facts())
 
     def test_replicate_refuses_shape_mismatch(self):
         caps, arms = self.facts(), self.facts()
