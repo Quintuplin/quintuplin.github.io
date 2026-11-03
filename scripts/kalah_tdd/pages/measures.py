@@ -167,10 +167,12 @@ FIELDS = (
         Field("Hidden-pass curve area", f"The area under an arm's curve of hidden tests passed, which {link('APFD-I')} "
               "scores."))),
 )
-# Fields whose only label is on the tcp-1 results page, which builds them from facts, and the label kind.
-LATER = ("results/test-order", {**dict.fromkeys(("Run", "Setting", "Arm", "Order", "Clause", "Risk", "Usage", "Candidate",
-                                                 "Checks", "Relies", "Estimate", "Stage", "Runs as", "Steps", "Details",
-                                                 "Note"), "Table header"), "Hidden-pass curve area": "Axis label"})
+# Field labels the G10b results pages build from facts: {name: (label kind, page slugs)}, as G10-plan.md places them.
+LATER = {**dict.fromkeys(("Run", "Outcome", "U"), ("Table header", ("results/contrasts",))),
+         **dict.fromkeys(("Setting", "Value", "Arm", "Order", "Clause", "Risk", "Usage", "Candidate", "Checks", "Relies",
+                          "Estimate", "Stage", "Runs as", "Steps", "Details", "Note"),
+                         ("Table header", ("results/test-order",))),
+         "Hidden-pass curve area": ("Axis label", ("results/test-order",))}
 
 
 class Row(NamedTuple):
@@ -433,12 +435,13 @@ class TableFields:
 
     def where(self, f):
         titles = list(dict.fromkeys(t for n in (f.name,) + f.aliases for t in self.heads.get(n.casefold(), [])))
-        if titles:
-            return f"Table header in: {escape(joined(titles))}."
-        page, kinds = LATER
-        if f.name in kinds:
-            return f"{kinds[f.name]} on {escape(pagemap.BY_SLUG[page].title)}."
-        raise ValueError(f"field '{f.name}' heads no table on a results or data page")
+        said = [f"Table header in: {escape(joined(titles))}."] if titles else []
+        if f.name in LATER:
+            kind, pages = LATER[f.name]
+            said.append(f"{kind} on {escape(joined([pagemap.BY_SLUG[p].title for p in pages]))}.")
+        if not said:
+            raise ValueError(f"field '{f.name}' heads no table on a results or data page")
+        return " ".join(said)
 
     def card(self, f):
         head = (f'<b><dfn id="{slug(f.name)}"{alias_attr(f.aliases)}>{escape(f.name)}</dfn></b>. '

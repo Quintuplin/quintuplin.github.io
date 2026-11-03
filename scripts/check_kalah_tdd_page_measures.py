@@ -22,13 +22,14 @@ SLUG = "methodology/measures"
 HEADINGS = ["measurement-pipeline", "columns", "tests", "static-analysis-and-mutation", "size-and-speed", "cost",
             "review-ratings", "combined-and-consistency", "records", "test-order-measures", "table-fields",
             "builds-and-methods", "contrasts-and-tests", "ratings", "run-records", "test-list-and-stages", "column-index"]
-# Labels the G10b results pages add from facts, outside the snapshot report (G10-plan.md, "MetricDefs labels").
-G10B_LABELS = {"figure title": ("Holm p of each planned contrast", "APFD-I and APFDc-H by test-list order",
-                                "Stage flow of a tcp-1 arm"),
-               "axis label": ("Holm p", "Hidden-pass curve area"),
-               "table header": ("Run", "Outcome", "Contrast", "U", "Holm p", "Order", "APFD-I", "APFDc-H", "Arm",
-                                "Candidate", "Checks", "Relies", "Estimate", "Clause", "Risk", "Usage", "Setting",
-                                "Value", "Stage", "Runs as", "Steps", "Details", "Note")}
+# Labels the G10b results pages add from facts, outside the snapshot report, by the page G10-plan.md gives them.
+G10B_LABELS = {"results/contrasts": {"figure title": ("Holm p of each planned contrast",), "axis label": ("Holm p",),
+                                     "table header": ("Run", "Outcome", "Contrast", "U", "Holm p")},
+               "results/test-order": {"figure title": ("APFD-I and APFDc-H by test-list order", "Stage flow of a tcp-1 arm"),
+                                      "axis label": ("Hidden-pass curve area",),
+                                      "table header": ("Order", "APFD-I", "APFDc-H", "Arm", "Candidate", "Checks",
+                                                       "Relies", "Estimate", "Clause", "Risk", "Usage", "Setting",
+                                                       "Value", "Stage", "Runs as", "Steps", "Details", "Note")}}
 # The metrics plan.md names for this page, as dfn names.
 PLAN_METRICS = {"functional mark", "hidden pass", "seen tests", "unseen pass", "acceptance pass", "strict pmd compliance",
                 "strict pmd violations", "mutation score", "k/n", "adjusted mutation", "weighted tokens",
@@ -180,12 +181,16 @@ def snapshot_labels():
             for what, text in check().labels(check().Tree(own).root) if re.search(r"[^\W\d_]", text)]
 
 
-def g10b_page():
-    """A page holding each G10b label in the shape check_kalah_tdd_study.labels reads."""
-    figures = "".join(f"<figure><figcaption><h3>{t}</h3></figcaption></figure>" for t in G10B_LABELS["figure title"])
-    axes = "".join(f'<line class="axis"></line><text text-anchor="middle">{t}</text>' for t in G10B_LABELS["axis label"])
-    heads = "".join(f"<th>{t}</th>" for t in G10B_LABELS["table header"])
+def g10b_page(labels):
+    """A page holding a G10b page's labels in the shape check_kalah_tdd_study.labels reads."""
+    figures = "".join(f"<figure><figcaption><h3>{t}</h3></figcaption></figure>" for t in labels["figure title"])
+    axes = "".join(f'<line class="axis"></line><text text-anchor="middle">{t}</text>' for t in labels["axis label"])
+    heads = "".join(f"<th>{t}</th>" for t in labels["table header"])
     return f"<main>{figures}<svg>{axes}</svg><table><thead><tr>{heads}</tr></thead></table></main>"
+
+
+def g10b_texts():
+    return [t for labels in G10B_LABELS.values() for ts in labels.values() for t in ts]
 
 
 def dfn_words(dfn):
@@ -579,12 +584,13 @@ class Measures(unittest.TestCase):
         self.assertGreater(check().metric_defs({**label_pages(), SLUG: html().replace("data-alias=", "data-x=")})[0], [])
 
     def test_g10b_labels_defined(self):
-        later = g10b_page()
-        self.assertEqual(list(check().labels(check().Tree(later).root)),
-                         [(what, t) for what, texts in G10B_LABELS.items() for t in texts])
-        errors, checked = check().metric_defs({"results/test-order": later, SLUG: html()})
+        later = {slug: g10b_page(labels) for slug, labels in G10B_LABELS.items()}
+        for slug, labels in G10B_LABELS.items():
+            self.assertEqual(list(check().labels(check().Tree(later[slug]).root)),
+                             [(what, t) for what, texts in labels.items() for t in texts])
+        errors, checked = check().metric_defs({**later, SLUG: html()})
         self.assertEqual(errors, [])
-        self.assertEqual(checked, sum(map(len, G10B_LABELS.values())))
+        self.assertEqual(checked, len(g10b_texts()))
 
     def test_figure_titles_name_a_metric(self):
         records = {measures().slug(n) for id, _, names in measures().FAMILIES if id == "records" for n in names}
@@ -600,7 +606,7 @@ class Measures(unittest.TestCase):
                 self.assertRegex(title.casefold(), within)
 
     def test_aliases_are_labels(self):
-        texts = [t for _, _, t in snapshot_labels()] + [t for ts in G10B_LABELS.values() for t in ts]
+        texts = [t for _, _, t in snapshot_labels()] + g10b_texts()
         wanted = {check().folded(t) for t in texts} | {check().bare(t) for t in texts}
         titles = [t.casefold() for _, what, t in snapshot_labels() if what == "figure title"]
         in_title = lambda alias: any(re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", t) for t in titles)
@@ -625,7 +631,11 @@ class Measures(unittest.TestCase):
             for what, text in check().labels(check().Tree(own).root):
                 if what == "table header":
                     heads.setdefault(text.casefold(), []).append(anchor_title(a))
-        later = {t.casefold(): what for what, ts in G10B_LABELS.items() for t in ts}
+        later = {}  # {label: {kind: [page titles]}}
+        for slug, labels in G10B_LABELS.items():
+            for what, ts in labels.items():
+                for t in ts:
+                    later.setdefault(t.casefold(), {}).setdefault(what, []).append(kalah("pagemap").BY_SLUG[slug].title)
         report_root, quoted = check().Tree(report()).root, 0
         for card in found:
             dfn = next(n for n in card.iter() if n.tag == "dfn")
@@ -635,14 +645,15 @@ class Measures(unittest.TestCase):
                 titles = list(dict.fromkeys(t for n in [name] + aliases(dfn) for t in heads.get(n.casefold(), [])))
                 lines = [check().spaced(p) for p in card.iter() if p.tag == "p"]
                 where = [t for t in lines if " on Results: " in t or t.startswith("Table header in: ")]
+                want = [f"{what[:1].upper()}{what[1:]} on {said(pages)}."
+                        for what, pages in later.get(name.casefold(), {}).items()]
+                self.assertTrue(titles or want)
                 if titles:
                     at = [where[0].find(t) for t in titles]
                     self.assertNotIn(-1, at, where)
                     titles = [t for _, t in sorted(zip(at, titles))]
-                    self.assertEqual(where, [f"Table header in: {said(titles)}."])
-                else:
-                    what = later[name.casefold()]
-                    self.assertEqual(where, [f"{what[:1].upper()}{what[1:]} on Results: test order (tcp-1)."])
+                    want.insert(0, f"Table header in: {said(titles)}.")
+                self.assertEqual(where, [" ".join(want)])
                 for p in (p for p in card.iter() if p.tag == "p" and "sub" in p.classes()):
                     text = flat(p)
                     pills = [check().spaced(n) for n in p.iter() if "tag" in n.classes()]
@@ -665,6 +676,10 @@ class Measures(unittest.TestCase):
                     else:
                         self.assertFalse(text.startswith(QUOTES), text)  # a quote line in no known shape
         self.assertGreater(quoted, 20)
+        lines = lambda id: [check().spaced(p) for p in page().ids[id].closest(cls="entry").iter() if p.tag == "p"]
+        self.assertIn("Table header on Results: planned contrasts.", lines("run"))
+        self.assertTrue(any(t.startswith("Table header in: ") and t.endswith(" Table header on Results: test order (tcp-1).")
+                            for t in lines("value")), lines("value"))
 
     def test_field_refuses_missing_source(self):
         for old, new, name in (("Its slug is its short lowercase name", "Its slug is its short name", "Slug"),
