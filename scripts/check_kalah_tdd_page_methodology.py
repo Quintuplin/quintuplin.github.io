@@ -429,6 +429,12 @@ class AgentRoles(unittest.TestCase):
         self.assertRegex(desc, r"Review phase runs one blind reviewer[^.]*Measure phase[^.]*\. Collect then")
         # Every node but the last leads on, so the text version has no dead end.
         self.assertEqual([n.id for n in nodes if not any(e.src == n.id for e in edges)], ["report"])
+        # F8 once let a classic or tpp build reach review only "if hidden". batch.js reviews every method after runMethod.
+        reach, todo = set(), ["clone"]
+        while todo:
+            reach.add(at := todo.pop())
+            todo += [e.dst for e in edges if e.src == at and not e.label.startswith("if ") and e.dst not in reach]
+        self.assertIn("review", reach)
 
     def test_routes_clear(self):
         flow = mod("check_kalah_tdd_flow")
@@ -459,9 +465,9 @@ class AgentRoles(unittest.TestCase):
         self.assertTrue(all(n.col is not None for n in nodes))
         _, cell = f.cells(nodes)
         row = {i: c // f.COLS for i, (_, c) in cell.items()}
-        wraps = [(row[e.src], row[e.dst]) for e in edges if row[e.src] != row[e.dst]]
-        # One wrap per row boundary, as wraps from one row share the gap line below it.
-        self.assertEqual(wraps, [(0, 1), (1, 2)])
+        wraps = {(row[e.src], row[e.dst], e.src) for e in edges if row[e.src] != row[e.dst]}
+        # Wraps from one row share the gap line below it, so one source per row boundary keeps them a fork.
+        self.assertEqual(wraps, {(0, 1, "repeat"), (1, 2, "review")})
         self.assertTrue(all(len(e.label) <= 10 for e in edges), [e.label for e in edges])
         self.assertTrue(all(row[lp.node] == row[lp.back_to or lp.node] for lp in loops))
 
