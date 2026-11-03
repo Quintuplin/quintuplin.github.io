@@ -206,17 +206,10 @@ class Design(unittest.TestCase):
         self.assertTrue(re.search(r"(^|\})\.words\{overflow-wrap:normal\}", CSS.read_text(encoding="utf-8"), re.M))
 
     def test_build_defined_and_totals_agree(self):
-        """The page defines a build, so 11 builds in 14 clones and the runs table and Figure 2.2 totals agree."""
+        """The page defines a build, and the runs table and Figure 2.2 totals agree."""
         text, runs = main_text(), facts()["runs"]
         self.assertIn(study.squash("A build is one final clone of a method or arm. Start clones and rebuilds are not "
                                    "builds."), text)
-        for name, run in runs.items():
-            multi = sum(any(s["kind"] == "starts" for s in m["stages"]) for m in run["methods"].values())
-            if multi:
-                n = len(run["methods"])
-                with self.subTest(name):
-                    self.assertIn(study.squash(f"{name} makes {n} builds in {n + multi * run['caps']['starts']} clones"),
-                                  text)
         builds = sum(len(r["methods"]) for k, r in runs.items() if not k.endswith("/rebuild"))
         rebuilds = sum(len(r["methods"]) for k, r in runs.items() if k.endswith("/rebuild"))
         head, rows = table("runs-table")
@@ -225,6 +218,19 @@ class Design(unittest.TestCase):
         self.assertEqual([r[col] for r in rows if not r[col].isdigit()], [f"{rebuilds} rebuilds"])
         self.assertIn(study.squash(f"The runs make {builds} builds, the marks of Figure 2.2, and {rebuilds} rebuilds"),
                       text)
+
+    def test_start_clones_worded_by_evidence(self):
+        """full-1 states the 3 start clones its multi-start page records. The pilots record none, so they state the cap."""
+        want = {"pilot-1": 'makes 3 builds in up to 6 clones <span class="tag">recomputed</span>',
+                "pilot-2": 'makes 3 builds in up to 6 clones <span class="tag">recomputed</span>',
+                "full-1": 'makes 11 builds in 14 clones <span class="tag">verified</span>'}
+        for name, claim in want.items():
+            with self.subTest(name):
+                self.assertIn(f"{name} {claim}", main_html())
+        self.assertIn("One survey build from 3 start clones", snap().files["runs/full-1/methods/multi-start.html"])
+        files = {k: v for k, v in snap().files.items() if k != "runs/full-1/methods/multi-start.html"}
+        self.assertIn('full-1 makes 11 builds in up to 14 clones <span class="tag">recomputed</span>',
+                      experimental_design.builds(snap()._replace(files=files)))
 
     def test_collect_steps_table(self):
         head, rows = table("collect-steps")
@@ -406,13 +412,14 @@ class Refusals(unittest.TestCase):
             for name, run in f["runs"].items():
                 for m in run["methods"].values():
                     m["stages"] = [s for s in m["stages"] if s["kind"] != "starts" or name in keep]
-            return experimental_design.builds(f["runs"])
+            return re.sub(r"<[^>]+>", "", experimental_design.builds(snap()._replace(facts=f)))
         with self.assertRaisesRegex(ValueError, "no multi-start run"):
             starts_only_in(())
         one = starts_only_in(("full-1",))
-        self.assertIn("cap, so full-1 makes 11 builds in 14 clones. The runs", one)
+        self.assertIn("cap, so full-1 makes 11 builds in 14 clones verified. The runs", one)
         many = starts_only_in(("pilot-1", "full-1"))
-        self.assertIn("cap, so pilot-1 makes 3 builds in 6 clones and full-1 makes 11 builds in 14 clones. The", many)
+        self.assertIn("cap, so pilot-1 makes 3 builds in up to 6 clones recomputed and full-1 makes 11 builds in 14 "
+                      "clones verified. The", many)
         for text in (one, many):
             self.assertNotRegex(text, r"so ,| and  | and \.")
 

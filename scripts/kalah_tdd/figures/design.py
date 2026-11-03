@@ -27,10 +27,9 @@ def runs(facts):
     return {run: facts["runs"][run] for run in RUNS}
 
 
-def start_clones(run):
-    """Clones a run adds beyond its builds: the starts cap for each method that runs its starts in clones of their own."""
-    multi = sum(any(s["kind"] == "starts" for s in m["stages"]) for m in run["methods"].values())
-    return multi * run["caps"]["starts"]
+def multi_starts(run):
+    """Slugs of the run's methods that run each start in a clone of its own, up to the starts cap."""
+    return [slug for slug, m in run["methods"].items() if any(s["kind"] == "starts" for s in m["stages"])]
 
 
 def arm(slug, entry):

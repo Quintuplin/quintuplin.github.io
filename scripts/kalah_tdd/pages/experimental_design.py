@@ -10,6 +10,8 @@ from ..figures import design
 INTRO = re.compile(r'<h1 id="kalah-tdd-experiment">.*?</h1>(.*?)<h2', re.S)
 PARA = re.compile(r"<p>.*?</p>", re.S)
 SLUG = "experimental-design"
+# The start clone count a run's multi-start method page records.
+STARTS = re.compile(r"from (\d+) start clones")
 
 
 def inline(text):
@@ -108,11 +110,19 @@ def listed(items):
     return " and ".join(filter(None, (", ".join(items[:-1]), items[-1])))
 
 
-def builds(runs):
+def run_clones(snap, name, run, slugs):
+    """A run's builds and clones: the start clones its own method pages record, else the starts cap as a bound."""
+    n = len(run["methods"])
+    found = [STARTS.search(snap.files.get(f"runs/{name}/methods/{slug}.html", "")) for slug in slugs]
+    if all(found):
+        return f"{name} makes {n} builds in {n + sum(int(m.group(1)) for m in found)} clones {parts.tag('verified')}"
+    return f"{name} makes {n} builds in up to {n + len(slugs) * run['caps']['starts']} clones {parts.tag('recomputed')}"
+
+
+def builds(snap):
     """What a build is, the clones beyond builds per run and the build and rebuild totals."""
-    every = design.runs({"runs": runs})
-    clones = [f"{name} makes {len(run['methods'])} builds in {len(run['methods']) + extra} clones"
-              for name, run in every.items() if (extra := design.start_clones(run))]
+    every = design.runs(snap.facts)
+    clones = [run_clones(snap, name, run, slugs) for name, run in every.items() if (slugs := design.multi_starts(run))]
     if not clones:
         raise ValueError("no multi-start run, so the start clones sentence has nothing to state")
     rebuilds = sum(len(run["methods"]) for name, run in every.items() if name.endswith(design.REBUILD))
@@ -186,7 +196,7 @@ def body(page, snap, idx):
         + parts.figure(next(n), "arms-map", "Builds per arm and run", arms_svg,
                        "Each mark's area grows with its build count. The ring marks the rep-2 replicates rebuilt at a "
                        f"later harness. Counts come from facts.json {parts.tag('recomputed')}.", None, arms_text)
-        + builds(snap.facts["runs"])
+        + builds(snap)
         + f"<p>Every run of the study {parts.tag('recomputed')}. {shared(snap.facts['runs'])} Methods doc is the short "
           f"sha256 of the methods doc each run was built under. The methods text quoted on the study pages is doc "
           f"{snap.doc}.</p>" + runs_table(snap),
