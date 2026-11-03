@@ -28,7 +28,7 @@ RESULTS_ITEMS = 283
 SVG = re.compile(r"<svg\b.*?</svg>", re.S)
 P_OR_ENTRY = re.compile(r'<p\b[^>]*>.*?</p>|<div class="entry">.*?</div>', re.S)
 # Headings the pages add before and after the report sections (#90), and the figures and question links they add.
-ADDED_H2 = {"results/contrasts": (("contrast-holm",), ()), "results/test-order": ((), ("tcp-design",))}
+ADDED_H2 = {"results/contrasts": (("holm",), ()), "results/test-order": ((), ("tcp-design",))}
 NEW_FIGS = {"results/contrasts": ["fig-7-1"], "results/test-order": ["fig-9-1", "fig-9-2"]}
 ADDED_Q = {"results/test-order": 1}
 NS = "{http://www.w3.org/2000/svg}"
@@ -339,8 +339,10 @@ class Results(unittest.TestCase):
         self.assertEqual(figs[0].attrs["id"], "fig-7-1")
         self.assertTrue(figs[0].attrs["aria-label"].startswith("Figure 7.1: "))
         heads = [n for n in main.iter() if study().heading(n)]
-        self.assertEqual(heads[0].attrs.get("id"), "contrast-holm")
+        self.assertEqual([h.attrs.get("id") for h in heads[:2]], ["holm", None])
         self.assertIs(figs[0].closest("section"), heads[0].parent)
+        table_head = next(h for h in heads if h.attrs.get("id") == "contrast-holm")
+        self.assertEqual((table_head.tag, table_head.parent), ("h3", heads[0].parent))
         fig, root = figure_of("results/contrasts", "fig-7-1")
         mk = marks(root)
         self.assertEqual(len(mk), 8)
