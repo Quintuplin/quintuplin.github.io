@@ -136,11 +136,14 @@ def answers(rows, blocks):
         if not row or not m or m[1] != want:
             got = m[1] if m else "none" if block is None else repr(block[:40])
             raise ValueError(f"answer {len(out) + 1} is {got} where the table has {want or 'no row'}")
-        if m[2] != row.n or plain(m[3]) != plain(row.question):
+        if m[2] != row.n:
+            raise ValueError(f"answer {want} is labelled {m[2]} where its row is {row.n}")
+        if plain(m[3]) != plain(row.question):
             raise ValueError(f"answer {want} asks {plain(m[3])!r} where its row asks {plain(row.question)!r}")
         tags, marked = TAG.findall(block), block.count('class="tag"')
         if len(tags) != 1 or marked != 1:
-            raise ValueError(f"answer {want} holds {marked} claim tags, not 1")
+            raise ValueError(f"answer {want} holds {marked} tag spans, {len(tags)} of them plain parts.tag markup; "
+                             f"it needs one of each")
         try:
             tag = parts.tag(tags[0])
         except ValueError as e:

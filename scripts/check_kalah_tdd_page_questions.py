@@ -85,11 +85,13 @@ def questions():
     return kalah("pages.questions")
 
 
-def refused(test, html, *named):
+def refused(test, html, *named, absent=()):
     with test.assertRaises(ValueError) as caught:
         questions().section(html, "10.1")
     for name in named:
         test.assertIn(name, str(caught.exception))
+    for text in absent:
+        test.assertNotIn(text, str(caught.exception))
 
 
 class Questions(unittest.TestCase):
@@ -218,6 +220,10 @@ class Questions(unittest.TestCase):
             with self.subTest(name):
                 self.assertNotEqual(html, sec)
                 refused(self, html, said)
+        # A tag span that is not plain parts.tag markup, and a label naming another question, get their own messages.
+        refused(self, sec.replace(q3, q3.replace('<span class="tag">', '<span class="tag" title="t">')), "q3",
+                absent=("1 claim tags, not 1",))
+        refused(self, sec.replace(q3, q3.replace("<b>Q3</b>", "<b>Q4</b>")), "Q4")
 
     def test_refuses_unknown_block(self):
         for extra in ("<ul><li>b</li></ul>", "stray text", '<p class="lead">x</p>', '<div class="qbar"></div>'):
