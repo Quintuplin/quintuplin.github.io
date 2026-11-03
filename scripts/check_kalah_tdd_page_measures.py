@@ -307,6 +307,16 @@ class Measures(unittest.TestCase):
                 for href in hrefs:
                     self.assertEqual(page().ids[href.removeprefix("#")].tag, "dfn", href)
 
+    def test_e_operands_read_from_columns(self):
+        card = page().ids["e"].closest(cls="entry")
+        code = next(n for n in subs(card, "Formula:")[0].iter() if n.tag == "code")
+        links = [n for n in code.iter() if n.tag == "a"]
+        self.assertEqual(len(links), 4)
+        for a in links:
+            column = check().spaced(page().ids[a.attrs["href"].removeprefix("#")])
+            with self.subTest(check().spaced(a)):
+                self.assertEqual(a.attrs.get("title"), f"read from {column}")
+
     def test_doc_versions_cover_named_runs(self):
         text = lead()
         self.assertIn(f"methods doc {snap().doc}", " ".join(text.split()))
