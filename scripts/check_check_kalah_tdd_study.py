@@ -115,6 +115,27 @@ class Coverage(unittest.TestCase):
         dropped = {"designs/classic": [(kpi, "<p>804,727 Cost to completion so far</p>")]}
         self.assertRegex(" ".join(errors(dropped)), "designs/classic lacks tile '804,727 Cost to completion'")
 
+    def test_copy_counts(self):
+        tile = ('<div class="tile"><span class="sub">Correctness</span><b>11 of 11</b>'
+                '<span class="sub">methods with a full functional mark</span></div>')
+        twice = {"runs/full-1/report.html": [(tile, tile + tile)]}
+        self.assertRegex(" ".join(errors(src=twice)), "landing lacks tile 'Correctness 11 of 11 .*found 1 of 2")
+        self.assertEqual(errors({"": [(tile, tile + tile)]}, src=twice), [])
+        # A page needs the most copies one source holds, so two sources may share one copy.
+        other = {"artifact/showcase.html": [('<div class="grid">', f'<div class="tiles">{tile}</div><div class="grid">')]}
+        self.assertEqual(errors(src=other), [])
+
+    def test_shared_items(self):
+        terms = '<dl class="terms"><dt>PMD</dt><dd>A static analysis tool for Java.</dd></dl>'
+        # A shared item is needed once, however often one source repeats it.
+        self.assertEqual(errors(src={"artifact/showcase.html": [(terms, terms + terms)]}), [])
+        # Shared items wait while either glossary or measures is a stub.
+        self.assertEqual(errors({"glossary": [("<head>", f"<head>{STUB}"), (terms, "")]}), [])
+
+    def test_svg_title_is_no_mark(self):
+        svg = 'aria-label="Scatter of PMD violations against weighted tokens, one mark per method">'
+        self.assertEqual(errors({"results/survey": [(svg, svg + "<title>Scatter</title>")]}), [])
+
     def test_droppedMarkFails(self):
         mark = re.search(r'<path class="mk s2".*?</path>', read("page-results-survey")).group(0)
         found = " ".join(errors({"results/survey": [(mark, "")]}))
@@ -159,6 +180,16 @@ class MetricDefs(unittest.TestCase):
         unit = {"results/survey": [(header, '<th scope="col">PMD violations /15</th>'),
                                    ("<span class=\"sub\">Cost</span>", "<span class=\"sub\">cost, millions</span>")]}
         self.assertEqual(errors(unit), [])
+        # A figure title needs a whole dfn name, so "Methods" does not contain "method".
+        title = "Figure 1. PMD violations against weighted tokens"
+        found = " ".join(errors({"results/survey": [(title, "Figure 1. Methods")]}))
+        self.assertRegex(found, "figure title 'Figure 1. Methods' has no dfn")
+
+    def test_void_tag_closes_itself(self):
+        # A br opens nothing, so the span after it is still the tile's first label span.
+        tile = '<div class="tile"><span class="sub">Cost</span>'
+        found = " ".join(errors({"results/survey": [(tile, '<div class="tile"><br><span class="sub">Zorp</span>')]}))
+        self.assertRegex(found, "tile label 'Zorp' has no dfn")
 
     def test_stub_measures_defines_nothing(self):
         # Labels wait for a built measures page, as shared items do.
