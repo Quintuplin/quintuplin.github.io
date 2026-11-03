@@ -419,6 +419,10 @@ class Measures(unittest.TestCase):
             body(snap()._replace(files={k: v.replace("pmd.txt", "lint.txt") for k, v in snap().files.items()}))
         with self.assertRaisesRegex(ValueError, r"curve\.py"):
             body(with_report(snap(), "curve.py", "curves.py"))
+        for old, new in (("curve.py", "learning_curve.py"), ("harness/report/curve.py", "src/harness/report/curve.py"),
+                         ("awards.py", "old_awards.py")):
+            with self.subTest(new), self.assertRaisesRegex(ValueError, rf"names \S*{re.escape(old)} but"):
+                body(with_report(snap(), old, new))
 
     def test_caption_names_undrawn(self):
         m = measures()
