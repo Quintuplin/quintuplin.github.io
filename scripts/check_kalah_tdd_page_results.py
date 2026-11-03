@@ -446,12 +446,22 @@ class Results(unittest.TestCase):
         del missing["runs"]["tcp-1"]["tcp"]["orders"]["cost"]
         unknown = copy.deepcopy(snap().facts)
         unknown["runs"]["tcp-1"]["tcp"]["orders"]["random"][0] = "T99"
-        for name, call, facts, said in (("stages", results.tcp_stages, stages, "tcp-risk"),
-                                        ("arm order", results.tcp_orders, missing, "tcp-1-r03"),
-                                        ("candidate", results.tcp_orders, unknown, "T99")):
-            with self.subTest(name), self.assertRaises(ValueError) as caught:
-                call(facts)
-            self.assertIn(said, str(caught.exception))
+        steps = copy.deepcopy(snap().facts)
+        steps["runs"]["tcp-1"]["methods"]["tcp-1-r02"]["steps"][0] += " changed"
+        for name, call, facts, said in (("stages", results.tcp_stages, stages, ["tcp-risk"]),
+                                        ("steps", results.tcp_stages, steps, ["tcp-1-r02"]),
+                                        ("arm order", results.tcp_orders, missing, ["tcp-1-r03"]),
+                                        ("candidate", results.tcp_orders, unknown, ["T99"])):
+            with self.subTest(name):
+                with self.assertRaises(ValueError) as caught:
+                    call(facts)
+                for s in said:
+                    self.assertIn(s, str(caught.exception))
+        q20 = copy.deepcopy(snap().facts)
+        q20["runs"]["tcp-1"]["methods"]["tcp-1-r05"]["order"] = "costOnly"
+        with self.assertRaises(ValueError) as caught:
+            results.tcp_results(report(), q20, "results/test-order", kalah("links").index(snap()), "9.1")
+        self.assertIn("Q20 orders", str(caught.exception))
 
     def test_q20_values(self):
         results = kalah("pages.results")
