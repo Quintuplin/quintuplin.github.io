@@ -144,13 +144,17 @@ def award_scoring(snap, numbers):
           f"at tdd-experiment {code(snap.sha[:7])}.", "verified"),
         awards_figure(snap, next(numbers)),
         '<h3 id="award-rules">Award rules</h3>',
-        p("Each rule is quoted from awards.py. Counts toward best overall marks the awards whose criterion joins the "
-          "rank sum."),
+        p("Each rule is quoted from awards.py.", "verified"),
+        p("Counts toward best overall marks the awards whose criterion joins the rank sum, by the criterion to award "
+          "mapping in the Award column below.", "unchecked"),
         table,
         p(f"The {escape(LIMITED)} rule carries a consistency limit, which the {link('', 'landing page')} states with "
-          f"the award."),
+          f"the award.", "verified"),
         '<h3 id="awards-code">awards.py functions and constants</h3>',
-        p("Criteria, docstrings and constants are quoted verbatim from awards.py at the snapshot sha.", "verified"),
+        p("Criterion names and returns, docstrings and constants are quoted verbatim from awards.py at the snapshot "
+          "sha.", "verified"),
+        p("The Award column is this page's mapping of each criterion to the award it scores. awards.py does not state "
+          "it.", "unchecked"),
         grid("awards.py criteria", ["Criterion", "Award", "Returns"],
              [[code(c["name"]), escape(COUNTED[c["name"]]), code(c["returns"])] for c in a["criteria"]]),
         grid("awards.py functions", ["Function", "Docstring"],
@@ -188,7 +192,8 @@ def awards_figure(snap, n):
             "of medals. Best overall: the criterion values are ranked, summed and placed. Badges: cost to completion "
             "and consistency score C are placed for a bronze badge only.")
     return parts.figure(n, "award-flow", title, flow.svg("f6", title, desc, nodes, edges, loops),
-                        "Each award places methods on one value. Only the three criteria feed the best overall rank sum.",
+                        "Each award places methods on one value. Only the three criteria feed the best overall rank sum. "
+                        + parts.tag("verified"),
                         "#award-rules", flow.text_version(title, nodes, edges, loops))
 
 
@@ -245,7 +250,8 @@ def test_figure(snap, n):
     desc = (f"{len({x.lane for x in nodes})} lanes, one per question. Each runs from the question to the stats.py "
             f"functions, the multiple-test correction and the page that reports the result.")
     left = listed(u.lane for u in TEST_USE if not u.functions)
-    left = f" {escape(left)} name no stats.py function in the snapshot, so only the table lists them." if left else ""
+    left = (f" {escape(left)} name no stats.py function in the snapshot, so only the table lists them. "
+            f"{parts.tag('unchecked')}" if left else "")
     return parts.figure(n, "test-flow", title, flow.svg("f7", title, desc, nodes, edges, loops),
                         f"Each lane reads left to right.{left}", "#test-use", flow.text_version(title, nodes, edges, loops))
 
@@ -315,9 +321,9 @@ def threats(snap, idx):
     return section(
         "threats", "Threats to validity",
         p("The report states its limits once, kept here word for word. The gaps after them come from the run records "
-          "and the code docstrings in the snapshot."),
+          "and the code docstrings in the snapshot.", "verified"),
         limits, '<h3 id="record-gaps">Gaps in the records</h3>',
-        p("Each row is derived from facts.json at the snapshot sha, so it changes when the snapshot does."),
+        p("Each row is derived from facts.json at the snapshot sha, so it changes when the snapshot does.", "recomputed"),
         f'<div class="shaped">{"".join(rows)}</div>')
 
 

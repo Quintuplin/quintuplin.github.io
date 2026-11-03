@@ -425,6 +425,21 @@ class Analysis(unittest.TestCase):
         after = kids[kids.index(head) + 1]
         self.assertTrue("table-scroll" in after.classes() and after.attrs.get("role") == "region", after.attrs)
 
+    def test_site_claims_tagged(self):
+        # Prose and captions the site writes each end in a claim tag. Report text quoted under Limits keeps its own.
+        quoted = squash(plain(kalah("snapshot").section(report(), "limits")))
+        paras = [p for id in ("award-scoring", "statistical-tests", "threats")
+                 for p in by_id(id).closest("section").elements() if p.tag == "p" and squash(spaced(p)) not in quoted]
+        paras += [next(p for p in figure(n).iter() if p.tag == "p" and p.closest("figcaption")) for n in ("5.1", "5.2")]
+        tagged = {}
+        for p in paras:
+            last = p.elements()[-1:]
+            with self.subTest(spaced(p)[:50]):
+                self.assertTrue(last and "tag" in last[0].classes(), spaced(p))
+                tagged[spaced(p)] = spaced(last[0]) if last else None
+        # The Award column is the page's criterion to award mapping, which awards.py does not state.
+        self.assertEqual([t for s, t in tagged.items() if s.startswith("The Award column")], ["unchecked"])
+
     def test_figures_wrapped(self):
         ids = parsed().ids
         for n in ("5.1", "5.2"):
