@@ -309,67 +309,104 @@ def intro():
               "source. Unchecked means written or judged by an agent and not checked."))
 
 
+def raters(snap):
+    """How many blind raters score each final, as the report words it."""
+    m = re.search(r"(\w+) blind raters scored each final", snap.files[snapshot.REPORT])
+    if not m:
+        raise ValueError("report does not say how many blind raters scored each final")
+    return m.group(1).lower()
+
+
 def roles(snap):
-    """F8: the agents of one build and the collect steps after it, with counts from the facts."""
+    """F8: the agents of a run by batch phase (Methods, Review, Measure), then collect and rating, with counts from the
+    facts. Phases and their order follow the harness sources batch.js, collect.sh and rate.js."""
     f = snap.facts
-    all_stages = [st for s in f["stages"].values() for st in s["stages"]]
-    n = {k: sum(1 for st in all_stages if st["kind"] == k) for k in KINDS}
-    units = sorted({st["unit"] for st in all_stages if st["kind"] == "L"})
-    separate = [st["id"] for st in all_stages if st.get("note", "").startswith("You are the separate agent")]
+    sets = [(d, st) for d, s in f["stages"].items() for st in s["stages"]]
+    n = {k: sum(1 for _, st in sets if st["kind"] == k) for k in KINDS}
+    units = sorted({st["unit"] for _, st in sets if st["kind"] == "L"})
+    separate = [(f"{d} {st['id']}", st.get("when")) for d, st in sets
+                if st.get("note", "").startswith("You are the separate agent")]
+    always, when = [s for s, w in separate if not w], [(s, w) for s, w in separate if w]
+    if len(always) != 1 or len(when) != 1:
+        raise ValueError(f"expected one separate agent stage that always runs and one with a when: {separate}")
     caps = {r["caps"]["starts"] for r in f["runs"].values()}
     if len(caps) != 1:
         raise ValueError(f"runs differ in their starts cap: {sorted(caps)}")
-    starts = caps.pop()
-    steps = {k: [s["name"] for s in v] for k, v in f["pipeline"]["collect"].items()}
+    one = [s["name"] for s in f["pipeline"]["collect"]["collectOne"]]
+    steps = lambda *names: ", ".join(str(one.index(x) + 1) for x in names)
     found = dispositions(snap)
-    one = steps["collectOne"]
-    harness, method, other = "Harness and report", "Method agent", "Separate agent"
+    harness, method, other = "Harness and collect", "Method agent", "Other agents"
     nodes = [
         flow.node("clone", "Fresh clone and prompt", harness, 0,
                   f"{sum(len(r['methods']) for r in f['runs'].values())} builds in {len(f['runs'])} runs"),
+        flow.node("lister", "Test lister", other, 0, f"{sum('list_phase' in r for r in f['runs'].values())} list-only runs"),
         flow.node("throughout", "Throughout rule (F)", harness, 1, f"{n['F']} stages join every prompt"),
         flow.node("once", "Once stage (S)", method, 1, f"{n['S']} stages"),
-        flow.node("harness", "Harness stage (H)", harness, 2, f"{n['H']} stage"),
-        flow.node("repeat", "Repeat stage (L)", method, 2, f"{n['L']} stages, units {joined(units)}"),
-        flow.node("starts", "Starts stage", method, 3, f"{n['starts']} stage, up to {starts} starts"),
-        flow.node("writer", "Held-out case writer", other, 3, f"{len(separate)} stages: {joined(separate)}"),
-        flow.node("collect", "Collect", harness, 4,
-                  f"collectOne {len(one)} steps, collectList {len(steps['collectList'])}"),
-        flow.node("audit", "Audit flags", harness, 5, f"collectOne step {one.index('audit') + 1}"),
-        flow.node("review", "Blind reviewer", other, 6, f"collectOne step {one.index('review') + 1}"),
-        flow.node("report", "Report", harness, 7,
+        flow.node("writer", "Case writer", other, 2, f"{always[0]}, every build"),
+        flow.node("harness", "Harness stage (H)", harness, 3, f"{n['H']} stage"),
+        flow.node("repeat", "Repeat stage (L)", method, 3, f"{n['L']} stages, units {joined(units)}"),
+        flow.node("transfers", "Harness transfer agents", harness, 4, "seed, winner and list by git"),
+        flow.node("starts", "Starts stage", method, 5, f"{n['starts']} stage, parallel attempts"),
+        flow.node("fresh", "Fresh case writer", other, 6, f"{when[0][0]} if {when[0][1]}"),
+        flow.node("review", "Blind reviewer", other, 7, "Review phase, one per method"),
+        flow.node("measure", "Measure agent", method, 8, "Measure phase, one per method"),
+        flow.node("audit", "Audit and adherence", harness, 9, f"collectOne steps {steps('audit', 'adherence')} of {len(one)}"),
+        flow.node("copy", "Review copy and report", harness, 10, f"collectOne steps {steps('review', 'report')}"),
+        flow.node("raters", "Blind raters", other, 10, f"{raters(snap)} per final, after collect"),
+        flow.node("report", "Study report", harness, 11,
                   f"{len(found)} disposition rows judge {sum(int(d[2]) for d in found)} high flags"),
     ]
-    edges = [flow.edge("clone", "throughout"), flow.edge("throughout", "once"), flow.edge("once", "repeat"),
-             flow.edge("harness", "repeat"), flow.edge("repeat", "starts"), flow.edge("repeat", "writer", "if hidden"),
-             flow.edge("starts", "collect"), flow.edge("collect", "audit"), flow.edge("audit", "review"),
-             flow.edge("review", "report")]
-    return nodes, edges, [flow.loop("repeat", "unit"), flow.loop("starts", "start")]
+    edges = [flow.edge("lister", "clone", "its list"), flow.edge("clone", "throughout"), flow.edge("throughout", "once"),
+             flow.edge("once", "writer", "s2"), flow.edge("once", "repeat"), flow.edge("writer", "harness", "after s3"),
+             flow.edge("harness", "repeat"), flow.edge("repeat", "fresh", "if hidden"),
+             flow.edge("transfers", "starts", f"{caps.pop()} parallel"), flow.edge("starts", "review"),
+             flow.edge("fresh", "review"), flow.edge("review", "measure"), flow.edge("measure", "audit", "collect"),
+             flow.edge("audit", "copy"), flow.edge("copy", "raters"), flow.edge("raters", "report")]
+    return nodes, edges, [flow.loop("repeat", "unit")]
+
+
+def winner_stage(snap):
+    return next(st["id"] for st in snap.facts["stages"]["multi-start"]["stages"] if st.get("returns") == "winner")
 
 
 def agent_roles(snap):
-    title = "Agents in one build and its collect steps"
+    title = "Agents of a run by phase, then collect and rating"
     nodes, edges, loops = roles(snap)
-    svg = flow.svg("f8", title, "A fresh clone takes throughout rules into each prompt. Method agents run once, "
-                   "repeat and starts stages, the harness runs its own stage, and a separate agent writes held-out "
-                   "cases. Collect then runs the audit, the blind reviewer and the report.", nodes, edges, loops)
+    svg = flow.svg("f8", title, "In the Methods phase a fresh clone takes throughout rules into each prompt. Method agents "
+                   "run once, repeat and starts stages and the harness runs its own stage. Transfer agents seed parallel "
+                   "starts by git. A separate agent writes held-out cases in s2 and fresh cases after a hidden failure. "
+                   "The Review phase runs one blind reviewer per method and the Measure phase one measure agent. "
+                   "Collect then audits, checks adherence, copies the review and renders the report. Blind raters score "
+                   "each final after collect.", nodes, edges, loops)
     n = next(parts.numbers("methodology"))
     caption = (f"Stage counts are over all {len(snap.facts['stages'])} stage sets, so one design runs only some kinds. "
-               f"{parts.tag('recomputed')}")
-    rows = [["Method agent", code("<design>:<stage>"), "held-out:s1", "The build clone"],
-            ["Separate agent", code("<design>:<stage>"), "held-out:s2",
+               f"{parts.tag('recomputed')} Phases and their order follow the harness sources batch.js, collect.sh and "
+               f"rate.js. {parts.tag('verified')}")
+    listers = [f"{r['tcp']['lister']}:list" for r in snap.facts["runs"].values() if "list_phase" in r]
+    rows = [["Method agent", "Methods", code("<design>:<stage>"), "held-out:s1", "The build clone"],
+            ["Separate agent", "Methods", code("<design>:<stage>"), "held-out:s2",
              "The cases and scratch folders, outside the clone the method agents read"],
-            ["Harness agents", code("harness:<task>"), "harness:seed-multi-start-1, harness:winner-multi-start",
-             "Tasks the harness hands to an agent, such as seeding and ranking multi-start attempts"],
-            ["Blind reviewer", code("review:<blind id>"), "review:r01, review:r02",
-             "git diff refs/tags/starter..HEAD of src/ and test/, under a blind id"]]
+            ["Harness transfer agents", "Methods", code("harness:<task>-<clone>"),
+             "harness:seed-multi-start-1, harness:winner-multi-start",
+             "Git fetch and merge between clones at low effort, to seed each start, take the winner and fetch the list"],
+            ["Test lister", "List-only run", code("<lister>:list"), escape(joined(listers)),
+             "Its own clone, where it commits only CLAUSES.md and TESTLIST.md"],
+            ["Blind reviewer", "Review", code("review:<blind id>"), "review:r01, review:r02",
+             "git diff refs/tags/starter..HEAD of src/ and test/, under a blind id"],
+            ["Measure agent", "Measure", code("<clone>:measure"), "rep-1-r01:measure, rep-1-r11:measure",
+             "The clone root, where it writes MEASURE.md from LOG.md, git log, GAP.md and ATTEMPTS.md"],
+            ["Blind raters", "Rate, after collect", code("rate:<item>:<rater>"), "none in the snapshot",
+             "Each item of a rating round, scored on the eight cqp.html principles"]]
     return section(
         "agent-roles", "Agent roles",
         parts.figure(n, "f8", title, svg, caption, None, flow.text_version(title, nodes, edges, loops)),
-        grid("Agent roles", ["Role", "Label pattern", "Examples from run records", "Where it works"], rows),
-        p("Examples are agent labels in the full-1 report.", "recomputed"),
-        p("Where each role works is quoted from the stage notes and the review schema.", "verified"),
-        p("The harness agent tasks are read from their labels.", "unchecked"))
+        grid("Agent roles", ["Role", "Phase", "Label pattern", "Examples from run records", "Where it works"], rows),
+        p("Examples are agent labels in the full-1 report and its method pages. Lister labels join each list-only run's "
+          "lister field to :list.", "recomputed"),
+        p("Where each role works paraphrases the stage notes, the review schema and the harness sources batch.js and "
+          "rate.js.", "verified"),
+        p(f"Transfer agents run fixed git commands. Ranking the starts is the method's own stage "
+          f"{escape(winner_stage(snap))}.", "verified"))
 
 
 def body(page, snap, idx):

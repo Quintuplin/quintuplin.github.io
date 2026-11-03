@@ -393,24 +393,42 @@ class AgentRoles(unittest.TestCase):
         kinds = {k: sum(1 for st in stages if st["kind"] == k) for k in ("S", "L", "F", "H", "starts")}
         self.assertEqual(kinds, {"S": 32, "L": 15, "F": 9, "H": 1, "starts": 1})
         units = sorted({st["unit"] for st in stages if st["kind"] == "L"})
-        separate = [st["id"] for st in stages if st.get("note", "").startswith("You are the separate agent")]
+        held = {st["id"]: st for st in f["stages"]["held-out"]["stages"]}
+        self.assertNotIn("when", held["s2"])
+        self.assertEqual(held["s8-writer"]["when"], "hidden_failure")
         starts = {r["caps"]["starts"] for r in f["runs"].values()}
-        self.assertEqual(len(starts), 1)
+        self.assertEqual(starts, {3})
         builds = sum(len(r["methods"]) for r in f["runs"].values())
-        steps = {k: [s["name"] for s in v] for k, v in f["pipeline"]["collect"].items()}
+        one = [s["name"] for s in f["pipeline"]["collect"]["collectOne"]]
+        self.assertEqual(one[-4:], ["audit", "adherence", "review", "report"])
         found = dispositions()
-        want = {"clone": f"{builds} builds in {len(f['runs'])} runs", "throughout": f"{kinds['F']} stages join every prompt",
-                "once": f"{kinds['S']} stages", "harness": f"{kinds['H']} stage",
+        want = {"clone": f"{builds} builds in {len(f['runs'])} runs", "lister": "2 list-only runs",
+                "throughout": f"{kinds['F']} stages join every prompt", "once": f"{kinds['S']} stages",
+                "writer": "held-out s2, every build", "harness": f"{kinds['H']} stage",
                 "repeat": f"{kinds['L']} stages, units {', '.join(units)}",
-                "starts": f"{kinds['starts']} stage, up to {starts.pop()} starts",
-                "writer": f"{len(separate)} stages: {', '.join(separate)}",
-                "collect": f"collectOne {len(steps['collectOne'])} steps, collectList {len(steps['collectList'])}",
-                "audit": f"collectOne step {steps['collectOne'].index('audit') + 1}",
-                "review": f"collectOne step {steps['collectOne'].index('review') + 1}",
+                "transfers": "seed, winner and list by git", "starts": f"{kinds['starts']} stage, parallel attempts",
+                "fresh": "held-out s8-writer if hidden_failure", "review": "Review phase, one per method",
+                "measure": "Measure phase, one per method", "audit": f"collectOne steps 13, 14 of {len(one)}",
+                "copy": "collectOne steps 15, 16", "raters": "three per final, after collect",
                 "report": f"{len(found)} disposition rows judge {sum(int(d[2]) for d in found)} high flags"}
         self.assertEqual({k: n.note for k, n in nodes.items()}, want)
-        for step in ("audit", "review", "report"):
-            self.assertIn(step, steps["collectOne"])
+
+    def test_phase_order(self):
+        # F8 once drew the blind reviewer as a collect step and starts as a sequential loop. batch.js runs the
+        # Methods, Review and Measure phases before collect, and starts in parallel.
+        nodes, edges, loops = roles()
+        self.assertEqual([n.id for n in nodes],
+                         ["clone", "lister", "throughout", "once", "writer", "harness", "repeat", "transfers", "starts",
+                          "fresh", "review", "measure", "audit", "copy", "raters", "report"])
+        self.assertEqual([lp.node for lp in loops], ["repeat"])
+        label = {(e.src, e.dst): e.label for e in edges}
+        self.assertEqual((label[("once", "writer")], label[("repeat", "fresh")], label[("transfers", "starts")]),
+                         ("s2", "if hidden", "3 parallel"))
+        desc = svg().find(self.NS + "desc").text
+        self.assertNotRegex(desc, r"(?i)collect[^.]*reviewer")
+        self.assertRegex(desc, r"Review phase runs one blind reviewer[^.]*Measure phase[^.]*\. Collect then")
+        # Every node but the last leads on, so the text version has no dead end.
+        self.assertEqual([n.id for n in nodes if not any(e.src == n.id for e in edges)], ["report"])
 
     def test_routes_clear(self):
         flow = mod("check_kalah_tdd_flow")
@@ -442,7 +460,8 @@ class AgentRoles(unittest.TestCase):
         _, cell = f.cells(nodes)
         row = {i: c // f.COLS for i, (_, c) in cell.items()}
         wraps = [(row[e.src], row[e.dst]) for e in edges if row[e.src] != row[e.dst]]
-        self.assertEqual(wraps, [(0, 1)])
+        # One wrap per row boundary, as wraps from one row share the gap line below it.
+        self.assertEqual(wraps, [(0, 1), (1, 2)])
         self.assertTrue(all(len(e.label) <= 10 for e in edges), [e.label for e in edges])
         self.assertTrue(all(row[lp.node] == row[lp.back_to or lp.node] for lp in loops))
 
@@ -460,13 +479,26 @@ class AgentRoles(unittest.TestCase):
         self.assertEqual((region.attrs.get("role"), region.attrs.get("tabindex")), ("region", "0"))
 
     def test_role_labels_from_report(self):
-        report = re.sub(r"<[^>]+>", " ", snap().files[mod("kalah_tdd.snapshot").REPORT])
+        # The table once left out the measure agent, the lister and the blind raters.
+        pages = " ".join(re.sub(r"<[^>]+>", " ", v) for k, v in snap().files.items() if k.startswith("runs/full-1/"))
         got = rows(section("agent-roles"), "Agent roles")
-        self.assertEqual(len(got), 4)
+        self.assertEqual([c[0] for c in got], ["Method agent", "Separate agent", "Harness transfer agents", "Test lister",
+                                               "Blind reviewer", "Measure agent", "Blind raters"])
+        role = {c[0]: c for c in got}
+        self.assertEqual(role["Measure agent"][1:3], ["Measure", "<clone>:measure"])
+        listers = {f"{r['tcp']['lister']}:list" for r in facts()["runs"].values() if "list_phase" in r}
+        self.assertEqual(set(role["Test lister"][3].split(", ")), listers)
+        self.assertEqual(role["Blind raters"][3], "none in the snapshot")
+        self.assertNotIn("ranking", role["Harness transfer agents"][4])
         for cells in got:
-            for label in cells[2].split(", "):
+            if cells[0] in ("Test lister", "Blind raters"):
+                continue
+            for label in cells[3].split(", "):
                 with self.subTest(label):
-                    self.assertRegex(report, rf"(?<![\w:-]){re.escape(label)}(?![\w-])")
+                    self.assertRegex(pages, rf"(?<![\w:-]){re.escape(label)}(?![\w-])")
+        text = spaced(section("agent-roles"))
+        self.assertNotIn("quoted from", text)
+        self.assertIn("Ranking the starts is the method's own stage s6", text)
 
 
 if __name__ == "__main__":
