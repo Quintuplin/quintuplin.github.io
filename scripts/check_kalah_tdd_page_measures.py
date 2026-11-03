@@ -724,6 +724,14 @@ class Measures(unittest.TestCase):
         files = {**snap().files, name: snap().files[name].replace("Agent time sums each", "Agent time adds each")}
         with self.assertRaisesRegex(ValueError, "field 'Agent time'"):
             body(snap()._replace(files=files))
+        # body refuses a run without method pages at its metric cards first, so the field card is checked alone.
+        m = measures()
+        src = m.MetricSources(snap())
+        fields = m.TableFields(src, ())
+        src.snap = snap()._replace(files={n: t for n, t in snap().files.items() if not n.startswith(check().METHODS)})
+        agent = next(f for _, _, group in m.FIELDS for f in group if f.name == "Agent time")
+        with self.assertRaisesRegex(ValueError, "field 'Agent time': run full-1 has no method pages"):
+            fields.quote(agent)
 
 
 if __name__ == "__main__":
