@@ -239,19 +239,26 @@ def held_out(snap):
 
 
 def leaves(schema):
-    """(item title, criterion title) for each scored item of the review schema."""
+    """(item title, criterion title, item schema) for each scored item of the review schema."""
     out = []
     for crit in schema["properties"].values():
         subs = crit["properties"]
-        out += [(crit["title"], crit["title"])] if "score" in subs else [(s["title"], crit["title"]) for s in subs.values()]
+        out += [(crit["title"], crit["title"], crit)] if "score" in subs else \
+            [(s["title"], crit["title"], s) for s in subs.values()]
     return out
+
+
+def ranges(item):
+    """The score and reason ranges an item's schema allows."""
+    score, reason = item["properties"]["score"], item["properties"]["reason"]
+    return [f"{score['minimum']} to {score['maximum']}", f"{reason['minLength']} to {reason['maxLength']} characters"]
 
 
 def review(snap):
     schema = snap.facts["runs"]["full-1"]["review_schema"]
     same = len({json.dumps(r["review_schema"], sort_keys=True) for r in snap.facts["runs"].values()}) == 1
     crit = "".join(f"<dt>{escape(c['title'])}</dt><dd>{escape(c['description'])}</dd>" for c in schema["properties"].values())
-    rows = [[escape(item), escape(c), "1 to 5", "1 to 400 characters"] for item, c in leaves(schema)]
+    rows = [[escape(item), escape(c), *ranges(leaf)] for item, c, leaf in leaves(schema)]
     return section(
         "blind-review", "Blind review",
         p(f"<b>{escape(schema['title'])}</b>. {escape(schema['description'])}", "verified"),

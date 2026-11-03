@@ -4,6 +4,7 @@ from facts.json is on the committed page, and Figure F8 matches the facts and ke
 
 Usage: check_kalah_tdd_page_methodology.py
 """
+import copy
 import functools
 import importlib
 import json
@@ -142,6 +143,17 @@ def leaves(schema):
     return out
 
 
+def scored(schema):
+    """The schema object of each scored item, in leaves order."""
+    return [s for c in schema["properties"].values()
+            for s in ([c] if "score" in c["properties"] else c["properties"].values())]
+
+
+def ranges(leaf):
+    score, reason = leaf["properties"]["score"], leaf["properties"]["reason"]
+    return [f"{score['minimum']} to {score['maximum']}", f"{reason['minLength']} to {reason['maxLength']} characters"]
+
+
 def dispositions():
     return DISPOSITION.findall(mod("kalah_tdd.snapshot").section(snap().files[mod("kalah_tdd.snapshot").REPORT],
                                                                   "audit-flag-dispositions"))
@@ -252,8 +264,17 @@ class Data(unittest.TestCase):
             self.assertIn(squash(f"{crit['title']} {crit['description']}"), text)
         got = rows(sec, "Blind review criteria")
         self.assertEqual([c[:2] for c in got], [[item, crit] for crit, item in leaves(schema)])
-        self.assertEqual({tuple(c[2:]) for c in got}, {("1 to 5", "1 to 400 characters")})
+        self.assertEqual([c[2:] for c in got], [ranges(leaf) for leaf in scored(schema)])
         self.assertIn(f'href="{BASE}data/ratings/"', html())
+
+    def test_review_ranges_from_schema(self):
+        # The score and reason ranges were once fixed text, so a schema change left the rows stale.
+        doctored = copy.deepcopy(facts())
+        leaf = scored(doctored["runs"]["full-1"]["review_schema"])[0]
+        leaf["properties"]["score"]["maximum"], leaf["properties"]["reason"]["maxLength"] = 7, 250
+        sec = mod("kalah_tdd.pages.harness").review(snap()._replace(facts=doctored))
+        cells = re.findall(r"<td[^>]*>([^<]*)</td>", sec)
+        self.assertEqual(cells[2:4], ["1 to 7", "1 to 250 characters"])
 
     def test_prompts_and_list_phase(self):
         f, sec = facts(), section("prompts")
