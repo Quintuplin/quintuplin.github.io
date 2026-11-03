@@ -361,6 +361,18 @@ class Analysis(unittest.TestCase):
         ids = re.findall(r'\bid="([^"]*)"', out)
         self.assertTrue(ids)
         self.assertEqual([i for i in ids if not i.startswith("f6-")], [])
+        # The caption opens as the prose does and counts the criteria from the facts.
+        opening = "Each award but best overall places"
+        caption = spaced(next(p for p in fig.iter() if p.tag == "p" and p.closest("figcaption")))
+        prose = next(spaced(p) for p in by_id("award-scoring").closest("section").elements() if p.tag == "p")
+        self.assertTrue(caption.startswith(opening) and prose.startswith(opening), (caption, prose))
+        self.assertIn(f"Only the {len(a['criteria'])} criteria", caption)
+
+        def two_criteria(s):
+            s.facts["analysis"]["criteria"].pop()
+
+        fewer = analysis().awards_figure(mutated(two_criteria), "5.1")
+        self.assertIn(f"Only the {len(a['criteria']) - 1} criteria", fewer)
 
     def test_f7_from_rows(self):
         nodes, _, _ = analysis().test_flow(snap())

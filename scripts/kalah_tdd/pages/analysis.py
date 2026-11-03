@@ -193,8 +193,9 @@ def awards_figure(snap, n):
             "of medals. Best overall: the criterion values are ranked, summed and placed. Badges: cost to completion "
             "and consistency score C are placed for a bronze badge only.")
     return parts.figure(n, "award-flow", title, flow.svg("f6", title, desc, nodes, edges, loops),
-                        "Each award places methods on one value. Only the three criteria feed the best overall rank sum. "
-                        + parts.tag("verified"),
+                        f"Each award but {escape(OVERALL.lower())} places methods on one value. Only the "
+                        f"{len(snap.facts['analysis']['criteria'])} criteria feed the {escape(OVERALL.lower())} rank "
+                        f"sum. {parts.tag('verified')}",
                         "#award-rules", flow.text_version(title, nodes, edges, loops))
 
 
