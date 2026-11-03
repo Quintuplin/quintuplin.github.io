@@ -218,11 +218,13 @@ class Stubs(unittest.TestCase):
 
     def test_committed_study(self):
         s = study()
-        stubs = sum(STUB in html for html in s.load_pages(SCRIPTS.parent).values())
+        from kalah_tdd import pagemap, pages as built
+        # The check's stub detection must agree with the page registry.
+        stubs = {slug for slug, html in s.load_pages(SCRIPTS.parent).items() if s.parse(html).stub}
+        self.assertEqual(stubs, {p.slug for p in pagemap.PAGES if built.built(p) is None})
         self.assertEqual(s.check(SCRIPTS.parent)[0], [])
         final = s.check(SCRIPTS.parent, final=True)[0]
-        self.assertEqual(len([e for e in final if e.endswith(" is a stub")]), stubs)
-        self.assertGreater(stubs, 0, "drop this assert once every page is built")
+        self.assertEqual(len([e for e in final if e.endswith(" is a stub")]), len(stubs))
 
 
 if __name__ == "__main__":
