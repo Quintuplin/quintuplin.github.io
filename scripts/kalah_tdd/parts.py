@@ -37,9 +37,14 @@ def foot(n, href):
 def figure(n, id, title, svg, caption, data_href, text):
     """A study figure: number, title, the svg in a scroll region, then a caption, a Data link and a text version.
     caption and svg are HTML. text is flow.text_version HTML or a sequence of plain strings, one list item each.
-    The title has no id, as chrome.headings would put it in the sidebar."""
+    The title has no id, as chrome.headings would put it in the sidebar. data_href None links the text version,
+    as in source_figure."""
     if not isinstance(text, str):
         text = flow.details(title, "".join(f"<li>{escape(t)}</li>" for t in text))
+    if not text.startswith("<details>"):
+        raise ValueError(f"text is not a text version disclosure: {text[:60]!r}")
+    text = f'<details id="{escape(id)}-data">' + text.removeprefix("<details>")
+    data_href = data_href or f"#{id}-data"
     return (f'<figure id="{escape(id)}" aria-label="Figure {n}: {escape(title)}"><p class="fig-n">Figure {n}</p>'
             f'<h3>{escape(title)}</h3><div class="diagram" role="region" tabindex="0" aria-label="Figure {n} diagram">{svg}</div>'
             f'<figcaption><p>{caption}</p><div class="fig-foot">{foot(n, data_href)}</div>{text}</figcaption></figure>')

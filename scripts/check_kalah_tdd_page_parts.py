@@ -34,7 +34,7 @@ def report():
 
 
 def frame(text=("One", UNSAFE)):
-    return kalah("parts").figure("3.1", "loop", "The loop", SVG, "How a stage <em>runs</em>.", "#loop-data", text)
+    return kalah("parts").figure("3.1", "loop", "The loop", SVG, "How a stage <em>runs</em>.", None, text)
 
 
 class Parts(unittest.TestCase):
@@ -72,6 +72,14 @@ class Parts(unittest.TestCase):
         self.assertTrue(html.endswith("</details></figcaption></figure>"), html)
         self.assertNotRegex(html, r"<h3\b[^>]*\bid=", "a figure title with an id would join the sidebar")
 
+    def test_figure_data_link_reaches_text_version(self):
+        html = frame()
+        self.assertIn('<details id="loop-data"><summary>Text version: The loop</summary>', html)
+        self.assertEqual(re.findall(r'<a href="([^"]*)"[^>]*>Data</a>', html), ["#loop-data"])
+        self.assertIn('<a href="#elsewhere"', kalah("parts").figure("3.1", "loop", "The loop", SVG, "", "#elsewhere", ["x"]))
+        with self.assertRaises(ValueError):
+            frame("<p>not a disclosure</p>")
+
     def test_figure_title_is_a_label(self):
         spec = importlib.util.spec_from_file_location("check_kalah_tdd_study", SCRIPTS / "check_kalah_tdd_study.py")
         study = importlib.util.module_from_spec(spec)
@@ -82,8 +90,10 @@ class Parts(unittest.TestCase):
         flow = kalah("figures.flow")
         nodes = [flow.node("a", "Start"), flow.node("b", "End")]
         given = flow.text_version("The loop", nodes, [flow.edge("a", "b")])
-        self.assertIn(given + "</figcaption>", frame(given))
-        self.assertIn(flow.details("The loop", "<li>One</li><li>a &lt;b&gt; &amp; &quot;c&quot;</li>") + "</figcaption>", frame())
+        linked = '<details id="loop-data">'
+        self.assertIn(given.replace("<details>", linked, 1) + "</figcaption>", frame(given))
+        listed = flow.details("The loop", "<li>One</li><li>a &lt;b&gt; &amp; &quot;c&quot;</li>")
+        self.assertIn(listed.replace("<details>", linked, 1) + "</figcaption>", frame())
         self.assertEqual(flow.details("T", "<li>x</li>"), "<details><summary>Text version: T</summary><ol><li>x</li></ol></details>")
 
     def test_source_figure_keeps_svg_bytes(self):
