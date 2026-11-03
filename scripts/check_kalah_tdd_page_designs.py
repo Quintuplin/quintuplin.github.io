@@ -437,7 +437,7 @@ def f5(slug):
 
 
 def f5_svg(slug):
-    return ET.fromstring(re.search(r'<svg xmlns="http://www.w3.org/2000/svg" class="flow".*?</svg>', html(f"designs/{slug}"), re.S).group(0))
+    return ET.fromstring(re.search(r'<svg [^>]*class="flow".*?</svg>', html(f"designs/{slug}"), re.S).group(0))
 
 
 def cross(s, t):
