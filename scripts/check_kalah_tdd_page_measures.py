@@ -196,7 +196,7 @@ class Measures(unittest.TestCase):
         rows = {i.key: i.shown for i in items if i.page == check().SHARED and i.source.startswith(check().METHODS)}
         self.assertEqual(len(rows), 12)
         for key in rows:
-            self.assertGreaterEqual(page().texts[key], 1, rows[key])
+            self.assertEqual(page().texts[key], 1, rows[key])
         key = next(iter(rows))
         root = check().Tree(html()).root
         text = {}
