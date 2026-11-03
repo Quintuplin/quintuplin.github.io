@@ -197,9 +197,9 @@ class Analysis(unittest.TestCase):
         self.assertEqual(len(entries), 20)
         texts = parsed().texts
         self.assertGreaterEqual(texts[squash("What this study cannot show, stated once for the whole page.")], 1)
-        for e in entries:
-            with self.subTest(e[:40]):
-                self.assertGreaterEqual(texts[squash(plain(e))], 1)
+        shown = [squash(spaced(n)) for n in by_id("threats").closest("section").iter()
+                 if "entry" in n.classes() and n.attrs.get("id") not in GAPS]
+        self.assertEqual(shown, [squash(plain(e)) for e in entries])
         self.assertEqual(by_id("limits").tag, "h3")
         self.assertEqual(idx()[kalah("snapshot").REPORT]["limits"], (SLUG, "limits"))
 
