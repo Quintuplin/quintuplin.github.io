@@ -757,7 +757,7 @@ test("runOffAboveRunRows", () => {
   assert.ok(!rootChip($), "no pair climbs");
 });
 
-// ---- RetuneChecks: Re-tune loads the fitted λ rule's tree for any N, c and t, the F1 button the tidy rule's for a static study dataset ----
+// ---- RetuneChecks: Re-tune loads the fitted λ rule's tree for any N, c and t, the F1 button the tidy rule's for a study dataset with a pair histogram ----
 const TIDY = study.tidy, TOP = study.facts.top_budget;
 const enter = ($, id, v) => { const input = $(id); input.value = String(v); input.dispatch("change"); };
 const target = ($, t) => { const input = $("ex-t"); input.value = String(t); input.dispatch("input"); };
@@ -864,7 +864,7 @@ test("fitKeepsRunningOnSameValue", () => {
   }
 });
 
-// Guard: Re-tune ran F1, which needs the exact pair histogram of a static dataset, so the preferred KAlambda was a second button (#94).
+// Guard: Re-tune ran F1, which needs the exact pair histogram, so KAlambda that needs none was a second button (#94).
 test("retuneLoadsKAlambdaTuple", () => {
   assert.ok(TIDY, "the page embeds the tidy rule");
   for (const r of [tidyRow(1000, 19, 0.3), tidyRow(30000, 40, 0.5)]) {
@@ -974,7 +974,7 @@ test("f1OffWithoutHistogram", () => {
     enter($, "ex-mix", c);
     flush();
     assert.equal($("ex-f1").disabled, true, `F1 is off at N ${n} c ${c}`);
-    assert.equal($("ex-f1").title, `No pair histogram for N ${n} c ${c}. F1 needs the similarity of every pair of a static dataset.`);
+    assert.equal($("ex-f1").title, `No pair histogram for N ${n} c ${c}. F1 needs the similarity of every pair in the dataset.`);
     assert.equal($("ex-retune").disabled, false, "Re-tune covers every N and c");
     $("ex-f1").dispatch("click");
     flush();
@@ -983,7 +983,7 @@ test("f1OffWithoutHistogram", () => {
     enter($, "ex-mix", 19);
     flush();
     assert.equal($("ex-f1").disabled, false, "the corpus has its histogram");
-    assert.equal($("ex-f1").title, "Load the exact best tree F1 picks on the pair histogram of a static study dataset");
+    assert.equal($("ex-f1").title, "Load the exact best tree F1 picks on the pair histogram of a study dataset");
   }
 });
 
@@ -1191,16 +1191,16 @@ test("savedOffListNMapsToNearest", () => {
 });
 
 test("termsNameBothRules", () => {
-  const defined = terms(), F1 = "Tidy rule F1 (F1 exact best for static data)", FIT = "Fitted λ rule (Re-tune)";
+  const defined = terms(), F1 = "Tidy rule F1 (F1 exact best)", FIT = "Fitted λ rule (Re-tune)";
   for (const t of ["Dataset size N", "Cluster size c", "Near-pair mass m", F1, FIT, "Weight λ", "A_lo and A_hi", "Expected errors (study)"]) {
     assert.ok(defined.get(t)?.length > 20, `the terms define ${t}`);
   }
   const f1 = defined.get(F1), fitText = defined.get(FIT), [lo, hi] = TIDY.depths;
   assert.match(f1, new RegExp(`depths ${lo} to ${hi} within ${TOP} rows`), "F1 names its depths and budget");
-  // Guard: the terms did not say F1 suits only a static dataset or that KAlambda is preferred otherwise with its limits (#94).
-  for (const re of [/exact best/, /static dataset/, /all-pairs/, /pair histogram/]) assert.match(f1, re, `F1 states its condition: ${re}`);
+  // Guard: the terms did not say F1 holds up under drift or that KAlambda needs no pair histogram with its limits (#94).
+  for (const re of [/exact best/, /all-pairs/, /pair histogram/, /drift/, /stale|older dataset/]) assert.match(f1, re, `F1 states its condition: ${re}`);
   assert.doesNotMatch(f1, /λ/, "F1 has no fitted weight");
-  for (const re of [/preferred rule/, /KAlambda/, /m must be estimated/, /drift/, /uneven similarity spread/]) assert.match(fitText, re, `the fit states ${re}`);
+  for (const re of [/no pair histogram/, /KAlambda/, /m must be estimated/, /sample of the documents/, /uneven similarity spread/]) assert.match(fitText, re, `the fit states ${re}`);
   // The fit's ranges are the generated datasets', the corpus aside.
   const gen = TIDY.datasets.filter(([n]) => n !== study.facts.corpus.docs), span = (i) => [Math.min(...gen.map((d) => d[i])), Math.max(...gen.map((d) => d[i]))];
   assert.match(fitText, new RegExp(`N from ${span(0).join(" to ")} and c from ${span(1).join(" to ")}`), "the fit names its fitted ranges");
@@ -1208,7 +1208,7 @@ test("termsNameBothRules", () => {
   assert.doesNotMatch(fitText, /§/);
   assert.match(defined.get("Weight λ"), /a twofold error in m moves λ by about 2<sup>γ<\/sup> − 1\. That is <span id="ex-fit-m2"><\/span>\./);
   assert.match(defined.get("Expected errors (study)"), /Re-tune shows it only for an N, c and t the study ran\.$/);
-  assert.match(PageScripts.markup(), /<button[^>]*\bid="ex-f1"[^>]*>F1 exact best for static data<\/button>/);
+  assert.match(PageScripts.markup(), /<button[^>]*\bid="ex-f1"[^>]*>F1 exact best<\/button>/);
   const fitButton = PageScripts.markup().match(/<button[^>]*\bid="ex-retune"[^>]*>Re-tune<\/button>/)?.[0];
   assert.ok(fitButton, "the fit has its own button");
   assert.doesNotMatch(fitButton, /tidy/i);
@@ -1234,6 +1234,13 @@ test("termsNameBothRules", () => {
   const maxN = Math.max(...TIDY.datasets.map(([n]) => n));
   assert.ok(facts.includes(`N up to ${maxN}`), `the excess range names its N cap: ${facts}`);
   assert.ok(sets.startsWith(`${TIDY.datasets.length} study datasets with N up to ${maxN}`), `F1 names its dataset count and N cap: ${sets}`);
+});
+
+// Guard: the page tied F1 to static data, but F1 tuned on an older dataset stays near its best after growth or a mix change (#94).
+test("termsMatchDriftStudy", () => {
+  for (const s of ["suits only a static", "not static", "for static data", "No run tests an estimated m, drift"]) {
+    assert.ok(!PageScripts.html.includes(s), `the page drops "${s}"`);
+  }
 });
 
 // Guard: Dataset size N typed the study's N values as every N the study ran, which went stale when it added N 1000000 (#54).
