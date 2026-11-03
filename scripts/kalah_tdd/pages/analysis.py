@@ -264,13 +264,17 @@ def rebuild(facts):
     if REBUILD not in runs or REP not in runs:
         raise ValueError(f"{REBUILD} needs the {REBUILD} and {REP} run records")
     again, base = runs[REBUILD], runs[REP]
+    builds = [b for wave in again.get("waves", []) for b in wave]
+    delta = (again.get("harness_delta") or {}).get("sha256")
+    for field, value in (("methods", again.get("methods")), ("builds in its waves", builds), ("harness_delta.sha256", delta)):
+        if not value:
+            raise ValueError(f"{REBUILD} records no {field}")
     methods = sorted({m["method"] for m in again["methods"].values()})
     if len(methods) != 1:
         raise ValueError(f"{REBUILD} rebuilt {len(methods)} methods ({', '.join(methods)}); the gap row names one")
     new, old = (r.get("harness", {}).get("commit") for r in (again, base))
     if not new or not old or new == old:
         raise ValueError(f"{REBUILD} needs a harness commit unlike {REP}'s, got {new!r} against {old!r}")
-    builds = [b for wave in again["waves"] for b in wave]
     new_cli, old_cli = ((r["harness"].get("claude_version") or "").split()[:1] for r in (again, base))
     if not new_cli or not old_cli:
         raise ValueError(f"{REBUILD} and {REP} each need a harness claude_version")
@@ -278,7 +282,7 @@ def rebuild(facts):
            f"They record agent CLI {new_cli[0]} and {old_cli[0]}.")
     return (f"{REBUILD} rebuilt the {len(builds)} {escape(methods[0])} replicates {listed(builds)} at harness commit "
             f"{code(new[:7])}, where the rest of {REP} records {code(old[:7])}. The rebuild records a harness delta of "
-            f"sha256 {code(again['harness_delta']['sha256'][:8])}. {cli}")
+            f"sha256 {code(delta[:8])}. {cli}")
 
 
 def docs(snap):

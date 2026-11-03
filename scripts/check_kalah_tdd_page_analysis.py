@@ -256,6 +256,21 @@ class Analysis(unittest.TestCase):
         def no_run(s):
             del s.facts["runs"]["rep-2/rebuild"]
 
+        def no_methods(s):
+            del s.facts["runs"]["rep-2/rebuild"]["methods"]
+
+        def no_waves(s):
+            s.facts["runs"]["rep-2/rebuild"]["waves"] = [[]]
+
+        def no_waves_key(s):
+            del s.facts["runs"]["rep-2/rebuild"]["waves"]
+
+        def no_delta(s):
+            del s.facts["runs"]["rep-2/rebuild"]["harness_delta"]
+
+        def no_delta_sha(s):
+            del s.facts["runs"]["rep-2/rebuild"]["harness_delta"]["sha256"]
+
         def no_limit(s):
             f = doc(s, "stats", "mann_whitney_exact")
             f["doc"] = f["doc"].replace(" The C(n, len(xs)) splits suit small samples only.", "")
@@ -268,7 +283,9 @@ class Analysis(unittest.TestCase):
         self.assertIn("Every run records a harness commit", text)
 
         for change, name in ((two_methods, "rep-2/rebuild"), (same_commit, "rep-2/rebuild"), (no_harness, "rep-2/rebuild"),
-                             (no_cli, "rep-2/rebuild"), (no_run, "rep-2/rebuild"), (no_limit, "mann_whitney_exact")):
+                             (no_cli, "rep-2/rebuild"), (no_run, "rep-2/rebuild"), (no_methods, "methods"),
+                             (no_waves, "waves"), (no_waves_key, "waves"), (no_delta, "harness_delta.sha256"),
+                             (no_delta_sha, "harness_delta.sha256"), (no_limit, "mann_whitney_exact")):
             refuses(self, change, name)
 
     def test_award_rules_from_facts(self):
