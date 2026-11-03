@@ -389,7 +389,7 @@ def agent_roles(snap):
             ["Harness transfer agents", "Methods", code("harness:<task>-<clone>"),
              "harness:seed-multi-start-1, harness:winner-multi-start",
              "Git fetch and merge between clones at low effort, to seed each start, take the winner and fetch the list"],
-            ["Test lister", "List-only run", code("<lister>:list"), escape(joined(listers)),
+            ["Test lister", "Methods (list-only run)",code("<lister>:list"), escape(joined(listers)),
              "Its own clone, where it commits only CLAUSES.md and TESTLIST.md"],
             ["Blind reviewer", "Review", code("review:<blind id>"), "review:r01, review:r02",
              "git diff refs/tags/starter..HEAD of src/ and test/, under a blind id"],

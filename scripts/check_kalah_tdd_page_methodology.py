@@ -492,6 +492,8 @@ class AgentRoles(unittest.TestCase):
                                                "Blind reviewer", "Measure agent", "Blind raters"])
         role = {c[0]: c for c in got}
         self.assertEqual(role["Measure agent"][1:3], ["Measure", "<clone>:measure"])
+        # batch.js gives the lister callAgent's default phase, Methods.
+        self.assertEqual(role["Test lister"][1], "Methods (list-only run)")
         listers = {f"{r['tcp']['lister']}:list" for r in facts()["runs"].values() if "list_phase" in r}
         self.assertEqual(set(role["Test lister"][3].split(", ")), listers)
         self.assertEqual(role["Blind raters"][3], "none in the snapshot")
