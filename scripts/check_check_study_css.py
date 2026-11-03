@@ -143,6 +143,10 @@ class DiagramPull(unittest.TestCase):
         # A rule written under .diagram is itself inside the scroll region.
         self.assertRegex(" ".join(pull(lambda t: t + ".diagram .zz{margin-left:-6px}")), r"\.diagram \.zz sets margin-left:-6px")
 
+    def test_not_toc_is_not_sidebar(self):
+        # :not(.toc) names everything but the sidebar, so a figure can hold it.
+        self.assertRegex(" ".join(pull(lambda t: t + "details:not(.toc) .cnt2{margin-left:-3px}")), r"\.cnt2 sets margin-left:-3px")
+
     def test_reset_and_sidebar_pass(self):
         # The sidebar never sits inside a figure, so its current-page pull needs no reset.
         for probe in (".x{margin-inline-start:-4px}.diagram .x{margin-inline-start:0}", ".toc li a{margin-left:-2px}"):
