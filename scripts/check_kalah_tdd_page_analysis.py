@@ -245,6 +245,13 @@ class Analysis(unittest.TestCase):
             f = doc(s, "stats", "mann_whitney_exact")
             f["doc"] = f["doc"].replace(" The C(n, len(xs)) splits suit small samples only.", "")
 
+        def all_recorded(s):
+            for run in s.facts["runs"].values():
+                run.setdefault("harness", {}).setdefault("commit", "0" * 40)
+
+        text = analysis().harness(mutated(all_recorded).facts)
+        self.assertIn("Every run records a harness commit", text)
+
         for change, name in ((two_methods, "rep-2/rebuild"), (same_commit, "rep-2/rebuild"), (no_harness, "rep-2/rebuild"),
                              (no_limit, "mann_whitney_exact")):
             refuses(self, change, name)

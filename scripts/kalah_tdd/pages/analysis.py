@@ -79,7 +79,7 @@ def link(slug, text):
 def listed(items):
     """a, b and c."""
     items = list(items)
-    return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} and {items[-1]}"
+    return "" if not items else items[0] if len(items) == 1 else f"{', '.join(items[:-1])} and {items[-1]}"
 
 
 def lead():
@@ -245,9 +245,9 @@ def test_figure(snap, n):
     desc = (f"{len({x.lane for x in nodes})} lanes, one per question. Each runs from the question to the stats.py "
             f"functions, the multiple-test correction and the page that reports the result.")
     left = listed(u.lane for u in TEST_USE if not u.functions)
+    left = f" {escape(left)} name no stats.py function in the snapshot, so only the table lists them." if left else ""
     return parts.figure(n, "test-flow", title, flow.svg("f7", title, desc, nodes, edges, loops),
-                        f"Each lane reads left to right. {escape(left)} name no stats.py function in the snapshot, so "
-                        f"only the table lists them.", "#test-use", flow.text_version(title, nodes, edges, loops))
+                        f"Each lane reads left to right.{left}", "#test-use", flow.text_version(title, nodes, edges, loops))
 
 
 def rebuild(facts):
@@ -282,6 +282,8 @@ def docs(snap):
 
 def harness(facts):
     none = [r for r, v in facts["runs"].items() if not v.get("harness", {}).get("commit")]
+    if not none:
+        return "Every run records a harness commit in args.json."
     return (f"{len(none)} of {len(facts['runs'])} runs record no harness commit in args.json: {listed(none)}. "
             f"The harness version they ran is not on record.")
 
