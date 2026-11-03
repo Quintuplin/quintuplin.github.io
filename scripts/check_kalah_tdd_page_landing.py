@@ -17,6 +17,8 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 ARTIFACT = "https://claude.ai/artifact/5g7jbNAxSnZPjQ2nLEJ15a"
 SVG = re.compile(r"<svg\b.*?</svg>", re.S)
+# The runs the committed landing names, in first-mention order. Recount by reading the page before re-pinning.
+NAMED_RUNS = ("full-1", "tcp-1-list2", "rep-1", "rep-2", "tcp-1")
 
 
 @functools.cache
@@ -94,6 +96,22 @@ def missing_text(s):
         elif chunk[1] != "Kalah TDD showcase":
             out.append(chunk[1])
     return out
+
+
+def doc_version_gaps(page):
+    """What the doc version sentence of the committed landing page gets wrong: its runs against the expected list,
+    then against a plain token scan of the rest of the page, each with its own run_doc."""
+    snapshot = kalah("snapshot")
+    main = next(n for n in module("check_kalah_tdd_study").Tree(page).root.iter() if n.tag == "main")
+    docs = [text(n) for n in main.iter() if n.tag == "p" and text(n).startswith("The methods text")]
+    if len(docs) != 1:
+        return [f"{len(docs)} doc version sentences"]
+    listed = docs[0].split("short sha256: ", 1)[1].removesuffix(".").split(", ")
+    tokens = {t.strip(".,;:()") for t in text(main).replace(docs[0], "").split()}
+    named = sorted(tokens & set(snap().facts["runs"]))
+    gaps = [] if [e.split()[0] for e in listed] == list(NAMED_RUNS) else [f"lists {listed}"]
+    gaps += [run for run in named if f"{run} {snapshot.run_doc(snap(), run)}" not in listed]
+    return gaps + [e for e in listed if e.split()[0] not in named]
 
 
 def hrefs(nodes):
@@ -198,16 +216,18 @@ class LandingContent(unittest.TestCase):
                 self.assertEqual(page.count(f"{run} {snapshot.run_doc(snap(), run)}"), 1)
 
     def test_doc_versions_cover_every_named_run(self):
-        snapshot = kalah("snapshot")
-        docs = [text(n) for n in main_node().iter() if n.tag == "p" and text(n).startswith("The methods text")]
-        self.assertEqual(len(docs), 1)
-        rest = text(main_node()).replace(docs[0], "")
-        keys = "|".join(map(re.escape, sorted(snap().facts["runs"], key=len, reverse=True)))
-        named = set(re.findall(rf"(?<![\w/-])({keys})(?![\w/-])", rest))
-        self.assertIn("tcp-1", named)
-        for run in named:
-            with self.subTest(run):
-                self.assertEqual(docs[0].count(f"{run} {snapshot.run_doc(snap(), run)}"), 1)
+        self.assertEqual(doc_version_gaps(html()), [])
+
+    def test_doc_version_check_catches_wrong_guard(self):
+        landing = kalah("pages.landing")
+
+        def wrong(s, html):  # a space joins the lookahead guard, so a run followed by a space goes unnamed
+            keys = "|".join(map(re.escape, sorted(s.facts["runs"], key=len, reverse=True)))
+            return list(dict.fromkeys(re.findall(rf"(?<![\w/-])({keys})(?![\w/ -])", re.sub(r"<[^>]+>", " ", html))))
+
+        with unittest.mock.patch.object(landing, "named_runs", wrong):
+            page = module("build_kalah_tdd_study").render_page(landing_page(), snap(), kalah("links").index(snap()))
+        self.assertNotEqual(doc_version_gaps(page), [])
 
     def test_keeps_all_source_text(self):
         self.assertEqual(missing_text(snap()), [])
