@@ -242,8 +242,8 @@ class Design(unittest.TestCase):
                 self.assertRegex(fig, r"</p><h3>[^<]+</h3>")
                 root = svg_root(fig)
                 self.assertTrue(root.find(NS + "title").text and root.find(NS + "desc").text)
-                for href in re.findall(r'<a href="#([^"]+)"[^>]*>Data</a>', fig):
-                    self.assertIn(href, ids)
+                self.assertEqual(re.findall(r'<a href="#([^"]+)"[^>]*>Data</a>', fig), [f"{id}-data"])
+                self.assertIn(f"{id}-data", ids)
 
     def test_text_versions_match_nodes(self):
         self.assertEqual(len(flows()), 2)
