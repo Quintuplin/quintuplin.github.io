@@ -214,6 +214,9 @@ ul.notes{padding-left:1.2em;color:var(--muted)}
 .src{display:block;font-size:13px;color:var(--muted);margin-top:var(--space-1)}
 .qchart{display:block;min-height:24px;line-height:24px;font-size:13px}
 main li a,.src a,.record-link{display:inline-block;min-height:24px;padding:2px 0}
+/* Landing contents: a wrapped title keeps its list number on its first line, and the blurb sits under it. */
+.contents li > a{vertical-align:top}
+.contents .blurb{display:block;font-size:14px}
 
 /* Folds and record lists. Folds keep their "N rows and M columns" summary. */
 details:not(.toc){margin:var(--space-3) 0;padding:0 14px}

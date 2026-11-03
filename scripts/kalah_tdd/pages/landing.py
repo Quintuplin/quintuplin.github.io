@@ -95,7 +95,7 @@ def contents(page):
                         f'<span class="blurb">{escape(p.blurb)}</span></li>' for p in pages)
         cards.append(f'<div class="design"><h3>{part}</h3><ol start="{pagemap.number(pages[0].slug)}">{items}</ol></div>')
     return (f'<h2 id="contents">Contents</h2>\n<p>All {len(pagemap.PAGES)} parts in reading order, grouped as the '
-            f'sidebar groups them. Part numbers match the header of each page.</p>\n<div class="grid">{"".join(cards)}</div>')
+            f'sidebar groups them. Part numbers match the header of each page.</p>\n<div class="grid contents">{"".join(cards)}</div>')
 
 
 def current(p, page):
