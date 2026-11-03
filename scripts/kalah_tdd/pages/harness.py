@@ -279,8 +279,9 @@ def collect(snap):
     rows = [[escape(x) for x in d] for d in found]
     return section(
         "collect-audit", "Collect and audit",
-        p(f"After the build stages {code('collect.sh')} collects each run. Its steps marked skippable can be skipped.",
-          "recomputed"), lists,
+        p(f"After the build stages {code('collect.sh')} collects each run. Its {code('branchStep')} records a step marked "
+          f"skippable as skipped when {code('fetchBack')} failed, as the method branch may then be stale.",
+          "verified"), lists,
         p(f"<b>Audit flag.</b> {glossary(snap, 'Audit flag')}", "verified"),
         grid("Audit flag dispositions summary", ["Design", "Channel", "High flags", "Verdict"], rows),
         p(f"{len(found)} rows judge {sum(int(d[2]) for d in found)} high flags. The evidence for each is in "

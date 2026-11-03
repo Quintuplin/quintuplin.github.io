@@ -238,6 +238,10 @@ class Data(unittest.TestCase):
             with self.subTest(name):
                 self.assertEqual(items(sec, f"{name} steps"),
                                  [s["name"] + (" skippable" if s["skippable"] else "") for s in steps])
+        # The intro once said only that skippable steps can be skipped. It names when instead.
+        intro = spaced(next(n for n in sec.iter() if n.tag == "p"))
+        self.assertIn("fetchBack", intro)
+        self.assertTrue(intro.endswith("verified"), intro)
 
     def test_review_schema_complete(self):
         schema, sec = facts()["runs"]["full-1"]["review_schema"], section("blind-review")
