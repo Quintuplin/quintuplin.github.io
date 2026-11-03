@@ -484,7 +484,8 @@ class StageFlow(unittest.TestCase):
         cases = {"wrong kind": (changed(kind="S"), pre), "unknown kind": (changed(kind="Q"), pre),
                  "step missing from the steps": (changed(steps=[2, 3, 4, 5, 6, 7, 9]), pre),
                  "step dropped from the steps": (facts, last), "unknown when": (changed(when="timeout"), pre),
-                 "line of unknown form": (facts, pre.replace('<span class="st">2. ', '<span class="st">', 1))}
+                 "line of unknown form": (facts, pre.replace('<span class="st">2. ', '<span class="st">', 1)),
+                 "unknown with design": (changed(**{"with": {"nope": [2]}}), pre)}
         for name, (bad, steps) in cases.items():
             with self.subTest(name), self.assertRaisesRegex(ValueError, r"tpp\b.*L2-7"):
                 sf.stages("tpp", bad, steps)
@@ -494,6 +495,9 @@ class StageFlow(unittest.TestCase):
         extra = {**facts, "tpp": {**facts["tpp"], "stages": [*facts["tpp"]["stages"], {"id": "s8", "kind": "S", "steps": [8]}]}}
         with self.assertRaisesRegex(ValueError, r"tpp\b.*s8.*no steps left"):
             sf.stages("tpp", extra, pre)
+        # An empty header block reaches the header check and is refused, never skipped.
+        with self.assertRaisesRegex(ValueError, r"tpp\b.*s1"):
+            sf.stages("tpp", facts, pre.replace('<span class="hd">', '<span class="hd">once:</span><span class="hd">', 1))
         # Stages in a row under one header share its block, as noun-verb's eight once stages do.
         self.assertEqual(len(sf.stages("noun-verb", facts, merged("noun-verb"))), 8)
 

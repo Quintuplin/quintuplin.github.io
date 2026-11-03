@@ -32,7 +32,8 @@ def stages(slug, facts, pre):
             blocks[-1][1].append(line)
     out, b, i = [], 0, 0
     for stage in facts[slug]["stages"]:
-        if b < len(blocks) and i == len(blocks[b][1]):
+        # Advance only past a block a stage has used, so an empty block reaches the header check and is refused.
+        if b < len(blocks) and 0 < i == len(blocks[b][1]):
             b, i = b + 1, 0
         if b == len(blocks):
             raise ValueError(f"{slug}: stage {stage['id']} has no steps left to match")
@@ -61,6 +62,9 @@ def checked(slug, facts, stage, header, lines):
             got.append(int(m[1]))
         else:
             borrowed.setdefault(m[2], []).append(int(m[3]))
+    unknown = [k for k in stage.get("with", {}) if k not in facts]
+    if unknown:
+        raise ValueError(f"{where} takes steps with unknown designs {unknown}")
     with_ = {facts[k]["method"]: ns for k, ns in stage.get("with", {}).items()}
     if (got, borrowed) != (stage["steps"], with_):
         raise ValueError(f"{where} lists steps {stage['steps']} with {with_}, its header holds {got} with {borrowed}")
