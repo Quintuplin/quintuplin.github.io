@@ -57,7 +57,10 @@ def joined(values):
 
 
 def methodology(snap, title):
-    return next(s["text"] for s in snap.facts["analysis"]["methodologies"] if s["title"] == title)
+    found = [s["text"] for s in snap.facts["analysis"]["methodologies"] if s["title"] == title]
+    if not found:
+        raise ValueError(f"methods doc has no section {title!r}")
+    return found[0]
 
 
 def families(snap):
@@ -69,6 +72,8 @@ def families(snap):
 def glossary(snap, term):
     """A report glossary definition, as HTML."""
     m = re.search(rf"<b>{re.escape(term)}</b>\. Tag: verified\.</p><p><b>Definition:</b> (.*?)</p>", snap.files[snapshot.REPORT])
+    if not m:
+        raise ValueError(f"report glossary has no verified term {term!r}")
     return m.group(1)
 
 
@@ -135,6 +140,8 @@ def changes(snap):
             d = m.get("arm") or next(k for k, s in f["stages"].items() if s["method"] == m["method"])
             now = {st["id"]: st for st in f["stages"][d]["stages"]}
             for st in m["stages"]:
+                if st["id"] not in now:
+                    raise ValueError(f"{run} {build} ran stage {st['id']!r}, which stages.json {d} lacks")
                 for field in sorted(set(st) | set(now[st["id"]])):
                     if st.get(field) != now[st["id"]].get(field):
                         out.setdefault((d, st["id"], field, json.dumps(st.get(field))), []).append(f"{run} {build}")
@@ -309,7 +316,10 @@ def roles(snap):
     n = {k: sum(1 for st in all_stages if st["kind"] == k) for k in KINDS}
     units = sorted({st["unit"] for st in all_stages if st["kind"] == "L"})
     separate = [st["id"] for st in all_stages if st.get("note", "").startswith("You are the separate agent")]
-    starts = {r["caps"]["starts"] for r in f["runs"].values()}.pop()
+    caps = {r["caps"]["starts"] for r in f["runs"].values()}
+    if len(caps) != 1:
+        raise ValueError(f"runs differ in their starts cap: {sorted(caps)}")
+    starts = caps.pop()
     steps = {k: [s["name"] for s in v] for k, v in f["pipeline"]["collect"].items()}
     found = dispositions(snap)
     one = steps["collectOne"]

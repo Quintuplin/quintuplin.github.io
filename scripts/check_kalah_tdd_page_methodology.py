@@ -337,6 +337,37 @@ class Data(unittest.TestCase):
                 self.assertTrue(any(n.tag == "span" and "tag" in n.classes() for n in s.iter()))
 
 
+class Refusals(unittest.TestCase):
+    """A missing or conflicting fact stops the build with a ValueError that names it."""
+
+    def refuses(self, name, call, doctor=None, files=None):
+        f = copy.deepcopy(facts())
+        if doctor:
+            doctor(f)
+        s = snap()._replace(facts=f, files=files or snap().files)
+        with self.assertRaisesRegex(ValueError, re.escape(name)):
+            call(mod("kalah_tdd.pages.harness"), s)
+
+    def test_missing_glossary_term(self):
+        report = mod("kalah_tdd.snapshot").REPORT
+        files = {**snap().files, report: snap().files[report].replace("<b>Audit flag</b>", "<b>Audit</b>")}
+        self.refuses("Audit flag", lambda h, s: h.glossary(s, "Audit flag"), files=files)
+
+    def test_missing_methodology(self):
+        self.refuses("Held-out TDD", lambda h, s: h.methodology(s, "Held-out TDD"),
+                     lambda f: f["analysis"]["methodologies"].clear())
+
+    def test_run_stage_missing_from_stages(self):
+        def doctor(f):
+            f["runs"]["full-1"]["methods"]["classic"]["stages"][0]["id"] = "s99"
+        self.refuses("s99", lambda h, s: h.changes(s), doctor)
+
+    def test_starts_caps_differ(self):
+        def doctor(f):
+            f["runs"]["full-1"]["caps"]["starts"] = 5
+        self.refuses("starts", lambda h, s: h.roles(s), doctor)
+
+
 class AgentRoles(unittest.TestCase):
     NS = "{http://www.w3.org/2000/svg}"
 
