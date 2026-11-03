@@ -5,6 +5,7 @@ import re
 from html import escape
 
 from .. import links, parts, snapshot
+from ..figures import flow
 
 SLUG = "methodology/analysis"
 REBUILD, REP = "rep-2/rebuild", "rep-2"
@@ -12,6 +13,10 @@ REBUILD, REP = "rep-2/rebuild", "rep-2"
 CODE_LIMITS = (("stats", "stats.py", "mann_whitney_exact", "suit small samples only"),
                ("functions", "awards.py", "overall", "A method a criterion leaves out ranks last on it."))
 SENTENCE = re.compile(r"(?<=[.?!])\s+(?=[A-Z])")
+# awards.py criterion to the award it scores; best overall sums the ranks on these.
+COUNTED = {"cost_effective": "Most cost effective", "fewest_errors": "Fewest errors", "alignment": "Best CQP/PMD alignment"}
+OVERALL, BADGES, LIMITED = "Best overall", ("Cheapest", "Most consistent design"), "Most consistent design"
+LIMIT = "{limit}"
 
 
 def section(id, title, *html):
@@ -43,6 +48,105 @@ def lead():
              f"{link('glossary', 'Glossary')}. The medals are on the {link('', 'landing page')}. The test results are on "
              f"the results pages for the {link('results/survey', 'survey')}, the "
              f"{link('results/contrasts', 'planned contrasts')} and {link('results/consistency', 'consistency')}.")
+
+
+def grid(caption, head, rows):
+    """A captioned table that stacks into labelled cells on a narrow screen. Cells are HTML."""
+    th = "".join(f'<th scope="col">{escape(h)}</th>' for h in head)
+    body = "".join("<tr>" + "".join(f'<td data-th="{escape(h)}">{c}</td>' for h, c in zip(head, r)) + "</tr>" for r in rows)
+    return parts.table(f'<table class="cols"><caption>{escape(caption)}</caption><thead><tr>{th}</tr></thead>'
+                       f"<tbody>{body}</tbody></table>", caption)
+
+
+def rules(facts):
+    """(title, rule without its limit placeholder, counts toward best overall) per award in order. Refuses a criterion
+    or award this page cannot place, and a limit placeholder anywhere but the consistency award."""
+    a = facts["analysis"]
+    for c in a["criteria"]:
+        if c["name"] not in COUNTED:
+            raise ValueError(f"awards.py criterion {c['name']!r} scores no award this page knows")
+    titles = [w["title"] for w in a["awards"]]
+    for t in titles:
+        if t not in (OVERALL, *COUNTED.values(), *BADGES):
+            raise ValueError(f"award {t!r} is not one this page places")
+    for name in {c["name"] for c in a["criteria"]}:
+        if COUNTED[name] not in titles:
+            raise ValueError(f"awards.py criterion {name!r} scores {COUNTED[name]!r}, which the award list lacks")
+    out = []
+    for w in a["awards"]:
+        if (LIMIT in w["rule"]) != (w["title"] == LIMITED):
+            raise ValueError(f"award {w['title']!r} {'carries' if LIMIT in w['rule'] else 'lacks'} the {LIMIT} placeholder")
+        out.append((w["title"], w["rule"].replace(LIMIT, "").strip(), w["title"] in COUNTED.values()))
+    return out
+
+
+def counts_cell(title, counts):
+    return "Yes" if counts else "Is the rank sum" if title == OVERALL else "No"
+
+
+def award_scoring(snap, numbers):
+    a = snap.facts["analysis"]
+    found, k = rules(snap.facts), a["constants"]
+    names = [c["name"] for c in a["criteria"]]
+    badges = [t for t, _, counts in found if not counts and t != OVERALL]
+    table = grid("Award rules", ["Award", "Rule", "Counts toward best overall"],
+                 [[escape(t), escape(r), counts_cell(t, c)] for t, r, c in found])
+    return section(
+        "award-scoring", "Award scoring",
+        p(f"Each award but {escape(OVERALL.lower())} places the methods on one value, lower first. {code('places')} gives competition places, ties "
+          f"sharing the best place. {code('podium')} keeps the places up to TOP = {k['TOP']} and {code('award')} gives "
+          f"them the medals {escape(listed(k['MEDALS']))}. {escape(OVERALL)} ranks every method on the {len(names)} "
+          f"CRITERIA {listed(map(code, names))} with {code('stats.ranks')}, ties sharing their average rank, and sums "
+          f"the ranks. {escape(listed(badges))} are bronze badges that never count toward it. Checked against awards.py "
+          f"at tdd-experiment {code(snap.sha[:7])}.", "verified"),
+        awards_figure(snap, next(numbers)),
+        '<h3 id="award-rules">Award rules</h3>',
+        p("Each rule is quoted from awards.py. Counts toward best overall marks the awards whose criterion joins the "
+          "rank sum."),
+        table,
+        p(f"The {escape(LIMITED)} rule carries a consistency limit, which the {link('', 'landing page')} states with "
+          f"the award."),
+        '<h3 id="awards-code">awards.py functions and constants</h3>',
+        p("Criteria, docstrings and constants are quoted verbatim from awards.py at the snapshot sha.", "verified"),
+        grid("awards.py criteria", ["Criterion", "Award", "Returns"],
+             [[code(c["name"]), escape(COUNTED[c["name"]]), code(c["returns"])] for c in a["criteria"]]),
+        grid("awards.py functions", ["Function", "Docstring"],
+             [[code(f["name"]), escape(f["doc"] or "No docstring in awards.py.")] for f in a["functions"]]),
+        grid("awards.py constants", ["Constant", "Value"],
+             [[code(n), escape(", ".join(v) if isinstance(v, list) else str(v))] for n, v in k.items()]))
+
+
+def awards_flow(snap):
+    """F6 in three lanes, every route inside one lane, straight down one column or one elbow through an empty gap."""
+    a = snap.facts["analysis"]
+    k, names = a["constants"], [c["name"] for c in a["criteria"]]
+    top = f"top {k['TOP']}: {', '.join(k['MEDALS'])}"
+    lanes = ("Criteria", OVERALL, "Badges")
+    nodes = [flow.node("records", "Method records", lanes[0], 0, "one per method"),
+             flow.node("criteria", "CRITERIA", lanes[0], 1, ", ".join(names)),
+             flow.node("places", "places", lanes[0], 2, "per criterion, lower first"),
+             flow.node("podium", "podium", lanes[0], 3, top),
+             flow.node("ranks", "stats.ranks", lanes[1], 1, "ties share their average rank"),
+             flow.node("overall", "overall", lanes[1], 2, "rank sum over CRITERIA"),
+             flow.node("best", "places and podium", lanes[1], 3, top),
+             flow.node("badge-in", "Cost to completion and C", lanes[2], 1, "never ranked in CRITERIA"),
+             flow.node("badge-places", "places", lanes[2], 2, "lower first"),
+             flow.node("bronze", "Bronze badge only", lanes[2], 3, "limit stated with the award")]
+    edges = [flow.edge("records", "criteria"), flow.edge("criteria", "places"), flow.edge("places", "podium"),
+             flow.edge("criteria", "ranks"), flow.edge("ranks", "overall"), flow.edge("overall", "best"),
+             flow.edge("records", "badge-in"), flow.edge("badge-in", "badge-places"), flow.edge("badge-places", "bronze")]
+    return nodes, edges, []
+
+
+def awards_figure(snap, n):
+    nodes, edges, loops = awards_flow(snap)
+    title = "How awards are scored"
+    desc = ("Three lanes. Criteria: method records are scored on each criterion, placed lower first and given a podium "
+            "of medals. Best overall: the criterion values are ranked, summed and placed. Badges: cost to completion "
+            "and consistency score C are placed for a bronze badge only.")
+    return parts.figure(n, "award-flow", title, flow.svg("f6", title, desc, nodes, edges, loops),
+                        "Each award places methods on one value. Only the three criteria feed the best overall rank sum.",
+                        "#award-rules", flow.text_version(title, nodes, edges, loops))
 
 
 def rebuild(facts):
@@ -112,4 +216,5 @@ def threats(snap, idx):
 
 
 def body(page, snap, idx):
-    return [lead(), threats(snap, idx)]
+    numbers = parts.numbers(page.slug)
+    return [lead(), award_scoring(snap, numbers), threats(snap, idx)]
