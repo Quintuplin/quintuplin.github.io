@@ -349,9 +349,13 @@ def dfn_names(page):
     return {n.strip().casefold() for n in names if n.strip()}
 
 
+def folded(label):
+    return label.strip().casefold()
+
+
 def bare(label):
     """A label less a trailing ", unit" or " /N", folded for case."""
-    return UNIT.sub("", label).strip().casefold()
+    return folded(UNIT.sub("", label))
 
 
 def metric_defs(pages):
@@ -363,6 +367,13 @@ def metric_defs(pages):
     names = dfn_names(measures) if measures else set()
     alts = "|".join(map(re.escape, sorted(names, key=len, reverse=True)))
     within = re.compile(r"(?<!\w)(?:" + alts + r")(?!\w)") if names else None
+
+    def defined(what, text):
+        """A dfn name, which may hold a comma, is the label whole or less its unit."""
+        if what == "figure title":
+            return bool(within and within.search(text.casefold()))
+        return folded(text) in names or bare(text) in names
+
     errors, checked = [], 0
     for slug in sorted(filter(is_label_page, pages), key=order):
         page = parse(pages[slug])
@@ -370,7 +381,7 @@ def metric_defs(pages):
             if not re.search(r"[^\W\d_]", text):
                 continue
             checked += 1
-            if not (within and within.search(text.casefold()) if what == "figure title" else bare(text) in names):
+            if not defined(what, text):
                 errors.append(f"{slug} {what} {text!r} has no dfn on {MEASURES}")
     return errors, checked
 

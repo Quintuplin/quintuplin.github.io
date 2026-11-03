@@ -200,6 +200,14 @@ class MetricDefs(unittest.TestCase):
         # An id with no value names nothing and must not crash the check.
         self.assertEqual(errors({"methodology/measures": [("<h2 ", "<p><dfn id>Bare</dfn></p><h2 ")]}), [])
 
+    def test_dfn_name_with_comma(self):
+        # A label may be the whole comma name, or that name less one ", unit".
+        header = '<th scope="col">PMD violations</th>'
+        named = {"methodology/measures": [("<h2 ", "<p><dfn>Tokens, weighted</dfn></p><h2 ")],
+                 "results/survey": [(header, '<th scope="col">Tokens, Weighted</th>'),
+                                    ('<span class="sub">Cost</span>', '<span class="sub">Tokens, weighted, millions</span>')]}
+        self.assertEqual(errors(named), [])
+
     def test_void_tag_closes_itself(self):
         # A br opens nothing, so the span after it is still the tile's first label span.
         tile = '<div class="tile"><span class="sub">Cost</span>'
