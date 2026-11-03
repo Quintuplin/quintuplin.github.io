@@ -260,6 +260,9 @@ class Measures(unittest.TestCase):
                 text = " ".join([source] + [check().spaced(rows[c]) for c in cited])
                 if check().spaced(line) == ABSENT:
                     self.assertIsNone(re.search(r"\S+\.py\b", source))
+                    name = name_of(card)
+                    for row in (r for r in rows if name in r or r == measures().CITES.get(name)):
+                        self.assertIsNone(re.search(r"\S+\.py\b", check().spaced(rows[row])), row)
                 else:
                     named = [check().spaced(n) for n in line.iter() if n.tag == "code"]
                     self.assertTrue(named)
