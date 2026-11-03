@@ -185,6 +185,14 @@ class Results(unittest.TestCase):
                                                        '<div class="shaped"><div class="entry"><p>e</p></div></div>')]
         self.assertEqual(kinds, ["p", "entries"])
 
+    def test_contrasts_lead_links_landing(self):
+        main = study().parse(html("results/contrasts")).ids["main"]
+        lead = main.elements()[0]
+        self.assertEqual(lead.tag, "p")
+        self.assertEqual([a.attrs["href"] for a in lead.iter() if a.tag == "a"], [f"{BASE}#rep-1-mutation"])
+        self.assertEqual(kalah("links").index(snap())[kalah("snapshot").REPORT]["rep-1-mutation"], ("", "rep-1-mutation"))
+        self.assertNotIn('id="rep-1-mutation"', html("results/contrasts"))
+
     def test_deterministic(self):
         # Set order follows the hash seed, so a second process with another seed shows any order the pages rely on.
         # -I would ignore PYTHONHASHSEED, so the child gets -s -P, the parent's -B and an environment of the seed alone.
