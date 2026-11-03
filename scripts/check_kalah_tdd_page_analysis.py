@@ -416,6 +416,10 @@ class Analysis(unittest.TestCase):
                      "#test-use + .table-scroll td:last-child{min-width:",
                      "@media (max-width:640px){.cols caption{display:block}}"):
             self.assertIn(rule, slot)
+        head = by_id("test-use")
+        kids = head.parent.elements()
+        after = kids[kids.index(head) + 1]
+        self.assertTrue("table-scroll" in after.classes() and after.attrs.get("role") == "region", after.attrs)
 
     def test_figures_wrapped(self):
         ids = parsed().ids
