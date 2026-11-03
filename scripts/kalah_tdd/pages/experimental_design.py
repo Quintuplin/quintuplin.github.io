@@ -48,12 +48,12 @@ def spec(snap):
 
 def variants():
     """The four variants as play(io, clockwise, sevenfive) selects them, read from the play() doc comment."""
-    rows = "".join(f"<tr><td><code>{str(cw).lower()}</code></td><td><code>{str(sf).lower()}</code></td>"
-                   f"<td>{7 if sf else 6}</td><td>{5 if sf else 4}</td><td>{'clockwise' if cw else 'anti-clockwise'}</td></tr>"
-                   for sf in (False, True) for cw in (False, True))
-    table = ('<table id="variants"><thead><tr><th scope="col">clockwise</th><th scope="col">sevenfive</th>'
-             '<th scope="col">Houses per player</th><th scope="col">Seeds per house</th><th scope="col">Sowing</th></tr>'
-             f"</thead><tbody>{rows}</tbody></table>")
+    cells = [(f"<code>{str(cw).lower()}</code>", f"<code>{str(sf).lower()}</code>", 7 if sf else 6, 5 if sf else 4,
+              "clockwise" if cw else "anti-clockwise") for sf in (False, True) for cw in (False, True)]
+    rows = "".join("<tr>" + "".join(f'<td class="nowrap">{c}</td>' for c in row) + "</tr>" for row in cells)
+    head = ("clockwise", "sevenfive", "Houses per player", "Seeds per house", "Sowing")
+    table = ('<table id="variants"><thead><tr>' + "".join(f'<th scope="col" class="nowrap">{h}</th>' for h in head)
+             + f"</tr></thead><tbody>{rows}</tbody></table>")
     return parts.table(table, "Kalah variants")
 
 
@@ -69,14 +69,14 @@ def waves(run):
 def note(name, run, facts):
     """What a run adds beyond its row: the test list it writes or rates, or the replicates it rebuilds."""
     tcp = run.get("tcp", {})
-    if "lister" in tcp and "rates" in tcp:
+    if "list_tag" in tcp:
+        return f"Builds the {tcp['list_tag']} list in {len(run['methods'])} orders."
+    if "rates" in tcp:
         return f"Rates the {tcp['rates']} test list again with lister {tcp['lister']}, seed {tcp['seed']}."
     if "lister" in tcp:
         made = next((r["tcp"]["list"] for r in facts["runs"].values() if r.get("tcp", {}).get("list_tag") == name), None)
         size = f" of {len(made['clauses'])} clauses and {len(made['candidates'])} candidates" if made else ""
         return f"Writes the test list{size} with lister {tcp['lister']}, seed {tcp['seed']}."
-    if "list_tag" in tcp:
-        return f"Builds the {tcp['list_tag']} list in {len(run['methods'])} orders."
     if name.endswith(design.REBUILD):
         ids = " ".join(sorted(slug.rsplit("-", 1)[-1] for slug in run["methods"]))
         return (f'Rebuilds {ids} of {name.removesuffix(design.REBUILD)} at a later harness. '
@@ -85,27 +85,31 @@ def note(name, run, facts):
 
 
 def runs_table(snap):
+    """The runs table, its cells unbroken so it scrolls in its region, then each run's note in a list."""
     head = ("Run", "Kind", "Builds", "Arms", "Waves", "Iterations cap", "Cycles cap", "Starts cap", "Model", "Effort",
-            "Methods doc", "Harness commit", "Notes")
-    rows = []
+            "Methods doc", "Harness commit")
+    rows, notes = [], []
     for name, run in design.runs(snap.facts).items():
         caps, commit = run["caps"], run.get("harness", {}).get("commit")
         arms = len({design.arm(slug, e) for slug, e in run["methods"].items()})
         cells = [design.RUNS[name], len(run["methods"]), arms, waves(run), caps["iterations"], caps["cycles"],
                  caps["starts"], run["model"], run["effort"], snapshot.run_doc(snap, name),
                  commit[:7] if commit else "not recorded"]
-        rows.append(f'<tr><th scope="row">{escape(name)}</th>' + "".join(f"<td>{escape(str(c))}</td>" for c in cells)
-                    + f"<td>{note(name, run, snap.facts)}</td></tr>")
-    table = ('<table id="runs-table"><thead><tr>' + "".join(f'<th scope="col">{h}</th>' for h in head)
+        rows.append(f'<tr><th scope="row" class="nowrap">{escape(name)}</th>'
+                    + "".join(f'<td class="nowrap">{escape(str(c))}</td>' for c in cells) + "</tr>")
+        if text := note(name, run, snap.facts):
+            notes.append(f"<li><b>{escape(name)}</b>. {text}</li>")
+    table = ('<table id="runs-table"><thead><tr>' + "".join(f'<th scope="col" class="nowrap">{h}</th>' for h in head)
              + f"</tr></thead><tbody>{''.join(rows)}</tbody></table>")
-    return parts.table(table, "Every run with its caps and versions")
+    return parts.table(table, "Every run with its caps and versions") + f"<ul>{''.join(notes)}</ul>"
 
 
 def collect_table(snap):
-    rows = "".join(f'<tr><td><code>{mode}</code></td><td>{k}</td><td><code>{escape(s["name"])}</code></td>'
+    rows = "".join(f'<tr><td class="nowrap"><code>{mode}</code></td><td>{k}</td>'
+                   f'<td class="nowrap"><code>{escape(s["name"])}</code></td>'
                    f'<td>{"yes" if s["skippable"] else "no"}</td></tr>'
                    for mode, steps in snap.facts["pipeline"]["collect"].items() for k, s in enumerate(steps, 1))
-    table = ('<table id="collect-steps"><thead><tr><th scope="col">Mode</th><th scope="col">Order</th>'
+    table = ('<table id="collect-steps"><thead><tr><th scope="col">Mode</th><th scope="col" class="nowrap">Order</th>'
              '<th scope="col">Step</th><th scope="col">Skipped after a failed fetchBack</th></tr></thead>'
              f"<tbody>{rows}</tbody></table>")
     return parts.table(table, "collect.sh steps")
@@ -135,7 +139,8 @@ def body(page, snap, idx):
         "rest.</p>"
         + parts.figure(next(n), "pipeline-flow", "Harness pipeline of one run", pipe_svg,
                        f"The step order follows the harness sources at tdd-experiment {sha} {parts.tag('verified')}. "
-                       f"That render.py draws the report again once the ratings land is {parts.tag('unchecked')}.",
+                       "One step has no source check. render.py draws the report again once the ratings land "
+                       f"{parts.tag('unchecked')}.",
                        None, pipe_text)
         + "<p>collect.sh runs collectOne for each clone and collectList for a list-only run. A step marked yes is "
           f"skipped when fetchBack fails {parts.tag('recomputed')}.</p>" + collect_table(snap),

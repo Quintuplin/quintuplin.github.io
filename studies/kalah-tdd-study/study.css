@@ -295,7 +295,7 @@ figure > :is(h4,h5,h6){margin:0;font-size:1rem}
 /* Flowcharts from the site flow module: S stages are plain boxes, L stages add a loop-back arrow. */
 /* Inside a .diagram wrapper a flow keeps readable labels and scrolls; the text version covers narrow screens. */
 svg.flow{display:block;width:100%;height:auto;font-family:var(--sans)}
-.diagram svg.flow{min-width:640px}
+.diagram svg.flow,.diagram .plot svg{min-width:640px}
 .flow .lane{fill:var(--wash);opacity:.6}
 .flow .node{fill:var(--surface);stroke:var(--axis);stroke-width:1.5}
 .flow .edge,.flow .loop{fill:none;stroke:var(--axis);stroke-width:1.5}
