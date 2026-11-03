@@ -6,6 +6,7 @@ from html import escape, unescape
 from typing import NamedTuple
 
 from .. import parts, snapshot
+from ..figures import flow
 
 ENTRY = re.compile(r'<div class="entry">(<p class="sub"><b>(.*?)</b>\. (?:Source: (.*?)\. )?Tag: (\w+)\.</p>.*?)</div>', re.S)
 FOLD = re.compile(r"<details><summary>(Column definitions[^<]*)</summary>(.*?)</details>", re.S)
@@ -37,6 +38,30 @@ CITES = {"APFDc-H": "APFDc-H", "Cost to completion": "Cost to completion", "M": 
 INPUT_ROWS = {"K/N": ("Mutation score",),
               "E": ("Static analysis violations", "Adjusted mutation", "Hidden pass /76", "Unseen pass /69")}
 FUNCTIONS = {"E": "error_count"}
+# Figure 4.1: each lane's cards, whose Source fields must name every file its nodes name.
+LANES = {"Tests": ("Functional mark /15", "Hidden pass /76", "Unseen pass /69", "Acceptance pass /6"),
+         "Static analysis": ("Strict PMD compliance", "Static analysis violations", "Strict PMD violations"),
+         "Mutation": ("Mutation score", "Adjusted mutation", "Unadjusted mutation"),
+         "Cost": ("Tokens", "Weighted tokens", "Agent calls", "Cost to completion", "APFDc-H", "M", "M_io"),
+         "Review": FAMILIES[4][2]}
+# One row of four columns: raw input, collected file, measure, score. Edges run left to right in each lane.
+NODES = (("t1", "grade.tsv, seen.tsv, summary.json", "Tests", 1, ""),
+         ("t2", "Functional mark; hidden, unseen, acceptance pass", "Tests", 2, ""),
+         ("s0", "pmd.txt", "Static analysis", 0, ""), ("s1", "metrics.json", "Static analysis", 1, ""),
+         ("s2", "Strict PMD, PMD violations", "Static analysis", 2, ""), ("s3", "E", "Static analysis", 3, "awards.py error_count"),
+         ("m0", "mutate.txt", "Mutation", 0, ""), ("m1", "metrics.json", "Mutation", 1, ""),
+         ("m2", "Mutation, adjusted mutation", "Mutation", 2, ""),
+         ("c0", "transcripts", "Cost", 0, ""), ("c1", "costs.json", "Cost", 1, "With steps.csv or batch.json tcp.calls"),
+         ("c2", "curve.json: cost to completion, APFDc-H", "Cost", 2, "harness/report/curve.py"),
+         ("c3", "M, M_io", "Cost", 3, "Times 1 minus APFDc-H"),
+         ("r0", "Blind raters", "Review", 0, ""), ("r1", "rating.json", "Review", 1, ""),
+         ("r2", "Principle medians /5", "Review", 2, ""), ("r3", "CQP, CQP accepted", "Review", 3, ""))
+# A score node: where its sentence comes from, then each input node with the terms that sentence gives it.
+COMPOSITES = {"s3": ("function", "error_count", {"t2": ("hidden failures", "unseen failures"),
+                                                 "s2": ("distinct PMD findings",), "m2": ("adjusted surviving mutants",)}),
+              "c3": ("glossary", "M and M_io", {"c2": ("cost to completion", "APFDc-H")}),
+              "r3": ("glossary", "CQP and CQP accepted", {"r2": ("rating medians",)})}
+FILE = re.compile(r"[\w-]+\.(?:tsv|json|txt|csv|calls)\b")
 
 
 class Row(NamedTuple):
@@ -246,6 +271,61 @@ def column_index(src, cards):
             f"{parts.table(table, 'Column index')}</details>")
 
 
+class MeasurePipeline:
+    """Figure 4.1 from the lane cards' Source fields and the sentences that define each score node."""
+
+    def __init__(self, src, cards):
+        self.src, self.cards = src, cards
+        self.nodes = [flow.node(*n) for n in NODES]
+        lanes = [[n for n in self.nodes if n.lane == lane] for lane in LANES]
+        self.edges = [flow.edge(a.id, b.id) for lane in lanes for a, b in zip(lane, lane[1:])]
+        self.edges += [flow.edge(i, t) for t, (_, _, inputs) in COMPOSITES.items() for i in inputs
+                       if self.lane(i) != self.lane(t)]
+        self.check()
+
+    def lane(self, id):
+        return next(n.lane for n in self.nodes if n.id == id)
+
+    def sentence(self, kind, name):
+        return self.src.fact_doc(name) if kind == "function" else plain(self.src.glossary_row(name).inner)
+
+    def check(self):
+        for n in self.nodes:
+            fields = " ".join(plain(self.cards.by_name[c].source) for c in LANES[n.lane])
+            for name in FILE.findall(f"{n.label} {n.note}"):
+                if name not in fields:
+                    raise ValueError(f"Figure 4.1 node {n.label!r} names {name} but no {n.lane} card Source does")
+        for target, (kind, name, inputs) in COMPOSITES.items():
+            text = self.sentence(kind, name)
+            if absent := [t for terms in inputs.values() for t in terms if t not in text]:
+                raise ValueError(f"{name} no longer names {absent}, which Figure 4.1 draws into {target}")
+
+    def caption(self):
+        said = []
+        for target, (kind, name, inputs) in COMPOSITES.items():
+            label = next(n.label for n in self.nodes if n.id == target).replace(", ", " and ")
+            whose = f"the doc of function {name}" if kind == "function" else f"the glossary row {name}"
+            said.append(f"{label} take{'' if ' and ' in label else 's'} {joined([t for terms in inputs.values() for t in terms])}, as {whose} states.")
+        return ("Each lane reads left to right from raw input to collected file to measure to score. " + " ".join(said)
+                + " Size, speed and record columns are not drawn, and their cards below define them. On a narrow "
+                "screen the diagram scrolls sideways and the text version holds the same steps.")
+
+    def figure(self, n):
+        title = "From raw inputs to scores"
+        desc = (f"{len(LANES)} lanes, {', '.join(LANES)}, each from raw input to collected file to measure to score. "
+                "E draws on the Tests, Static analysis and Mutation lanes.")
+        svg = flow.svg("f4", title, desc, self.nodes, self.edges)
+        return parts.figure(n, "f4", title, svg, escape(self.caption()), None,
+                            flow.text_version(title, self.nodes, self.edges))
+
+
+def pipeline(snap):
+    """Figure 4.1's (nodes, edges), checked against the snapshot."""
+    src = MetricSources(snap)
+    drawn = MeasurePipeline(src, MetricCards(src))
+    return drawn.nodes, drawn.edges
+
+
 def family(id, title, names, cards, typed, level=3):
     return (f'<h{level} id="{id}">{escape(title)}</h{level}>\n<div class="shaped">'
             + "".join(cards.card(n, typed.get(n)) for n in names) + "</div>")
@@ -256,7 +336,9 @@ def body(page, snap, idx):
     cards = MetricCards(src)
     typed = formulas(src, cards)
     intro = re.search(r"<p>.*?</p>", src.columns_html, re.S).group(0)
-    rest = [f'<h2 id="columns">Columns</h2>\n{intro}\n'
+    figure = MeasurePipeline(src, cards).figure(next(parts.numbers(page.slug)))
+    rest = [f'<h2 id="measurement-pipeline">Measurement pipeline</h2>\n{figure}',
+            f'<h2 id="columns">Columns</h2>\n{intro}\n'
             + "\n".join(family(id, title, names, cards, typed) for id, title, names in FAMILIES),
             family(*TEST_ORDER, cards, typed, level=2), column_index(src, cards)]
     return [lead(snap, "\n".join(rest))] + rest

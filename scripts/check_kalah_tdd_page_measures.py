@@ -377,7 +377,7 @@ class Measures(unittest.TestCase):
                 for term in terms:
                     self.assertIn(term, sentence, target)
         with self.assertRaisesRegex(ValueError, r"pmd\.txt"):
-            body(snap()._replace(files={**snap().files, kalah("snapshot").REPORT: report().replace("pmd.txt", "lint.txt")}))
+            body(snap()._replace(files={k: v.replace("pmd.txt", "lint.txt") for k, v in snap().files.items()}))
 
     def test_pipeline_routes_and_limits(self):
         nodes, edges = measures().pipeline(snap())
