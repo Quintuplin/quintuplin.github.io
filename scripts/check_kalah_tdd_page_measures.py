@@ -694,6 +694,14 @@ class Measures(unittest.TestCase):
         self.assertIn("Each method page of run full-1 says: Agent time sums each agent's first to last timestamp", agent)
         self.assertNotIn("no definition", agent)
 
+    def test_refuses_duplicate_dfn_id(self):
+        m = measures()
+        (id, title, fields), *rest = m.FIELDS
+        for extra, says in ((m.Field("Slug", "Again."), r"dfn ids \['slug'\]"), (m.Field("Cost", "A heading."), "'cost'")):
+            with self.subTest(says), mock.patch.object(m, "FIELDS", ((id, title, fields + (extra,)), *rest)):
+                with self.assertRaisesRegex(ValueError, says):
+                    body(snap())
+
     def test_value_covers_settings(self):
         # The tcp-1 settings table puts seed, lister, list sha and doc version under Value, which are no numbers.
         card = page().ids["value"].closest(cls="entry")
