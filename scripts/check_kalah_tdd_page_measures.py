@@ -426,9 +426,16 @@ class Measures(unittest.TestCase):
 
     def test_caption_names_undrawn(self):
         m = measures()
-        caption = check().spaced(next(n for n in page().ids["f4"].iter() if n.tag == "figcaption"))
-        drawn = {c for names in m.LANES.values() for c in names}
-        for _, title, names in m.FAMILIES + (m.TEST_ORDER,):
+        # The caption prose only: the text version inside figcaption also names every node.
+        caption = check().spaced(first_p(next(n for n in page().ids["f4"].iter() if n.tag == "figcaption")))
+        families = m.FAMILIES + (m.TEST_ORDER,)
+        # Drawn as the generator counts it: lane cards and cards a node is, which the caption names by their sentence.
+        on_node = {n.label for n in m.pipeline(snap())[0]} & {c for _, _, names in families for c in names}
+        drawn = {c for names in m.LANES.values() for c in names} | on_node
+        for name in on_node:
+            with self.subTest(name):
+                self.assertRegex(caption, rf"(?<![\w-]){re.escape(name)}(?![\w-])")
+        for _, title, names in families:
             if not drawn & set(names) and title in caption:
                 continue
             for name in (n for n in names if n not in drawn):
