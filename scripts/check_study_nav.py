@@ -16,16 +16,18 @@ STUDIES = "/studies/"
 
 
 class Page(HTMLParser):
-    """A page's ids, and each link as (href, in the sidebar, aria-current page). The sidebar is the first element of class toc."""
+    """A page's ids, and each link as (href, in the sidebar, aria-current page). The sidebar is the first element of class toc.
+    A stub page carries the kalah-tdd-stub meta until its page group builds it."""
 
     def __init__(self, html):
         super().__init__(convert_charrefs=True)
-        self.ids, self.links, self.has_toc, self.toc = [], [], False, None
+        self.ids, self.links, self.has_toc, self.toc, self.stub = [], [], False, None, False
         self.feed(html)
         self.close()
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
+        self.stub = self.stub or (tag == "meta" and a.get("name") == "kalah-tdd-stub")
         if self.toc and tag == self.toc[0]:
             self.toc[1] += 1
         elif not self.has_toc and "toc" in (a.get("class") or "").split():
@@ -76,7 +78,8 @@ def broken(pages, here, href):
     if path not in pages:
         return f"{here} links {href} but no study page or file {path} exists"
     ids = set(parse(pages[path]).ids) if pages[path] else set()
-    if frag and frag not in ids:
+    # A stub gains its ids when built, and check_kalah_tdd_study --final rejects every stub.
+    if frag and frag not in ids and not (pages[path] and parse(pages[path]).stub):
         # The generator suffixes an id that collides on its page, so name the renamed id.
         renamed = sorted(i for i in ids if re.fullmatch(re.escape(frag) + r"-\d+", i))
         hint = f" (renamed to {', '.join(renamed)}?)" if renamed else ""
