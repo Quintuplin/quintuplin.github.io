@@ -34,11 +34,13 @@ def foot(n, href):
     return f'<a href="{escape(href)}" aria-label="Data for Figure {n}">Data</a>'
 
 
-def figure(n, id, title, svg, caption, data_href, text):
+def figure(n, id, title, svg, caption, data_href, text, level=3):
     """A study figure: number, title, the svg in a scroll region, then a caption, a Data link and a text version.
     caption and svg are HTML. text is flow.text_version HTML or a sequence of plain strings, one list item each.
     The title has no id, as chrome.headings would put it in the sidebar. data_href None links the text version,
-    as in source_figure."""
+    as in source_figure. level is the title heading, one below the enclosing heading; study.css styles h3 to h6."""
+    if level not in range(3, 7):
+        raise ValueError(f"figure title level {level!r} is not 3 to 6")
     if not isinstance(text, str):
         text = flow.details(title, "".join(f"<li>{escape(t)}</li>" for t in text))
     if not text.startswith("<details>"):
@@ -46,7 +48,7 @@ def figure(n, id, title, svg, caption, data_href, text):
     text = f'<details id="{escape(id)}-data">' + text.removeprefix("<details>")
     data_href = data_href or f"#{id}-data"
     return (f'<figure id="{escape(id)}" aria-label="Figure {n}: {escape(title)}"><p class="fig-n">Figure {n}</p>'
-            f'<h3>{escape(title)}</h3><div class="diagram" role="region" tabindex="0" aria-label="Figure {n} diagram">{svg}</div>'
+            f'<h{level}>{escape(title)}</h{level}><div class="diagram" role="region" tabindex="0" aria-label="Figure {n} diagram">{svg}</div>'
             f'<figcaption><p>{caption}</p><div class="fig-foot">{foot(n, data_href)}</div>{text}</figcaption></figure>')
 
 
