@@ -112,7 +112,7 @@ TOUCH = ((".toc > summary", None, 44, None), (".toc a", None, 24, 28), (".toc a"
 
 
 def px(value):
-    return float(m.group(1)) if (m := re.fullmatch(r"(\d+(?:\.\d+)?)px", value)) else 0
+    return float(m.group(1)) if (m := re.fullmatch(r"(\d+(?:\.\d+)?)px", value.replace("!important", "").strip())) else 0
 
 
 def same_media(a, b):
@@ -122,7 +122,9 @@ def same_media(a, b):
 def reaches(s, sel):
     """Whether selector s styles the same element as sel inside the same container, such as .toc ol ol a for .toc a."""
     head, tail = sel.split()[0], sel.split()[-1]
-    return s == sel or ("::" not in s and re.search(rf"(?:^|[\s>+~]){re.escape(head)}(?![\w-])", s) is not None
+    # A .toc head also matches #toc and details.toc, but not :not(.toc).
+    name = rf"[.#]{re.escape(head[1:])}" if head.startswith(".") else re.escape(head)
+    return s == sel or ("::" not in s and re.search(rf"(?<!:not\(){name}(?![\w-])", s) is not None
                         and re.search(rf"[\s>]\s*{re.escape(tail)}(?![\w-])[^\s>+~]*$", s) is not None)
 
 
@@ -144,7 +146,8 @@ def touch_targets(parsed):
             verb = "lowers" if value < need else "raises" if cap and value > cap and same_media(m, media) else None
             errors += [f"{CSS}: later or more specific rule {s} {verb} {sel} min-height to {decls['min-height']}, "
                        f"outside {need}px{f' to {cap}px' if cap else ' or more'}"
-                       for s in sels if verb and reaches(s, sel) and (i > last or specificity(s) > spec)]
+                       for s in sels if verb and reaches(s, sel)
+                       and (i > last or specificity(s) > spec or "!important" in decls["min-height"])]
     return errors
 
 

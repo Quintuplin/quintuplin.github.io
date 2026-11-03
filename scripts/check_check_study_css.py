@@ -51,6 +51,13 @@ class TouchTargets(unittest.TestCase):
     def test_stronger_earlier_override_fails(self):
         self.assertRegex(" ".join(touch(lambda t: ".toc ol a{min-height:20px}" + t)), r"rule \.toc ol a lowers \.toc a")
 
+    def test_other_selectors_for_the_link_fail(self):
+        for probe, before in (("#toc a{min-height:20px}", True), ("details.toc a{min-height:20px}", True),
+                              (".toc a{min-height:20px !important}", True), ("#toc a{min-height:20px}", False)):
+            with self.subTest(probe, before=before):
+                errors = touch(lambda t: probe + t if before else t + probe)
+                self.assertRegex(" ".join(errors), r"rule (#|details\.|\.)toc a lowers \.toc a")
+
     def test_larger_override_passes(self):
         # The compact base row has a cap, so only a touch query may raise it.
         for probe in (".pager a:hover{min-height:48px}", "@media (pointer:coarse){.toc ol ol a{min-height:48px}}"):
