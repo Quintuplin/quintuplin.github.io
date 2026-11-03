@@ -540,7 +540,7 @@ class StageFlow(unittest.TestCase):
                 self.assertEqual([text(th) for th in table.iter() if th.attrs.get("scope") == "col"],
                                  ["Stage", "Runs as", "Steps", "Details", "Note"])
                 head, *rows = [r for r in table.iter() if r.tag == "tr"]
-                stages, shown = stage_facts(slug), []
+                sf, stages, shown = kalah("figures.stage_flow"), stage_facts(slug), []
                 self.assertEqual(len(rows), len(stages))
                 # study.css breaks td and th anywhere, so beside the long Note the short columns split mid-word.
                 keep = [c.attrs.get("style") == "overflow-wrap:normal" for r in (head, *rows) for c in r.elements()]
@@ -549,7 +549,10 @@ class StageFlow(unittest.TestCase):
                     cells = [" ".join(c.text(" ").split()) for c in row.elements()]
                     # Each step line in the Steps cell, with the stage header it runs under.
                     shown += [(cells[1], " ".join(k.split())) for k in row.elements()[2].kids if isinstance(k, str)]
+                    self.assertEqual(cells[0], sf.label(stage))
                     self.assertEqual(cells[4], " ".join(stage["note"].split()) if "note" in stage else "none")
+                    for k, ns in stage.get("with", {}).items():
+                        self.assertIn(f"with {k} {sf.steps(ns)}", cells[3])
                     for key in ("unit", "returns", "when", "commit_cap"):
                         if key in stage:
                             self.assertIn(f"{key.replace('_', ' ')} {stage[key]}", cells[3])
