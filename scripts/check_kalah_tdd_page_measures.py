@@ -204,8 +204,9 @@ def fact_texts():
 
 def fact_label_gaps(table):
     """(keys of a FACT_LABELS table that name no field card, (name, kind, slug) rows the table and the rendered
-    results pages disagree on for field names), so a renamed field leaves no dead key behind."""
-    names = {check().spaced(next(n for n in card.iter() if n.tag == "dfn")) for card in field_cards()}
+    results pages disagree on for field names and aliases), so a renamed field leaves no dead key behind."""
+    dfns = [next(n for n in card.iter() if n.tag == "dfn") for card in field_cards()]
+    names = {n for dfn in dfns for n in [check().spaced(dfn)] + aliases(dfn)}
     given = {(name, kind, s) for name, (kind, slugs) in table.items() for s in slugs}
     derived = {(t, f"{what[:1].upper()}{what[1:]}", s) for s, labels in fact_labels().items()
                for what, texts in labels.items() for t in texts if t in names}
@@ -620,6 +621,16 @@ class Measures(unittest.TestCase):
         orphans, rows = fact_label_gaps({**table, "Remark": ("Table header", ("results/test-order",))})
         self.assertEqual((orphans, rows), (["Remark"], [("Remark", "Table header", "results/test-order")]))
 
+    def test_fact_label_by_alias(self):
+        # A field may carry its fact label under an alias alone, as snapshot headers match name or alias.
+        m = measures()
+        fields, order = m.TableFields(m.MetricSources(snap()), ()), kalah("pagemap").BY_SLUG["results/test-order"].title
+        pick = m.Field("Pick", "A pick.", aliases=("Pick order",))
+        on = {"Pick order": ("Table header", ("results/test-order",))}
+        for table in (on, {**on, "Pick": on["Pick order"]}):  # one line when name and alias say the same
+            with self.subTest(sorted(table)), mock.patch.object(m, "FACT_LABELS", table):
+                self.assertEqual(fields.where(pick), f"Table header on {order}.")
+
     def test_figure_titles_name_a_metric(self):
         records = {measures().slug(n) for id, _, names in measures().FAMILIES if id == "records" for n in names}
         metric = set()
@@ -676,8 +687,11 @@ class Measures(unittest.TestCase):
                 titles = list(dict.fromkeys(t for n in [name] + aliases(dfn) for t in heads.get(n.casefold(), [])))
                 lines = [check().spaced(p) for p in card.iter() if p.tag == "p"]
                 where = [t for t in lines if " on Results: " in t or t.startswith("Table header in: ")]
-                want = [f"{what[:1].upper()}{what[1:]} on {said(pages)}."
-                        for what, pages in later.get(name.casefold(), {}).items()]
+                kinds = {}  # {kind: [page titles]} under the name or any alias, each page once
+                for n in [name] + aliases(dfn):
+                    for what, pages in later.get(n.casefold(), {}).items():
+                        kinds[what] = list(dict.fromkeys(kinds.get(what, []) + pages))
+                want = [f"{what[:1].upper()}{what[1:]} on {said(pages)}." for what, pages in kinds.items()]
                 self.assertTrue(titles or want)
                 if titles:
                     at = [where[0].find(t) for t in titles]

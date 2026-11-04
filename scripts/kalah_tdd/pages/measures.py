@@ -176,13 +176,24 @@ FIELDS = (
         Field("Hidden-pass curve area", f"The area under an arm's curve of hidden tests passed, which {link('APFD-I')} "
               "scores."))),
 )
-# Field labels the results pages build from run facts, out of reach of the report table scan: {name: (label kind,
-# page slugs)}. The measures page test checks it against the rendered pages.
+# Field labels the results pages build from run facts, out of reach of the report table scan: {field name or alias:
+# (label kind, page slugs)}. The measures page test checks it against the rendered pages.
 FACT_LABELS = {**dict.fromkeys(("Run", "Outcome", "U"), ("Table header", ("results/contrasts",))),
-               **dict.fromkeys(("Setting", "Value", "Arm", "Order", "Clause", "Risk", "Usage", "Candidate", "Checks",
-                                "Relies", "Estimate", "Stage", "Runs as", "Steps", "Details", "Note"),
+               **dict.fromkeys(("Setting", "Value", "Arm", "Order", "Clause", "Risk", "Usage", "Candidate",
+                                "Candidates in order", "Checks", "Relies", "Estimate", "Stage", "Runs as", "Steps",
+                                "Details", "Note"),
                                ("Table header", ("results/test-order",))),
                "Hidden-pass curve area": ("Axis label", ("results/test-order",))}
+
+
+def fact_kinds(f):
+    """{label kind: [page slugs]} FACT_LABELS gives a field under its name or any alias, each page once."""
+    kinds = {}
+    for n in (f.name,) + f.aliases:
+        kind, pages = FACT_LABELS.get(n, (None, ()))
+        if kind:
+            kinds[kind] = list(dict.fromkeys(kinds.get(kind, []) + list(pages)))
+    return kinds
 
 
 class Row(NamedTuple):
@@ -455,8 +466,7 @@ class TableFields:
     def where(self, f):
         titles = list(dict.fromkeys(t for n in (f.name,) + f.aliases for t in self.heads.get(n.casefold(), [])))
         said = [f"Table header in: {escape(joined(titles))}."] if titles else []
-        if f.name in FACT_LABELS:
-            kind, pages = FACT_LABELS[f.name]
+        for kind, pages in fact_kinds(f).items():
             said.append(f"{kind} on {escape(joined([pagemap.BY_SLUG[p].title for p in pages]))}.")
         if not said:
             raise ValueError(f"field '{f.name}' heads no table on a results or data page")
