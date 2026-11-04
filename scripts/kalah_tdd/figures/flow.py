@@ -195,4 +195,9 @@ def text_version(title, nodes, edges=(), loops=()):
             parts.append("Next: " + "; ".join(nexts) + ".")
         parts += [f"Loop: repeat per {lp.unit}, back to {label[lp.back_to or lp.node]}." for lp in loops if lp.node == n.id]
         items.append(f"<li>{escape(' '.join(parts))}</li>")
-    return f"<details><summary>Text version: {escape(title)}</summary><ol>{''.join(items)}</ol></details>"
+    return details(title, "".join(items))
+
+
+def details(title, items_html):
+    """The "Text version: <title>" disclosure around list items that are already HTML."""
+    return f"<details><summary>Text version: {escape(title)}</summary><ol>{items_html}</ol></details>"

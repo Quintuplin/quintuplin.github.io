@@ -75,6 +75,19 @@ class StudyNav(unittest.TestCase):
         self.assertRegex(" ".join(nav().cross_links(pages)), f"{INDEX} links {PART}#columns .*columns-2")
         self.assertRegex(" ".join(nav().toc_links(pages)), f"{INDEX} links {PART}#columns")
 
+    def test_stub_fragment_waits(self):
+        # A stub page gains its ids when its group builds it, so links into it wait. A missing page still fails.
+        n = nav()
+        stub = [("<head>", '<head><meta name="kalah-tdd-stub">'), ('<h2 id="columns">', "<h2>")]
+        self.assertEqual(n.cross_links(fixture(part=stub)), [])
+        self.assertEqual(n.toc_links(fixture(part=stub)), [])
+        pages = fixture(part=stub, index=[('href="/studies/demo/part"', 'href="/studies/demo/other"')])
+        self.assertRegex(" ".join(n.cross_links(pages)), "no study page or file /studies/demo/other")
+
+    def test_built_fragment_still_fails(self):
+        pages = fixture(part=[('<h2 id="columns">', "<h2>")])
+        self.assertRegex(" ".join(nav().cross_links(pages)), f"{INDEX} links {PART}#columns but that page has no id")
+
     def test_unique_ids(self):
         pages = fixture(part=[('<title id="t">', '<title id="columns">')])
         self.assertEqual(nav().unique_ids(pages), [f"{PART} has id columns 2 times"])

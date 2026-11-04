@@ -76,6 +76,13 @@ class TouchTargets(unittest.TestCase):
             with self.subTest(probe):
                 self.assertEqual(touch(lambda t: t + probe), [])
 
+    def test_figure_data_link_is_44px(self):
+        # The rule must exist before any page uses a figure foot, so the check never passes on nothing.
+        rule = re.compile(r"\.fig-foot a\{[^}]*\}")
+        errors = touch(lambda t: rule.sub("", t))
+        self.assertRegex(" ".join(errors), r"\.fig-foot a has no min-height of 44px or more")
+        self.assertRegex(" ".join(touch(lambda t: t + ".fig-foot a:hover{min-height:20px}")), r"rule \.fig-foot a:hover lowers")
+
 
 if __name__ == "__main__":
     unittest.main()

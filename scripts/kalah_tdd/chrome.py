@@ -83,7 +83,7 @@ def shell(page, snap, body, stub):
 
 
 def header(page, snap):
-    n = pagemap.PAGES.index(page) + 1
+    n = pagemap.number(page.slug)
     return f"""<header class="study-head">
 <p class="eyebrow">Kalah TDD study · Part {n} of {len(pagemap.PAGES)} · {page.part}</p>
 <h1>{escape(page.title)}</h1>

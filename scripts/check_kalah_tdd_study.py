@@ -328,6 +328,9 @@ def labels(root):
     for node in root.iter():
         if node.tag == "figcaption":
             yield from (("figure title", spaced(h)) for h in node.iter() if heading(h))
+        elif node.tag == "figure":
+            # A parts.figure title sits above its diagram, outside the figcaption.
+            yield from (("figure title", spaced(h)) for h in node.elements() if heading(h))
         elif node.tag == "th" and node.closest("thead"):
             yield "table header", spaced(node)
         elif "tile" in node.classes() or "kpi" in node.classes():

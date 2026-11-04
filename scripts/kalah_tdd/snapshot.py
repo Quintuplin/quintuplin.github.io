@@ -21,6 +21,8 @@ class Snapshot(NamedTuple):
     run: str
     files: dict
     facts: dict
+    # Short sha256 of the methods doc the snapshot was fetched with.
+    doc: str
 
 
 def load(root=ROOT):
@@ -35,7 +37,12 @@ def load(root=ROOT):
     facts = json.loads(files.pop("facts.json"))
     if facts["sha"] != manifest["sha"]:
         raise SystemExit(f"facts.json is from {facts['sha']}, MANIFEST.json from {manifest['sha']}")
-    return Snapshot(manifest["sha"], REPORT.split("/")[1], files, facts)
+    return Snapshot(manifest["sha"], REPORT.split("/")[1], files, facts, manifest["doc"]["sha256"][:8])
+
+
+def run_doc(snap, run):
+    """Short sha256 of the methods doc that the run was built under."""
+    return snap.facts["runs"][run]["doc_sha256"][:8]
 
 
 def section(html, id):
