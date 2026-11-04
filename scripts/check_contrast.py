@@ -18,8 +18,8 @@ TEXT, GRAPHIC = 4.5, 3.0
 
 # Tokens drawn on the bare sheet (glass) and on inner cards (card). Graphics cover
 # strokes, focus rings and large text, and are checked on both. Card graphics, such as
-# legend swatches, appear only on cards. Tinted maps a text token to the translucent
-# fill it sits on inside a card, such as a warning note.
+# legend swatches, appear only on cards. Tinted lists (text, fill) pairs where a text
+# token sits on a tinted fill inside a card, such as a warning note.
 PAGES = {
     "css/main.css": {"glass": ["ink", "muted", "accent"]},
     "studies/subagent-crew-study/index.html": {
@@ -43,9 +43,20 @@ PAGES = {
         "card": ["ink", "ink2", "muted", "accent", "ok", "open", "fp", "fn", "warn"],
         "graphic": ["accent", "fp", "fn"],
         "card-graphic": ["fp", "fn", "d2", "on", "axis", "ink2", "warn-line"],
-        "tinted": {"warn": "warn-bg"},
+        "tinted": [("warn", "warn-bg")],
+    },
+    # Source SVGs and th cells put --ink2 (an alias of --muted) on --wash. The .winner banner puts
+    # ink, muted and accent text on --accent-soft.
+    "studies/kalah-tdd-study/study.css": {
+        "glass": ["ink", "muted", "accent"],
+        "card": ["ink", "muted", "accent", "s1", "s2", "s3", "s4", "good", "warn", "serious", "open"],
+        # Status tokens also fill qbar segments and chip dots on bare glass.
+        "graphic": ["s1", "s2", "s3", "s4", "axis", "gold", "silver", "bronze", "good", "warn", "serious", "open"],
+        "tinted": [("muted", "wash"), ("ink", "accent-soft"), ("muted", "accent-soft"), ("accent", "accent-soft")],
     },
 }
+# Pages whose [data-theme="dark"] block must exist, so the theme toggle cannot drift from the media block.
+FORCED_REQUIRED = {"studies/kalah-tdd-study/study.css"}
 LIGHT = re.compile(r"(?m)^:root\s*\{")
 DARK = re.compile(r"@media\s*\(prefers-color-scheme:\s*dark\)\s*\{")
 FORCED_DARK = re.compile(r'(?m)^:root\[data-theme="dark"\]\s*\{')
@@ -104,7 +115,8 @@ def check_mode(page, mode, tokens, roles):
     errors = []
     if "glass" not in tokens:
         return [f"{page} {mode}: no --glass token"]
-    named = {name for names in roles.values() for name in names} | set(roles.get("tinted", {}).values())
+    named = {name for role, names in roles.items() if role != "tinted" for name in names}
+    named |= {name for pair in roles.get("tinted", []) for name in pair}
     missing = sorted(named - tokens.keys())
     errors += [f"{page} {mode}: token --{name} missing" for name in missing]
     for px in WORST_PIXELS:
@@ -114,7 +126,7 @@ def check_mode(page, mode, tokens, roles):
         checks = [(role, name, TEXT) for role in ("glass", "card") for name in roles.get(role, [])]
         checks += [(role, name, GRAPHIC) for role in layers for name in roles.get("graphic", [])]
         checks += [("card", name, GRAPHIC) for name in roles.get("card-graphic", [])]
-        for name, fill in roles.get("tinted", {}).items():
+        for name, fill in roles.get("tinted", []):
             if "card" in layers and fill not in missing:
                 layers[f"--{fill} on card"] = over(colour(tokens[fill]), layers["card"])
                 checks.append((f"--{fill} on card", name, TEXT))
@@ -145,13 +157,18 @@ def main():
     if hashlib.sha256((root / "assets/bg.jpg").read_bytes()).hexdigest() != BG_SHA256:
         errors.append("assets/bg.jpg changed: re-pin worst pixels and BG_SHA256")
     for page, roles in PAGES.items():
+        if not (root / page).is_file():
+            errors.append(f"{page}: file missing")
+            continue
         text = (root / page).read_text(encoding="utf-8")
         light, dark = block(text, LIGHT), block(text, DARK)
         if light is None or dark is None:
             errors.append(f"{page}: missing the light :root block or the dark media block")
             continue
         forced = block(text, FORCED_DARK)
-        if forced is not None and forced != dark:
+        if forced is None and page in FORCED_REQUIRED:
+            errors.append(f"{page}: missing the [data-theme=\"dark\"] block")
+        elif forced is not None and forced != dark:
             errors.append(f"{page}: [data-theme=\"dark\"] tokens differ from the dark media block")
         try:
             errors += check_mode(page, "light", light, roles)
