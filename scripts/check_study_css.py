@@ -179,12 +179,46 @@ def kept_rules(parsed):
             if not any(same_media(m, media) and sel in sels and decls.get(prop) == value for m, sels, decls in parsed)]
 
 
+# .diagram scrolls sideways, so content pulled left of its edge is clipped for good (#69). The sidebar never sits in a figure.
+# The fold summary's pull only cancels its details' 14px side padding, so it stays inside the fold.
+PULL_EXEMPT = {("details:not(.toc) > summary", "-14px")}
+
+
+def left_margins(decls):
+    """Yield (property, left value) for each declaration that sets a left margin, shorthands included."""
+    for prop, value in decls.items():
+        words = re.findall(r"(?:[^\s()]|\((?:[^()]|\([^()]*\))*\))+", value.replace("!important", ""))
+        if prop in ("margin-left", "margin-inline-start", "margin-inline") and words:
+            yield prop, words[0]
+        elif prop == "margin" and 1 <= len(words) <= 4:
+            yield prop, words[(0, 1, 1, 3)[len(words) - 1]]
+
+
+def diagram_pull(parsed):
+    """A negative left margin on anything a figure can hold needs a later or stronger .diagram rule that clears it."""
+    negative = lambda v: re.match(r"\s*(-|calc\(\s*-)", v) is not None
+    errors = []
+    for i, (media, sels, decls) in enumerate(parsed):
+        for prop, value in ((p, v) for p, v in left_margins(decls) if negative(v)):
+            for s in sels:
+                if re.search(r"[.#]toc(?![\w-])", re.sub(r":not\([^()]*\)", "", s)) or (s, value) in PULL_EXEMPT:
+                    continue
+                tail = s.split()[-1]
+                if not any(m is None and r.startswith(".diagram ") and r.split()[-1] == tail
+                           and any(not negative(v) for _, v in left_margins(d))
+                           and (specificity(r) > specificity(s) or (specificity(r) == specificity(s) and j > i))
+                           for j, (m, rs, d) in enumerate(parsed) for r in rs):
+                    errors.append(f"{CSS}: {s} sets {prop}:{decls[prop]} and no .diagram rule resets it, "
+                                  f"so it is clipped at the edge of a figure's scroll region")
+    return errors
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
     text = re.sub(r"/\*.*?\*/", "", (root / CSS).read_text(encoding="utf-8"), flags=re.S)
     parsed = list(rules(text))
     errors = summary_marker(parsed) + stacked_reset(parsed) + nested_card_reset(parsed) + forced_flow(parsed) + \
-        touch_targets(parsed) + kept_rules(parsed)
+        touch_targets(parsed) + kept_rules(parsed) + diagram_pull(parsed)
     for e in errors:
         print("FAIL:", e, file=sys.stderr)
     if not errors:

@@ -217,6 +217,7 @@ main li a,.src a,.record-link{display:inline-block;min-height:24px;padding:2px 0
 /* Landing contents: a wrapped title keeps its list number on its first line, and the blurb sits under it. */
 .contents li > a{vertical-align:top}
 .contents .blurb{display:block;font-size:14px}
+.diagram .qlegend{display:grid;grid-template-columns:max-content max-content;gap:8px 6px}.diagram .qlegend .cnt{margin-left:0}
 
 /* Folds and record lists. Folds keep their "N rows and M columns" summary. */
 details:not(.toc){margin:var(--space-3) 0;padding:0 14px}
