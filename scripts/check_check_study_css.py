@@ -186,9 +186,18 @@ class LabelWrap(unittest.TestCase):
             with self.subTest():
                 self.assertRegex(" ".join(wrap(probe)), r"no rule under @media \(max-width:640px\) sets \.cols td\.nowrap")
 
-    def test_later_nowrap_undoes_it(self):
-        self.assertRegex(" ".join(wrap(lambda t: t + "@media (max-width:640px){.cols td + td.nowrap::before{white-space:nowrap}}")),
-                         r"no rule under")
+    def test_later_or_stronger_nowrap_undoes_it(self):
+        for probe in ("@media (max-width:640px){.cols td + td.nowrap::before{white-space:nowrap}}",
+                      "@media (max-width:640px){table.cols td.nowrap::before{white-space:nowrap}}",
+                      "#main .cols td.nowrap::before{white-space:nowrap}", ".nowrap::before{white-space:nowrap !important}"):
+            with self.subTest(probe):
+                self.assertRegex(" ".join(wrap(lambda t: t + probe)), r"sets white-space:nowrap.* on the stacked card label")
+
+    def test_weaker_earlier_or_other_label_passes(self):
+        for probe in (lambda t: ".cols td.nowrap::before{white-space:nowrap}" + t,
+                      lambda t: t + ".qtable td.nowrap::before{white-space:nowrap}"):
+            with self.subTest():
+                self.assertEqual(wrap(probe), [])
 
 
 if __name__ == "__main__":

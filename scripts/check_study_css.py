@@ -218,14 +218,24 @@ NARROW = "@media (max-width:640px)"
 
 
 def label_wrap(parsed):
-    """In stacked .cols cards the ::before label of a td.nowrap must wrap, and no later rule there may undo it."""
+    """In stacked .cols cards the ::before label of a td.nowrap must wrap, and no later or stronger rule may undo it."""
     label = lambda s: re.fullmatch(r"\.cols\s+(?:td\s*\+\s*)?td\.nowrap::before", s) is not None
-    sets = [decls["white-space"] for m, sels, decls in parsed
-            if same_media(m, NARROW) and "white-space" in decls and any(label(s) for s in sels)]
-    if not sets or sets[-1] != "normal":
+    # A lone .nowrap::before compound reaches the label too; a longer selector reaches it only inside .cols.
+    reaches = lambda s: re.search(r"\.nowrap(?![\w-])[^\s>+~]*::before$", s) is not None and (
+        len(s.split()) == 1 or re.search(r"\.cols(?![\w-])", s) is not None)
+    fixes = [(specificity(s), i) for i, (m, sels, decls) in enumerate(parsed)
+             if same_media(m, NARROW) and decls.get("white-space") == "normal" for s in sels if label(s)]
+    if not fixes:
         return [f"{CSS}: no rule under {NARROW} sets .cols td.nowrap::before{{white-space:normal}}, "
                 f"so a long card label inherits nowrap and scrolls the card"]
-    return []
+    # The plain .cols td.nowrap rule alone reaches first cells, so the weakest fix sets the bar. Any media counts.
+    spec, last = min(fixes)
+    return [f"{CSS}: later or stronger rule {s} sets white-space:{decls['white-space']} on the stacked card label, "
+            f"so a long label scrolls the card"
+            for i, (m, sels, decls) in enumerate(parsed)
+            if decls.get("white-space", "normal").replace("!important", "").strip() != "normal"
+            for s in sels if reaches(s) and (specificity(s) > spec or (specificity(s) == spec and i > last)
+                                             or "!important" in decls["white-space"])]
 
 
 def main():
