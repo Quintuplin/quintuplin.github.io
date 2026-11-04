@@ -22,14 +22,6 @@ SLUG = "methodology/measures"
 HEADINGS = ["measurement-pipeline", "columns", "tests", "static-analysis-and-mutation", "size-and-speed", "cost",
             "review-ratings", "combined-and-consistency", "records", "test-order-measures", "table-fields",
             "builds-and-methods", "contrasts-and-tests", "ratings", "run-records", "test-list-and-stages", "column-index"]
-# Labels the G10b results pages add from facts, outside the snapshot report, by the page G10-plan.md gives them.
-G10B_LABELS = {"results/contrasts": {"figure title": ("Holm p of each planned contrast",), "axis label": ("Holm p",),
-                                     "table header": ("Run", "Outcome", "Contrast", "U", "Holm p")},
-               "results/test-order": {"figure title": ("APFD-I and APFDc-H by test-list order", "Stage flow of a tcp-1 arm"),
-                                      "axis label": ("Hidden-pass curve area",),
-                                      "table header": ("Order", "APFD-I", "APFDc-H", "Arm", "Candidate", "Checks",
-                                                       "Relies", "Candidates in order", "Estimate", "Clause", "Risk", "Usage", "Setting",
-                                                       "Value", "Stage", "Runs as", "Steps", "Details", "Note")}}
 # The metrics plan.md names for this page, as dfn names.
 PLAN_METRICS = {"functional mark", "hidden pass", "seen tests", "unseen pass", "acceptance pass", "strict pmd compliance",
                 "strict pmd violations", "mutation score", "k/n", "adjusted mutation", "weighted tokens",
@@ -181,16 +173,33 @@ def snapshot_labels():
             for what, text in check().labels(check().Tree(own).root) if re.search(r"[^\W\d_]", text)]
 
 
-def g10b_page(labels):
-    """A page holding a G10b page's labels in the shape check_kalah_tdd_study.labels reads."""
-    figures = "".join(f"<figure><figcaption><h3>{t}</h3></figcaption></figure>" for t in labels["figure title"])
-    axes = "".join(f'<line class="axis"></line><text text-anchor="middle">{t}</text>' for t in labels["axis label"])
-    heads = "".join(f"<th>{t}</th>" for t in labels["table header"])
+@functools.cache
+def fact_labels():
+    """{slug: {what: [texts]}} for the labels each results page builds from run facts: its rendered labels less those
+    of its report sections, each text once."""
+    idx, out = kalah("links").index(snap()), {}
+    for p in kalah("pagemap").PAGES:
+        if not check().is_label_page(p.slug):
+            continue
+        report_side = Counter(check().labels(check().Tree(label_pages().get(p.slug, "")).root))
+        for what, text in check().labels(check().parse(build().render_page(p, snap(), idx)).root):
+            if report_side[(what, text)]:
+                report_side[(what, text)] -= 1
+            elif text not in (texts := out.setdefault(p.slug, {}).setdefault(what, [])):
+                texts.append(text)
+    return out
+
+
+def fact_page(labels):
+    """A page holding only a results page's fact labels in the shape check_kalah_tdd_study.labels reads."""
+    figures = "".join(f"<figure><figcaption><h3>{t}</h3></figcaption></figure>" for t in labels.get("figure title", ()))
+    axes = "".join(f'<line class="axis"></line><text text-anchor="middle">{t}</text>' for t in labels.get("axis label", ()))
+    heads = "".join(f"<th>{t}</th>" for t in labels.get("table header", ()))
     return f"<main>{figures}<svg>{axes}</svg><table><thead><tr>{heads}</tr></thead></table></main>"
 
 
-def g10b_texts():
-    return [t for labels in G10B_LABELS.values() for ts in labels.values() for t in ts]
+def fact_texts():
+    return [t for labels in fact_labels().values() for ts in labels.values() for t in ts]
 
 
 def dfn_words(dfn):
@@ -584,14 +593,16 @@ class Measures(unittest.TestCase):
         self.assertEqual(len({(what, text) for _, what, text in snapshot_labels()}), 104)
         self.assertGreater(check().metric_defs({**label_pages(), SLUG: html().replace("data-alias=", "data-x=")})[0], [])
 
-    def test_g10b_labels_defined(self):
-        later = {slug: g10b_page(labels) for slug, labels in G10B_LABELS.items()}
-        for slug, labels in G10B_LABELS.items():
-            self.assertEqual(list(check().labels(check().Tree(later[slug]).root)),
-                             [(what, t) for what, texts in labels.items() for t in texts])
-        errors, checked = check().metric_defs({**later, SLUG: html()})
+    def test_fact_labels_defined(self):
+        self.assertEqual(sorted(fact_labels()), ["results/contrasts", "results/test-order"])
+        self.assertIn("Candidates in order", fact_labels()["results/test-order"]["table header"])
+        built = {slug: fact_page(labels) for slug, labels in fact_labels().items()}
+        for slug, labels in fact_labels().items():
+            self.assertEqual(sorted(check().labels(check().Tree(built[slug]).root)),
+                             sorted((what, t) for what, texts in labels.items() for t in texts))
+        errors, checked = check().metric_defs({**built, SLUG: html()})
         self.assertEqual(errors, [])
-        self.assertEqual(checked, len(g10b_texts()))
+        self.assertEqual(checked, len(fact_texts()))
 
     def test_figure_titles_name_a_metric(self):
         records = {measures().slug(n) for id, _, names in measures().FAMILIES if id == "records" for n in names}
@@ -607,7 +618,7 @@ class Measures(unittest.TestCase):
                 self.assertRegex(title.casefold(), within)
 
     def test_aliases_are_labels(self):
-        texts = [t for _, _, t in snapshot_labels()] + g10b_texts()
+        texts = [t for _, _, t in snapshot_labels()] + fact_texts()
         wanted = {check().folded(t) for t in texts} | {check().bare(t) for t in texts}
         titles = [t.casefold() for _, what, t in snapshot_labels() if what == "figure title"]
         in_title = lambda alias: any(re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", t) for t in titles)
@@ -636,7 +647,7 @@ class Measures(unittest.TestCase):
                 if what == "table header":
                     heads.setdefault(text.casefold(), []).append(anchor_title(a))
         later = {}  # {label: {kind: [page titles]}}
-        for slug, labels in G10B_LABELS.items():
+        for slug, labels in fact_labels().items():  # so FACT_LABELS must match the rendered results pages
             for what, ts in labels.items():
                 for t in ts:
                     later.setdefault(t.casefold(), {}).setdefault(what, []).append(kalah("pagemap").BY_SLUG[slug].title)
