@@ -7,6 +7,7 @@ from collections import Counter
 from html import escape, unescape
 
 from .. import links, pagemap, parts, snapshot
+from . import measures
 
 ANCHORS = {a for p in pagemap.PAGES for a in p.anchors}
 HEADING = re.compile(r'<h[1-6]\b[^>]*' + snapshot.ID_ATTR + r'([^"]+)"')
@@ -19,9 +20,9 @@ LEVEL = {"2": 2, "3": 2, "4": 3}
 SLOT = re.compile("\0(\\d+)\0")
 DATA = ("data", "data/contrasts", "data/methods", "data/ratings", "data/runs")
 MEASURES = "methodology/measures"
-# Glossary rows whose metric measures defines with its formula. The link goes to the page, as its fragments are not set.
-MEASURED = ("Awards and E", "APFD-I", "Kendall distance", "M and M_io", "CQP and CQP accepted")
-MEASURED_LINK = f'<p class="sub">Its formula and inputs are on <a href="{links.url(MEASURES)}">Measures</a>.</p>'
+# Glossary rows whose metric measures defines with its formula, each with the metric whose dfn the link goes to.
+MEASURED = {"Awards and E": "E", "APFD-I": "APFD-I", "Kendall distance": "Kendall distance", "M and M_io": "M",
+            "CQP and CQP accepted": "CQP"}
 # Each showcase short form and the glossary row that defines it in full, by subject where no row has its name.
 SHORT_FORMS = {"Functional mark": "Functional mark /15", "E": "Awards and E", "Cost to completion": "Cost to completion",
                "M": "M and M_io", "M_io": "M and M_io", "Alignment": "Awards and E",
@@ -157,6 +158,11 @@ def lead(page):
     return f"<p>The supporting data takes five pages.</p><ul>{items}</ul>"
 
 
+def measured_link(name):
+    href = links.url(MEASURES, measures.slug(MEASURED[name]))
+    return f'<p class="sub">Its formula and inputs are on <a href="{href}">Measures</a>.</p>'
+
+
 def term_id(name):
     return "term-" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
@@ -196,7 +202,7 @@ def glossary(page, snap, idx):
         inner = block[len('<div class="entry">'):-len("</div>")]
         if name in MEASURED:
             # The link closes the row's card, so it reads as the row's; a div keeps the row's text whole for coverage.
-            inner = f"<div>{inner}</div>{MEASURED_LINK}"
+            inner = f"<div>{inner}</div>{measured_link(name)}"
         return f'<div class="entry" id="{term_id(name)}">{inner}</div>'
 
     def after():

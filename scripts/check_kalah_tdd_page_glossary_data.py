@@ -188,6 +188,8 @@ class GlossaryData(unittest.TestCase):
         rows = [n for n in main("glossary").iter() if "entry" in n.classes()]
         self.assertEqual(len(rows), 35)
         squash = study().squash
+        built = SCRIPTS.parent / MEASURES.lstrip("/") / "index.html"
+        defined = study().parse(built.read_text(encoding="utf-8")).ids
         for row in rows:
             name = study().spaced(next(b for b in row.iter() if b.tag == "b"))
             linked = any(a.tag == "a" for a in row.iter())
@@ -197,7 +199,11 @@ class GlossaryData(unittest.TestCase):
                     # The link closes the row's card, after a div that holds the report row's text whole.
                     *text, after = row.elements()
                     self.assertEqual([(t.tag, squash(t.text())) for t in text], [("div", squash(study().Tree(entry(name)).root.text()))])
-                    self.assertEqual([a.attrs["href"] for a in after.iter() if a.tag == "a"], [MEASURES])
+                    # The link goes to the dfn of the row's metric on the built measures page.
+                    [href] = [a.attrs["href"] for a in after.iter() if a.tag == "a"]
+                    page, _, frag = href.partition("#")
+                    self.assertEqual(page, MEASURES)
+                    self.assertEqual(getattr(defined.get(frag), "tag", None), "dfn", f"{href} names no dfn on measures")
                     self.assertEqual(" ".join(after.text().split()), "Its formula and inputs are on Measures.")
         refused(self, {kalah("snapshot").REPORT: report().replace(entry("Kendall distance"), "")}, "Kendall distance")
 
