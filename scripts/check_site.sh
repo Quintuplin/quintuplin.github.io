@@ -93,6 +93,9 @@ python3 -I scripts/check_kalah_tdd_flow.py || err "Kalah TDD flowchart check fai
 python3 -I scripts/check_build_kalah_tdd_study.py || err "Kalah TDD study page build check failed"
 # Study sidebar and cross-page links reach a real page and id, and ids are unique per page (#60).
 python3 -I scripts/check_check_study_nav.py || err "study navigation check failed"
+# Built Kalah TDD study pages keep every snapshot figure, row, tile and term, and define their labels on measures (#61).
+python3 -I scripts/check_kalah_tdd_study.py || err "Kalah TDD study completeness check failed"
+python3 -I scripts/check_check_kalah_tdd_study.py || err "Kalah TDD study completeness check self-test failed"
 # Jekyll skips underscore folders, so the snapshot stays off the site and its sitemap (#56).
 [ ! -e "$site/_snapshots" ] || err "_snapshots is published"
 ! grep -q '_snapshots' "$site/sitemap.xml" 2>/dev/null || err "sitemap.xml lists _snapshots"
