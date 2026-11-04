@@ -235,6 +235,7 @@ details > .shaped{margin:0;padding:0 0 10px}
 .entry{margin:0 0 var(--space-3);padding:var(--space-2) var(--space-3);border-left:3px solid var(--accent)}
 .entry p{margin:var(--space-1) 0}
 .nowrap{white-space:nowrap}
+.words{overflow-wrap:normal}
 .brk{overflow-wrap:anywhere}
 
 /* Tables. The wrapper is a focusable labelled region that scrolls on its own; the page never scrolls sideways. */
@@ -272,9 +273,11 @@ figcaption{font-size:14px;color:var(--muted)}
 .diagram,.plot{overflow-x:auto}
 .diagram svg{display:block;max-width:100%;height:auto;margin:0 auto}
 .plot svg{display:block;width:100%;max-width:40rem;height:auto}
-.plot text{fill:var(--muted);font-size:12px}
-.plot .lbl{fill:var(--ink);font-weight:600}
-.plot .grid{stroke:var(--line)}
+/* A page plot passed straight into a .diagram, so the labelled region is its only scroller. */
+svg.arms{width:100%;max-width:24rem}
+:is(.plot,.arms) text{fill:var(--muted);font-size:12px}
+:is(.plot,.arms) .lbl{fill:var(--ink);font-weight:600}
+:is(.plot,.arms) .grid{stroke:var(--line)}
 .plot .axis{stroke:var(--axis)}
 .mk{stroke-width:1.5}
 line.mk{stroke-width:2.5}
