@@ -28,7 +28,7 @@ G10B_LABELS = {"results/contrasts": {"figure title": ("Holm p of each planned co
                "results/test-order": {"figure title": ("APFD-I and APFDc-H by test-list order", "Stage flow of a tcp-1 arm"),
                                       "axis label": ("Hidden-pass curve area",),
                                       "table header": ("Order", "APFD-I", "APFDc-H", "Arm", "Candidate", "Checks",
-                                                       "Relies", "Estimate", "Clause", "Risk", "Usage", "Setting",
+                                                       "Relies", "Candidates in order", "Estimate", "Clause", "Risk", "Usage", "Setting",
                                                        "Value", "Stage", "Runs as", "Steps", "Details", "Note")}}
 # The metrics plan.md names for this page, as dfn names.
 PLAN_METRICS = {"functional mark", "hidden pass", "seen tests", "unseen pass", "acceptance pass", "strict pmd compliance",

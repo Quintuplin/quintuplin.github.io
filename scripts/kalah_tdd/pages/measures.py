@@ -162,7 +162,8 @@ FIELDS = (
         Field("Risk", "A clause's 1 to 3 rating of the chance a first implementation gets it wrong.",
               ("list", "chance a first implementation gets it wrong")),
         Field("Usage", "A clause's 1 to 100 rating of how much of a game exercises it.", ("list", "Rate its usage")),
-        Field("Candidate", "A candidate test of the list.", ("list", "candidate tests")),
+        Field("Candidate", "A candidate test of the list. A Candidates in order cell lists an order's candidates first "
+              "to last.", ("list", "candidate tests"), ("Candidates in order",)),
         Field("Checks", "The clauses a candidate's assertions observe.", ("list", "checks lists every clause")),
         Field("Relies", "The clauses a candidate needs and does not assert.", ("list", "relies lists clauses")),
         Field("Estimate", "The production lines a candidate needs on the starter alone.",
