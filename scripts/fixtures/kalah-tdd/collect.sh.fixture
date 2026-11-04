@@ -1,0 +1,20 @@
+#!/bin/bash
+# Each step is logged, and a failed step is recorded.
+step() {
+    local name="$1"
+    shift
+    "$@"
+}
+
+collectOne() {
+    step fetchBack true
+    branchStep export true
+    [ "$role" != final ] || step review true
+    # step skipped stays a comment.
+    step report true
+}
+
+collectList() {
+    step fetchBack true
+    branchStep list true
+}

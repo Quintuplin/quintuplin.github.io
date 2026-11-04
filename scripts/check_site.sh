@@ -80,6 +80,11 @@ fi
 grep -q '^#lay {[^}]*max-width: *100%' "$fridge" || err "fridge #lay select caps the config name below its full width"
 # Its data generator refuses a dirty study tree or a --sha other than HEAD (#33) and reads the study's depth cap (#41).
 python3 -I scripts/check_build_deep_nested_lsh_data.py || err "deep nested LSH generator check failed"
+# The Kalah TDD snapshot comes from one clean tdd-experiment commit, drops host paths and matches its manifest (#56).
+python3 -I scripts/check_fetch_kalah_tdd_snapshot.py || err "Kalah TDD snapshot fetcher check failed"
+# Jekyll skips underscore folders, so the snapshot stays off the site and its sitemap (#56).
+[ ! -e "$site/_snapshots" ] || err "_snapshots is published"
+! grep -q '_snapshots' "$site/sitemap.xml" 2>/dev/null || err "sitemap.xml lists _snapshots"
 # The outcome chip may shrink and wrap, so the FN chip stays inside the narrow root rung on phones (#31).
 grep -q '^\.outcome {[^}]*min-width: *0' simulations/deep-nested-lsh/index.html || err "deep nested LSH .outcome chip cannot shrink inside a narrow rung"
 ! grep -q '^\.outcome {[^}]*nowrap' simulations/deep-nested-lsh/index.html || err "deep nested LSH .outcome chip cannot wrap inside a narrow rung"

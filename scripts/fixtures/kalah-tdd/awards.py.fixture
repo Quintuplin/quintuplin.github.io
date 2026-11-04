@@ -1,0 +1,29 @@
+"""Fixture awards."""
+TOP = 3
+MEDALS = ("gold", "silver", "bronze")
+CLEAN_MEDIAN = 4
+
+
+def cost_effective(record):
+    return record["m"] if record["full"] else None
+
+
+def fewest_errors(record):
+    """E, lower first."""
+    return record["e"]
+
+
+CRITERIA = (cost_effective, fewest_errors)
+
+
+def award(title, rule, found, text, medal=None):
+    return {"title": title, "rule": rule}
+
+
+def awards(records, spread=None):
+    """The award list."""
+    found = [award("Best overall", "Lowest plain sum of ranks. "
+                   "Cheapest never counts.", [], None)]
+    if spread:
+        found.append(award("Most consistent design", f"Lowest C. Variance p {spread['p']:.3f}.", [], None))
+    return found
