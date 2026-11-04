@@ -233,6 +233,18 @@ class Pages(unittest.TestCase):
         self.assertIn("Kalah TDD study · Part 4 of 29 · Methodology", html)
         self.assertEqual(re.findall(r'<a [^>]*aria-current="page"[^>]*>', html.split('class="toc"', 1)[1]),
                          [f'<a href="{BASE}methodology/measures/" aria-current="page">'])
+        # Every sidebar lists every page once.
+        for path, html in rendered().items():
+            toc = html.split('class="toc"', 1)[1].split("</details>", 1)[0]
+            self.assertEqual(sorted(h for h in HREF.findall(toc) if "#" not in h), sorted(map(page_url, slugs())), path)
+
+    def test_opener_scrolls_rail(self):
+        # Scrolling the rail alone keeps the current page in view without moving the page.
+        opener = kalah("chrome").OPENER
+        self.assertRegex(opener, r'contents\.querySelector\("\[aria-current\]"\)[^;]*;[^;]*contents\.scrollTop \+?=')
+        self.assertNotIn("scrollIntoView", opener)
+        # Centring the link means its middle, not its top edge, lands at mid-rail.
+        self.assertIn("contents.clientHeight / 2 + current.offsetHeight / 2;", opener)
 
     def test_stub_marker(self):
         pages = kalah("pages")

@@ -104,11 +104,66 @@ def forced_flow(parsed):
                        for media, sels, decls in parsed)]
 
 
+# Navigation controls meet the 44px touch target the rest of the site uses (#60).
+# Sidebar rows stay compact in the tall desktop rail and grow on touch or narrow screens.
+COARSE = "@media (max-width:899.98px), (pointer:coarse)"
+TOUCH = ((".toc > summary", None, 44, None), (".toc a", None, 24, 28), (".toc a", COARSE, 44, None),
+         (".pager a", None, 44, None), ("details:not(.toc) > summary", None, 44, None))
+
+
+def px(value):
+    """A length in px with rem and em at the 16px default. Any other unit or auto counts as 0, so it fails."""
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)(px|r?em)", value.replace("!important", "").strip())
+    return float(m.group(1)) * (1 if m.group(2) == "px" else 16) if m else 0
+
+
+def same_media(a, b):
+    return re.sub(r"\s+", "", a or "") == re.sub(r"\s+", "", b or "")
+
+
+def coarse(m):
+    """Whether every query in media m is one of the COARSE queries, so it only applies where touch rows are allowed."""
+    parts = lambda q: set(re.sub(r"\s+", "", q or "").removeprefix("@media").split(","))
+    return m is not None and parts(m) <= parts(COARSE)
+
+
+def reaches(s, sel):
+    """Whether selector s styles the same element as sel inside the same container, such as .toc ol ol a for .toc a."""
+    head, tail = sel.split()[0], sel.split()[-1]
+    # A .toc head also matches #toc and details.toc, but not :not(.toc).
+    name = rf"[.#]{re.escape(head[1:])}" if head.startswith(".") else re.escape(head)
+    return s == sel or ("::" not in s and re.search(rf"(?<!:not\(){name}(?![\w-])", s) is not None
+                        and re.search(rf"[\s>]\s*{re.escape(tail)}(?![\w-])[^\s>+~]*$", s) is not None)
+
+
+def touch_targets(parsed):
+    errors = []
+    for sel, media, need, cap in TOUCH:
+        meets = [(i, specificity(sel)) for i, (m, sels, decls) in enumerate(parsed)
+                 if same_media(m, media) and sel in sels and need <= px(decls.get("min-height", "")) <= (cap or float("inf"))]
+        if not meets:
+            size = f"between {need}px and {cap}px" if cap else f"of {need}px or more"
+            errors.append(f"{CSS}: {sel} has no min-height {size}{' under ' + media if media else ''}, "
+                          f"so it is a small touch target{' or a tall desktop row' if cap else ''}")
+            continue
+        last, spec = max(meets)
+        # Any media counts for lowering, as a lowering rule in another query still wins where both apply.
+        # A raise counts in any media but the coarse query, which raises the compact rows on purpose.
+        for i, (m, sels, decls) in enumerate(parsed):
+            value = px(decls.get("min-height", f"{need}px"))
+            verb = "lowers" if value < need else "raises" if cap and value > cap and not coarse(m) else None
+            errors += [f"{CSS}: later or more specific rule {s} {verb} {sel} min-height to {decls['min-height']}, "
+                       f"outside {need}px{f' to {cap}px' if cap else ' or more'}"
+                       for s in sels if verb and reaches(s, sel)
+                       and (i > last or specificity(s) > spec or "!important" in decls["min-height"])]
+    return errors
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
     text = re.sub(r"/\*.*?\*/", "", (root / CSS).read_text(encoding="utf-8"), flags=re.S)
     parsed = list(rules(text))
-    errors = summary_marker(parsed) + stacked_reset(parsed) + nested_card_reset(parsed) + forced_flow(parsed)
+    errors = summary_marker(parsed) + stacked_reset(parsed) + nested_card_reset(parsed) + forced_flow(parsed) + touch_targets(parsed)
     for e in errors:
         print("FAIL:", e, file=sys.stderr)
     if not errors:
