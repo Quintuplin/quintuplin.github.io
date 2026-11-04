@@ -312,6 +312,11 @@ svg.flow{display:block;width:100%;height:auto;font-family:var(--sans)}
 .flow .head{fill:var(--axis)}
 .flow text{fill:var(--ink);font-size:13px}
 .flow .note{fill:var(--muted)}
+#test-flow svg.flow text{font-size:12px}
+/* The seven-column test table scrolls in its region before it breaks words. */
+@media (min-width:641px){#test-use + .table-scroll table{min-width:60rem}#test-use + .table-scroll :is(th,td){overflow-wrap:normal}
+  #test-use + .table-scroll td:last-child{min-width:20rem}}
+@media (max-width:640px){.cols caption{display:block}}
 
 /* Forced colours drop fills, so shapes that rely on fills get borders. */
 @media (forced-colors: active){
