@@ -82,6 +82,8 @@ grep -q '^#lay {[^}]*max-width: *100%' "$fridge" || err "fridge #lay select caps
 python3 -I scripts/check_build_deep_nested_lsh_data.py || err "deep nested LSH generator check failed"
 # The Kalah TDD snapshot comes from one clean tdd-experiment commit, drops host paths and matches its manifest (#56).
 python3 -I scripts/check_fetch_kalah_tdd_snapshot.py || err "Kalah TDD snapshot fetcher check failed"
+# Study flowcharts list every node, edge and loop in their text version, escape text and take colours from study.css (#57).
+python3 -I scripts/check_kalah_tdd_flow.py || err "Kalah TDD flowchart check failed"
 # Jekyll skips underscore folders, so the snapshot stays off the site and its sitemap (#56).
 [ ! -e "$site/_snapshots" ] || err "_snapshots is published"
 ! grep -q '_snapshots' "$site/sitemap.xml" 2>/dev/null || err "sitemap.xml lists _snapshots"

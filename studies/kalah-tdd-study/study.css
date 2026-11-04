@@ -300,4 +300,8 @@ svg.flow{display:block;width:100%;height:auto;font-family:var(--sans)}
 @media (forced-colors: active){
   .winner,.chip i,.seg,.tag,.skip{border:1px solid CanvasText}
   .toc a[aria-current="page"]{border-left-color:Highlight}
+  .flow text,.flow .note,.flow .head{fill:CanvasText}
+  .flow .node{fill:Canvas;stroke:CanvasText}
+  .flow .edge,.flow .loop{stroke:CanvasText}
+  .flow .lane{fill:none;stroke:GrayText;opacity:1}
 }
