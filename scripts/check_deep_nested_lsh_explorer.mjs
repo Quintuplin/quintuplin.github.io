@@ -89,12 +89,31 @@ class Element {
   setPointerCapture() {}
 }
 
+// ---- FrameHarness: a busy runner simulated by spinning per unit of work ----
+const spin = (ms) => { for (const end = performance.now() + ms; performance.now() < end;); };
+// Virtual ms that advance only per unit of work, so frame times do not move with runner load (#92).
+const UNIT_MS = 1, FRAME_MS = 1000 / 60;
+class VirtualClock {
+  t = 0;
+  now() { return this.t; }
+  // Each frame gets a fresh stamp, since the page's shared slice keys on it.
+  frame() { this.t += FRAME_MS; }
+  spend(ms) { this.t += ms; }
+}
+// A copy of Cascade whose pipeline, trial and search steps each spin env.spinMs real ms and spend one unit on env.clock.
+function meteredCascade(C, env) {
+  const metered = (f) => (...a) => { spin(env.spinMs ?? 0); env.clock?.spend(UNIT_MS); return f(...a); };
+  return { ...C, quorumCurve: metered(C.quorumCurve), runTrials: metered(C.runTrials),
+    treeSearch: (...a) => { const steps = C.treeSearch(...a); return { next: metered((v) => steps.next(v)) }; } };
+}
+
 // Runs the page's chart kit and explorer. Frames queue until flush() runs them. Reduced motion takes the instant path.
 // Missing ids are created on demand, so `looked` records every id the explorer asks for.
 // `saved` is the explorer state found in storage on load.
-// fetch serves the histograms file beside the page. It waits for net.gate when set and fails while net.fail is true.
-function boot(saved, patch = (src) => src, net = {}) {
-  const body = new Element("body"), frames = new Map(), looked = new Set(), fetches = [];
+// fetch serves the histograms file beside the page. It waits for env.gate when set and fails while env.fail is true.
+// env.clock, when set, is the page's performance and stamps each frame. busy() is the ms the last step ran past its stamp.
+function boot(saved, patch = (src) => src, env = {}) {
+  const body = new Element("body"), frames = new Map(), looked = new Set(), fetches = [], clock = env.clock ?? performance;
   let nextFrame = 1;
   const add = (tag, cls) => { const e = body.appendChild(new Element(tag)); if (cls) e.className = cls; return e; };
   // The explorer finds its tree panel by class, so the fake page has it only when the real markup does.
@@ -115,7 +134,7 @@ function boot(saved, patch = (src) => src, net = {}) {
     querySelectorAll: (sel) => body.querySelectorAll(sel),
   };
   const ctx = vm.createContext({
-    console, performance, setTimeout, clearTimeout, document,
+    console, performance: clock, setTimeout, clearTimeout, document,
     matchMedia: () => ({ matches: true }),
     localStorage: { getItem: (k) => store.get(k) ?? (saved ? JSON.stringify(saved) : null), setItem: (k, v) => store.set(k, v) },
     requestAnimationFrame: (f) => { frames.set(nextFrame, f); return nextFrame++; },
@@ -123,8 +142,8 @@ function boot(saved, patch = (src) => src, net = {}) {
     addEventListener: () => {},
     fetch: async (url) => {
       fetches.push(url);
-      await net.gate;
-      if (net.fail) throw new TypeError("Failed to fetch");
+      await env.gate;
+      if (env.fail) throw new TypeError("Failed to fetch");
       const ok = url === "/simulations/deep-nested-lsh/histograms.json";
       return { ok, status: ok ? 200 : 404, json: async () => JSON.parse(readFileSync(HIST_PATH, "utf8")) };
     },
@@ -132,17 +151,20 @@ function boot(saved, patch = (src) => src, net = {}) {
   // The explorer shares this realm's maths, as inside a vm context it runs about 9 times slower.
   // Its only state is the tidy rule's cache of exact results for the last sweep, so sharing it changes no result.
   ctx.globalThis = ctx.window = ctx;
-  ctx.Cascade = C;
+  ctx.Cascade = env.clock || env.spinMs ? meteredCascade(C, env) : C;
   for (const id of ["chartkit-src", "explorer-src"]) vm.runInContext(id === "explorer-src" ? patch(PageScripts.read(id)) : PageScripts.read(id), ctx, { filename: id });
   // Runs the frames due now, each given the frame's one timestamp as a browser does. True while more are queued.
+  let busy = 0;
   const step = () => {
-    const due = [...frames.values()], now = performance.now();
+    clock.frame?.();
+    const due = [...frames.values()], now = clock.now();
     frames.clear();
     due.forEach((f) => f(now));
+    busy = clock.now() - now;
     return frames.size > 0;
   };
   const flush = () => { for (let i = 0; i < 100 && step(); i++); };
-  return { $: (id) => document.getElementById(id), body, flush, step, looked, store, fetches };
+  return { $: (id) => document.getElementById(id), body, flush, step, busy: () => busy, looked, store, fetches };
 }
 
 const depthInput = ($) => $("ex-depth").querySelector("input");
@@ -492,6 +514,15 @@ const withWork = (work) => (src) => {
   assert.match(src, WORK_DECLARATION, "the explorer declares SEARCH_WORK");
   return src.replace(WORK_DECLARATION, `SEARCH_WORK = ${work}`);
 };
+// Replaces `from` in the explorer source with `to`, failing when the source no longer holds it.
+const swap = (from, to, what) => (src) => {
+  assert.ok(src.includes(from), `the explorer ${what}`);
+  return src.replace(from, to);
+};
+// A pipeline count that does all its work in its first frame.
+const oneFramePipeline = swap("while (ys.length < xs.length && performance.now() < end);", "while (ys.length < xs.length);", "slices the pipeline count");
+// Each slice runner takes its own slice per frame, as before the shared slice.
+const ownSlices = swap("if (now !== sliceAt) { sliceAt = now; sliceEnd = performance.now() + SLICE_MS; }", "sliceEnd = performance.now() + SLICE_MS;", "shares one slice per frame");
 // Guard: a page already at the requested cap once failed as if it lacked the declaration.
 test("withWorkPatchesTheDeclaration", () => {
   const src = "const SEARCH_WORK = 30000000;";
@@ -555,46 +586,49 @@ test("searchDepthNamesShellTwoBound", () => {
   }
 });
 
-// Guard: the pipeline count and a sweep once each took a full slice per frame, so frames ran twice the slice.
 const SLICE_MS = Number(PageScripts.read("explorer-src").match(/\bSLICE_MS = (\d+)/)[1]);
-test("sweepWithPipelineStaysInFrame", () => {
-  const { $, flush, step } = boot();
-  flush();
-  tick($, "ex-pipeline", true);
-  step();
-  $("ex-sweep").dispatch("click");
-  const ms = [];
-  while (ms.length < 1e4 && /Computing/.test($("ex-readout").textContent)) {
-    const t0 = performance.now();
-    step();
-    ms.push(performance.now() - t0);
-  }
-  assert.match($("ex-msg").textContent, /Sweeping/, "the sweep outlasts the pipeline count");
-  const mid = ms.sort((a, b) => a - b)[ms.length >> 1];
-  assert.ok(ms.length >= 5 && mid < 1.5 * SLICE_MS, `frames took ${mid.toFixed(1)} ms at the median over ${ms.length} frames, slice ${SLICE_MS} ms`);
-});
-
-// Guard: a depth search beside a pipeline count must share the slice too. At t 0.95 near the pipeline limit both take a while.
 const PIPE_LIMIT = Number(PageScripts.read("explorer-src").match(/\bPIPE_LIMIT = (\d+)/)[1]);
-test("searchWithPipelineStaysInFrame", () => {
+// ---- FrameScenarios: busy ms per frame from the pipeline count's first frame ----
+function frameTimes(page, alive, k = 8) {
+  const ms = [];
+  do { page.step(); ms.push(page.busy()); } while (ms.length < k && alive());
+  return ms;
+}
+const computing = ($) => /Computing/.test($("ex-readout").textContent);
+function sweepBesidePipeline(env, patch) {
+  const page = boot(undefined, patch, env), { $ } = page;
+  page.flush();
+  tick($, "ex-pipeline", true);
+  $("ex-sweep").dispatch("click");
+  const ms = frameTimes(page, () => computing($));
+  assert.match($("ex-msg").textContent, /Sweeping/, "the sweep outlasts the pipeline count");
+  return ms;
+}
+// At t 0.95 near the pipeline limit both the search and the pipeline count take a while.
+function searchBesidePipeline(env, patch) {
   const dims = [23, 3, 8, 12, 3], T = 0.95;
   assert.ok(C.rows(dims) <= PIPE_LIMIT, `${dims} gets a pipeline count`);
-  const { $, flush, step } = boot({ dims, T, s: 0.5, seed: 753 });
-  flush();
+  const page = boot({ dims, T, s: 0.5, seed: 753 }, patch, env), { $ } = page;
+  page.flush();
   tick($, "ex-pipeline", true);
-  step();
   $("ex-search").dispatch("click");
-  step();
-  const ms = [], both = () => /Computing/.test($("ex-readout").textContent) && /Searching/.test($("ex-msg").textContent);
-  assert.ok(both(), "the search starts while the pipeline count runs");
-  while (ms.length < 1e4 && both()) {
-    const t0 = performance.now();
-    step();
-    ms.push(performance.now() - t0);
-  }
-  const mid = ms.sort((a, b) => a - b)[ms.length >> 1];
-  assert.ok(ms.length >= 5 && mid < 1.5 * SLICE_MS, `frames took ${mid.toFixed(1)} ms at the median over ${ms.length} frames, slice ${SLICE_MS} ms`);
-});
+  return frameTimes(page, () => computing($) && /Searching/.test($("ex-msg").textContent));
+}
+// Null when the frames stay within the slice, else what went wrong.
+function frameFault(ms) {
+  const worst = Math.max(...ms);
+  return ms.length >= 5 && worst < 1.5 * SLICE_MS ? null : `the worst of ${ms.length} frames took ${worst.toFixed(1)} ms, slice ${SLICE_MS} ms`;
+}
+
+// ---- FrameTests ----
+// Guard: a wall-clock frame check once failed on a busy runner (#92), so this one runs with every unit of work slowed.
+test("sweepWithPipelineStaysInFrame", () => assert.equal(frameFault(sweepBesidePipeline({ clock: new VirtualClock(), spinMs: 8 })), null));
+// Guard: a depth search beside a pipeline count must share the slice too.
+test("searchWithPipelineStaysInFrame", () => assert.equal(frameFault(searchBesidePipeline({ clock: new VirtualClock() })), null));
+// Guard for the check itself: it fails a pipeline count done in one frame.
+test("frameCheckCatchesOneFramePipeline", () => assert.notEqual(frameFault(sweepBesidePipeline({ clock: new VirtualClock() }, oneFramePipeline)), null));
+// Guard: the pipeline count and a sweep once each took a full slice per frame, so frames ran twice the slice.
+test("frameCheckCatchesSeparateSlices", () => assert.notEqual(frameFault(sweepBesidePipeline({ clock: new VirtualClock() }, ownSlices)), null));
 
 test("searchStopsWhenTreeChanges", () => {
   const { $, flush, step, k, dims } = bootDeepSearch();
