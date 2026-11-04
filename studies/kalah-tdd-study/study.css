@@ -269,6 +269,7 @@ th{background:var(--wash);color:var(--muted);font-weight:600}
   .cols td:first-child{font-weight:600}
   .cols td + td::before{content:attr(data-th) ": ";color:var(--muted);font-weight:600}
   .cols caption{display:block}
+  .cols td.nowrap::before{white-space:normal}
 }
 
 /* Figures. Source SVGs draw with the aliased tokens; .plot and the series classes come from render.py. */

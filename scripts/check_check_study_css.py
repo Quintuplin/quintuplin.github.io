@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the study stylesheet touch target (#60) and figure pull (#69) checks on edited copies of study.css.
+"""Check the study stylesheet touch target (#60), figure pull (#69) and card label (#70) checks on edited copies of study.css.
 
 Usage: check_check_study_css.py
 """
@@ -164,6 +164,43 @@ class DiagramPull(unittest.TestCase):
                       ".yy{margin:0 -5px 0 0}", ".yy{margin-inline:0 -5px}", ".x{margin:0 0 0 -4px}.diagram .x{margin:0}"):
             with self.subTest(probe):
                 self.assertEqual(pull(lambda t: t + probe), [])
+
+
+LABEL = ".cols td.nowrap::before{white-space:normal}"
+
+
+def wrap(edit=lambda text: text):
+    """label_wrap on the committed study.css after edit."""
+    c = css()
+    text = re.sub(r"/\*.*?\*/", "", (SCRIPTS.parent / c.CSS).read_text(encoding="utf-8"), flags=re.S)
+    return c.label_wrap(list(c.rules(edit(text))))
+
+
+class LabelWrap(unittest.TestCase):
+    def test_committed_passes(self):
+        self.assertEqual(wrap(), [])
+
+    def test_missing_or_misplaced_rule_fails(self):
+        # Outside the narrow block the rule never reaches stacked cards.
+        for probe in (lambda t: t.replace(LABEL, ""), lambda t: t.replace(LABEL, "") + LABEL):
+            with self.subTest():
+                self.assertRegex(" ".join(wrap(probe)), r"no rule under @media \(max-width:640px\) sets \.cols td\.nowrap")
+
+    def test_later_or_stronger_nowrap_undoes_it(self):
+        for probe in ("@media (max-width:640px){.cols td + td.nowrap::before{white-space:nowrap}}",
+                      "@media (max-width:640px){table.cols td.nowrap::before{white-space:nowrap}}",
+                      "#main .cols td.nowrap::before{white-space:nowrap}", ".nowrap::before{white-space:nowrap !important}",
+                      "#main .nowrap::before{white-space:nowrap}"):
+            with self.subTest(probe):
+                self.assertRegex(" ".join(wrap(lambda t: t + probe)), r"sets white-space:nowrap.* on the stacked card label")
+
+    def test_weaker_earlier_or_other_label_passes(self):
+        for probe in (lambda t: ".cols td.nowrap::before{white-space:nowrap}" + t,
+                      lambda t: t + ".qtable td.nowrap::before{white-space:nowrap}",
+                      lambda t: t + ".cols td.nowrap::before{white-space:nowrap}@media (max-width:640px){" + LABEL + "}",
+                      lambda t: t + ".cols td.nowrap::before{white-space:pre-wrap}"):
+            with self.subTest():
+                self.assertEqual(wrap(probe), [])
 
 
 if __name__ == "__main__":

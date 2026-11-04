@@ -213,12 +213,39 @@ def diagram_pull(parsed):
     return errors
 
 
+# A stacked card label inherits nowrap from its value cell, so a long label would scroll the card (#70).
+NARROW = "@media (max-width:640px)"
+# The site's other table classes, whose nowrap cells never stack as .cols cards.
+OTHER_TABLES = r"\.(?:qtable|kv|map)(?![\w-])"
+
+
+def label_wrap(parsed):
+    """In stacked .cols cards the ::before label of a td.nowrap must wrap, and no later or stronger rule may undo it."""
+    label = lambda s: re.fullmatch(r"\.cols\s+(?:td\s*\+\s*)?td\.nowrap::before", s) is not None
+    reaches = lambda s: re.search(r"\.nowrap(?![\w-])[^\s>+~]*::before$", s) and not re.search(OTHER_TABLES, s)
+    value = lambda d: d.get("white-space", "").replace("!important", "").strip()
+    # Cascade order: importance, then specificity, then source order.
+    rank = lambda d, s, i: ("!important" in d.get("white-space", ""), specificity(s), i)
+    fixes = [(rank(d, s, i), s) for i, (m, sels, d) in enumerate(parsed)
+             if same_media(m, NARROW) and value(d) in ("normal", "pre-wrap", "pre-line", "break-spaces")
+             for s in sels if label(s)]
+    if not fixes:
+        return [f"{CSS}: no rule under {NARROW} sets .cols td.nowrap::before{{white-space:normal}}, "
+                f"so a long card label inherits nowrap and scrolls the card"]
+    # Only nowrap and pre stop wrapping. A td + td fix misses first cells, so it only clears a td + td rule.
+    return [f"{CSS}: later or stronger rule {s} sets white-space:{d['white-space']} on the stacked card label, "
+            f"so a long label scrolls the card"
+            for i, (m, sels, d) in enumerate(parsed) if value(d) in ("nowrap", "pre")
+            for s in sels if reaches(s)
+            and not any(r > rank(d, s, i) and ("+" not in f or "+" in s) for r, f in fixes)]
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
     text = re.sub(r"/\*.*?\*/", "", (root / CSS).read_text(encoding="utf-8"), flags=re.S)
     parsed = list(rules(text))
     errors = summary_marker(parsed) + stacked_reset(parsed) + nested_card_reset(parsed) + forced_flow(parsed) + \
-        touch_targets(parsed) + kept_rules(parsed) + diagram_pull(parsed)
+        touch_targets(parsed) + kept_rules(parsed) + diagram_pull(parsed) + label_wrap(parsed)
     for e in errors:
         print("FAIL:", e, file=sys.stderr)
     if not errors:
