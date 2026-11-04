@@ -202,6 +202,16 @@ def fact_texts():
     return [t for labels in fact_labels().values() for ts in labels.values() for t in ts]
 
 
+def fact_label_gaps(table):
+    """(keys of a FACT_LABELS table that name no field card, (name, kind, slug) rows the table and the rendered
+    results pages disagree on for field names), so a renamed field leaves no dead key behind."""
+    names = {check().spaced(next(n for n in card.iter() if n.tag == "dfn")) for card in field_cards()}
+    given = {(name, kind, s) for name, (kind, slugs) in table.items() for s in slugs}
+    derived = {(t, f"{what[:1].upper()}{what[1:]}", s) for s, labels in fact_labels().items()
+               for what, texts in labels.items() for t in texts if t in names}
+    return sorted(set(table) - names), sorted(given ^ derived)
+
+
 def dfn_words(dfn):
     """A dfn's names as check_kalah_tdd_study.dfn_names reads them."""
     names = {check().spaced(dfn), (dfn.attrs.get("id") or "").replace("-", " ")}
@@ -603,6 +613,12 @@ class Measures(unittest.TestCase):
         errors, checked = check().metric_defs({**built, SLUG: html()})
         self.assertEqual(errors, [])
         self.assertEqual(checked, len(fact_texts()))
+
+    def test_fact_labels_name_fields(self):
+        table = measures().FACT_LABELS
+        self.assertEqual(fact_label_gaps(table), ([], []))
+        orphans, rows = fact_label_gaps({**table, "Remark": ("Table header", ("results/test-order",))})
+        self.assertEqual((orphans, rows), (["Remark"], [("Remark", "Table header", "results/test-order")]))
 
     def test_figure_titles_name_a_metric(self):
         records = {measures().slug(n) for id, _, names in measures().FAMILIES if id == "records" for n in names}
