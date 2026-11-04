@@ -1,12 +1,12 @@
 """The 12 design pages (#87): the showcase view and the method page merged into one page in paper order, which is
-how it builds code, results, verdict, then the method page evidence. A merge keeps the superset of both sources and
-refuses to drop text."""
+how it builds code with its stage flow, results, verdict, then the method page evidence. A merge keeps the superset of
+both sources and refuses to drop text."""
 
 import re
 from html import unescape
 
 from .. import links, pagemap, parts
-from ..figures import class_diagram
+from ..figures import class_diagram, stage_flow
 from ..snapshot import REPORT, SHOWCASE, section, view
 
 A02 = "designs/a02-reference"
@@ -37,12 +37,14 @@ LABEL = re.compile(r"<(h[1-6]|summary)\b[^>]*>(.*?)</\1>|<table\b.*?</table>", r
 
 
 def body(page, snap, idx):
-    fragments, report = (reference(page, snap, idx), None) if page.slug == A02 else design(page, snap, idx)
-    fragments = class_diagram.frame_all(wrap_tables(fragments, page.slug), page.slug, report)
+    numbers = parts.numbers(page.slug)
+    fragments, report = (reference(page, snap, idx), None) if page.slug == A02 else design(page, snap, idx, numbers)
+    fragments = class_diagram.frame_all(wrap_tables(fragments, page.slug), page.slug, report, numbers)
     return [TAG.sub(lambda m: f"Tag: {parts.tag(m.group(1))}.", f) for f in fragments]
 
 
-def design(page, snap, idx):
+def design(page, snap, idx, numbers=None):
+    """The page fragments and the index of the report summary. The stage flow takes the first of numbers."""
     slug, here = page.slug.removeprefix("designs/"), page.slug
     doc = f"{links.METHODS}{slug}.html"
     shown = showcase(page, view(snap.files[SHOWCASE], slug))
@@ -57,9 +59,10 @@ def design(page, snap, idx):
         raise ValueError(f"{slug}: the report card name {card['name']!r} differs from the page map")
     # The showcase lead and the report summary can hold links, so each is rewritten against its own source.
     lead = shown["chip"] + links.rewrite(shown["lead"], SHOWCASE, here, idx) + "\n" + intro.group(1)
-    family = union(slug, card["card"], how["family"])
+    family, pre = union(slug, card["card"], how["family"]), merge_steps(slug, shown["steps"], how["code"])
+    flow = stage_flow.figure(next(numbers or parts.numbers(here)), slug, snap.facts["stages"], pre)
     steps = (f'<section id="steps"><h2 id="how-it-works">How it builds code</h2>\n{shown["intro"]}\n<p>{family}</p>\n'
-             f'{merge_steps(slug, shown["steps"], how["code"])}\n{how["kinds"]}</section>')
+             f'{pre}\n{how["kinds"]}\n{flow}</section>')
     verdict = f'<h2 id="conclusion">Verdict</h2>\n<p>{union(slug, shown["verdict"], end.group(1))}</p>'
     summary = links.rewrite(f'<h2 id="{card["id"]}">Report summary</h2>\n{card["figure"]}\n{card["kv"] or ""}', REPORT, here, idx)
     fragments = [lead, steps, links.rewrite(shown["kpis"], SHOWCASE, here, idx), verdict, summary,
