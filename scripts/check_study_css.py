@@ -138,9 +138,13 @@ def reaches(s, sel):
                         and re.search(rf"[\s>]\s*{re.escape(tail)}(?![\w-])[^\s>+~]*$", s) is not None)
 
 
+# Methodology table cell links get the touch target where the nav rows do (#64).
+CELL_TOUCH = ((".cols td a", COARSE, 44, None),)
+
+
 def touch_targets(parsed):
     errors = []
-    for sel, media, need, cap in TOUCH:
+    for sel, media, need, cap in TOUCH + CELL_TOUCH:
         meets = [(i, specificity(sel)) for i, (m, sels, decls) in enumerate(parsed)
                  if same_media(m, media) and sel in sels and need <= px(decls.get("min-height", "")) <= (cap or float("inf"))]
         if not meets:
@@ -161,11 +165,26 @@ def touch_targets(parsed):
     return errors
 
 
+# Long words wrap so a 320px page never scrolls sideways, while code in table cells keeps short tokens such as a
+# doc sha whole and stacked cards keep their caption (#64).
+KEPT = (("dl.terms dd", None, "overflow-wrap", "anywhere"),
+        (".table-scroll > table.cols :is(th,td)", None, "overflow-wrap", "break-word"),
+        (".table-scroll > table.cols code", None, "overflow-wrap", "break-word"),
+        (".cols caption", "@media (max-width:640px)", "display", "block"))
+
+
+def kept_rules(parsed):
+    return [f"{CSS}: no rule sets {sel} {{{prop}:{value}}}{' under ' + media if media else ''}"
+            for sel, media, prop, value in KEPT
+            if not any(same_media(m, media) and sel in sels and decls.get(prop) == value for m, sels, decls in parsed)]
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
     text = re.sub(r"/\*.*?\*/", "", (root / CSS).read_text(encoding="utf-8"), flags=re.S)
     parsed = list(rules(text))
-    errors = summary_marker(parsed) + stacked_reset(parsed) + nested_card_reset(parsed) + forced_flow(parsed) + touch_targets(parsed)
+    errors = summary_marker(parsed) + stacked_reset(parsed) + nested_card_reset(parsed) + forced_flow(parsed) + \
+        touch_targets(parsed) + kept_rules(parsed)
     for e in errors:
         print("FAIL:", e, file=sys.stderr)
     if not errors:
