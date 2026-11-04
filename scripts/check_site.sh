@@ -26,10 +26,12 @@ for page in simulations/*/index.html studies/*/index.html; do
 	for href in $navHrefs; do
 		grep -qF "$href" "$page" || err "$page site bar lacks $href"
 	done
-	grep -q 'prefers-color-scheme: *dark' "$page" || err "$page lacks a dark mode block"
+	# The theme may come from a site stylesheet the page links, as the Kalah TDD study pages do (#59).
+	theme="$page $(sed -n 's|.*<link rel="stylesheet" href="/\([^"]*\.css\)">.*|\1|p' "$page")"
+	grep -q 'prefers-color-scheme: *dark' $theme || err "$page lacks a dark mode block"
 	grep -q 'class="backdrop"' "$page" || err "$page lacks the photo backdrop"
-	grep -qF 'url("/assets/bg.jpg")' "$page" || err "$page does not load the backdrop photo"
-	grep -q 'backdrop-filter' "$page" || err "$page lacks the glass backdrop-filter"
+	grep -qF 'url("/assets/bg.jpg")' $theme || err "$page does not load the backdrop photo"
+	grep -q 'backdrop-filter' $theme || err "$page lacks the glass backdrop-filter"
 	# The bar lists LinkedIn before GitHub, as the main nav does.
 	[ "$(sed -n '/class="site-bar"/,/<\/nav>/p' "$page" | grep -o 'LinkedIn\|GitHub' | head -1)" = LinkedIn ] || err "$page site bar does not list LinkedIn before GitHub"
 done
@@ -84,6 +86,8 @@ python3 -I scripts/check_build_deep_nested_lsh_data.py || err "deep nested LSH g
 python3 -I scripts/check_fetch_kalah_tdd_snapshot.py || err "Kalah TDD snapshot fetcher check failed"
 # Study flowcharts list every node, edge and loop in their text version, escape text and take colours from study.css (#57).
 python3 -I scripts/check_kalah_tdd_flow.py || err "Kalah TDD flowchart check failed"
+# The study pages match a fresh build, rewrite every old report link, keep ids unique and leak no host path (#59).
+python3 -I scripts/check_build_kalah_tdd_study.py || err "Kalah TDD study page build check failed"
 # Jekyll skips underscore folders, so the snapshot stays off the site and its sitemap (#56).
 [ ! -e "$site/_snapshots" ] || err "_snapshots is published"
 ! grep -q '_snapshots' "$site/sitemap.xml" 2>/dev/null || err "sitemap.xml lists _snapshots"

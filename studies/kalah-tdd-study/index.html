@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="generator" content="scripts/build_kalah_tdd_study.py from Quintuplin/tdd-experiment c3dd988275db04e156e2d12ee4f1ad54037cabde">
+<meta name="kalah-tdd-stub">
+<title>12 ways to test-drive Kalah · Kalah TDD study</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/studies/kalah-tdd-study/study.css">
+</head>
+<body>
+<div class="backdrop" aria-hidden="true"></div>
+<div class="sheet">
+<nav class="site-bar" aria-label="Site">
+  <a href="/">Home</a>
+  <a href="/about">About</a>
+  <a href="/cv">Resume</a>
+  <a href="/projects" aria-current="page">Projects</a>
+  <a class="ext" href="https://www.linkedin.com/in/jack-fraser-3a137ba3/">LinkedIn</a>
+  <a href="https://github.com/quintuplin">GitHub</a>
+</nav>
+<style>
+/* Static link bar back to the main site, styled like its nav. */
+.site-bar { flex: none; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 22px; padding-bottom: 8px; margin-bottom: 8px;
+  border-bottom: 1px solid var(--rule, var(--border, var(--line))); font: 600 16px/1.45 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+.site-bar a { padding-block: 2px; color: var(--muted); text-decoration: none; }
+.site-bar a:hover, .site-bar a:focus-visible { color: var(--text, var(--ink)); text-decoration: underline; }
+.site-bar a[aria-current] { color: var(--accent, var(--focus)); }
+.site-bar .ext { margin-left: auto; }
+@media (max-width: 600px) { .site-bar .ext { margin-left: 0; } }
+</style>
+<a class="skip" href="#main">Skip to content</a>
+<div class="study">
+<header class="study-head">
+<p class="eyebrow">Kalah TDD study · Part 1 of 29 · Introduction</p>
+<h1>12 ways to test-drive Kalah</h1>
+<p class="lede">An AI coding agent built the same Java Kalah game with each test-driven design. 6 awards pick the stand-outs.</p>
+<p class="prov">Source run full-1 at tdd-experiment <code>c3dd988</code></p>
+</header>
+<nav class="pager" aria-label="Previous and next page, top">
+<a class="pager-home" href="/studies/kalah-tdd-study/"><span>Study</span> <b>Contents</b></a>
+<a rel="next" href="/studies/kalah-tdd-study/experimental-design/"><span>Next</span> <b>Experimental design and approach</b></a>
+</nav>
+<details class="toc" id="toc"><summary>Contents</summary>
+<nav aria-label="Study contents">
+<p class="part">Introduction</p>
+<ol>
+<li><a href="/studies/kalah-tdd-study/" aria-current="page">12 ways to test-drive Kalah</a></li>
+</ol>
+<p class="part">Approach</p>
+<ol>
+<li><a href="/studies/kalah-tdd-study/experimental-design/">Experimental design and approach</a></li>
+</ol>
+<p class="part">Methodology</p>
+<ol>
+<li><a href="/studies/kalah-tdd-study/methodology/">Harness and protocol</a></li>
+<li><a href="/studies/kalah-tdd-study/methodology/measures/">Measures</a></li>
+<li><a href="/studies/kalah-tdd-study/methodology/analysis/">Analysis and validity</a></li>
+</ol>
+<p class="part">Results</p>
+<ol>
+<li><a href="/studies/kalah-tdd-study/results/survey/">Survey (full-1)</a></li>
+<li><a href="/studies/kalah-tdd-study/results/contrasts/">Planned contrasts</a></li>
+<li><a href="/studies/kalah-tdd-study/results/consistency/">Consistency across runs</a></li>
+<li><a href="/studies/kalah-tdd-study/results/test-order/">Test order (tcp-1)</a></li>
+</ol>
+<p class="part">Discussion</p>
+<ol>
+<li><a href="/studies/kalah-tdd-study/questions/">Critical questions</a></li>
+</ol>
+<p class="part">Designs</p>
+<ol>
+<li><a href="/studies/kalah-tdd-study/designs/classic/">Classic greedy TDD</a></li>
+<li><a href="/studies/kalah-tdd-study/designs/noun-verb/">Noun-verb map</a></li>
+<li><a href="/studies/kalah-tdd-study/designs/mapped-path/">Mapped-path TDD</a></li>
+<li><a href="/studies/kalah-tdd-study/designs/functions-first/">Functions first, classes later</a></li>
+<li><a href="/studies/kalah-tdd-study/designs/tpp/">Transformation Priority Premise TDD</a></li>
+<li><a href="/studies/kalah-tdd-study/designs/coarse-to-fine/">Coarse-to-fine TDD</a></li>
+<li><a href="/studies/kalah-tdd-study/designs/annealed/">Annealed refactoring</a></li>
+<li><a href="/studies/kalah-tdd-study/designs/multi-start/">Multi-start TDD</a></li>
+<li><a href="/studies/kalah-tdd-study/designs/mutation-guided/">Most informative next test</a></li>
+<li><a href="/studies/kalah-tdd-study/designs/property-based/">Property-based TDD</a></li>
+<li><a href="/studies/kalah-tdd-study/designs/held-out/">Held-out TDD</a></li>
+<li><a href="/studies/kalah-tdd-study/designs/anchor-engineering/">Anchor Engineering</a></li>
+<li><a href="/studies/kalah-tdd-study/designs/a02-reference/">A02 reference (not part of the comparison)</a></li>
+</ol>
+<p class="part">Reference</p>
+<ol>
+<li><a href="/studies/kalah-tdd-study/glossary/">Glossary</a></li>
+</ol>
+<p class="part">Data</p>
+<ol>
+<li><a href="/studies/kalah-tdd-study/data/">Findings</a></li>
+<li><a href="/studies/kalah-tdd-study/data/contrasts/">Contrasts and replicates</a></li>
+<li><a href="/studies/kalah-tdd-study/data/methods/">Method table</a></li>
+<li><a href="/studies/kalah-tdd-study/data/ratings/">Ratings</a></li>
+<li><a href="/studies/kalah-tdd-study/data/runs/">Run records</a></li>
+</ol>
+</nav>
+</details>
+<main id="main">
+<div class="callout">
+<p class="eyebrow">In progress</p>
+<p>This part is being written. Use the contents to reach the parts already published.</p>
+</div>
+</main>
+<nav class="pager" aria-label="Previous and next page, bottom">
+<a class="pager-home" href="/studies/kalah-tdd-study/"><span>Study</span> <b>Contents</b></a>
+<a rel="next" href="/studies/kalah-tdd-study/experimental-design/"><span>Next</span> <b>Experimental design and approach</b></a>
+</nav>
+</div>
+</div>
+<script>(() => { const contents = document.getElementById("toc"), wide = matchMedia("(min-width: 900px)"); const sync = () => { contents.open = wide.matches; }; sync(); wide.addEventListener("change", sync); const reveal = (hash) => { for (let node = hash && document.getElementById(decodeURIComponent(hash.slice(1))); node; node = node.parentElement) if (node.tagName === "DETAILS") node.open = true; }; const load = () => reveal(location.hash); if (document.readyState === "loading") addEventListener("DOMContentLoaded", load); else load(); addEventListener("hashchange", load); document.addEventListener("click", (event) => { const link = event.target.closest('a[href^="#"]'); if (link) reveal(link.hash); }); })();</script>
+</body>
+</html>

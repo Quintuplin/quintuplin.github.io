@@ -4,3 +4,5 @@ scripts/*.sh text eol=lf
 # The study snapshot must match its MANIFEST.json sha256 on every checkout
 _snapshots/** -text
 scripts/fixtures/kalah-tdd/* -text
+# Generated study pages must match build_kalah_tdd_study.py --check byte for byte on every checkout
+studies/kalah-tdd-study/**/index.html -text
