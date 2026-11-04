@@ -189,13 +189,16 @@ class LabelWrap(unittest.TestCase):
     def test_later_or_stronger_nowrap_undoes_it(self):
         for probe in ("@media (max-width:640px){.cols td + td.nowrap::before{white-space:nowrap}}",
                       "@media (max-width:640px){table.cols td.nowrap::before{white-space:nowrap}}",
-                      "#main .cols td.nowrap::before{white-space:nowrap}", ".nowrap::before{white-space:nowrap !important}"):
+                      "#main .cols td.nowrap::before{white-space:nowrap}", ".nowrap::before{white-space:nowrap !important}",
+                      "#main .nowrap::before{white-space:nowrap}"):
             with self.subTest(probe):
                 self.assertRegex(" ".join(wrap(lambda t: t + probe)), r"sets white-space:nowrap.* on the stacked card label")
 
     def test_weaker_earlier_or_other_label_passes(self):
         for probe in (lambda t: ".cols td.nowrap::before{white-space:nowrap}" + t,
-                      lambda t: t + ".qtable td.nowrap::before{white-space:nowrap}"):
+                      lambda t: t + ".qtable td.nowrap::before{white-space:nowrap}",
+                      lambda t: t + ".cols td.nowrap::before{white-space:nowrap}@media (max-width:640px){" + LABEL + "}",
+                      lambda t: t + ".cols td.nowrap::before{white-space:pre-wrap}"):
             with self.subTest():
                 self.assertEqual(wrap(probe), [])
 

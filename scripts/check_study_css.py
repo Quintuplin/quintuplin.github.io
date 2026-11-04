@@ -215,27 +215,29 @@ def diagram_pull(parsed):
 
 # A stacked card label inherits nowrap from its value cell, so a long label would scroll the card (#70).
 NARROW = "@media (max-width:640px)"
+# The site's other table classes, whose nowrap cells never stack as .cols cards.
+OTHER_TABLES = r"\.(?:qtable|kv|map)(?![\w-])"
 
 
 def label_wrap(parsed):
     """In stacked .cols cards the ::before label of a td.nowrap must wrap, and no later or stronger rule may undo it."""
     label = lambda s: re.fullmatch(r"\.cols\s+(?:td\s*\+\s*)?td\.nowrap::before", s) is not None
-    # A lone .nowrap::before compound reaches the label too; a longer selector reaches it only inside .cols.
-    reaches = lambda s: re.search(r"\.nowrap(?![\w-])[^\s>+~]*::before$", s) is not None and (
-        len(s.split()) == 1 or re.search(r"\.cols(?![\w-])", s) is not None)
-    fixes = [(specificity(s), i) for i, (m, sels, decls) in enumerate(parsed)
-             if same_media(m, NARROW) and decls.get("white-space") == "normal" for s in sels if label(s)]
+    reaches = lambda s: re.search(r"\.nowrap(?![\w-])[^\s>+~]*::before$", s) and not re.search(OTHER_TABLES, s)
+    value = lambda d: d.get("white-space", "").replace("!important", "").strip()
+    # Cascade order: importance, then specificity, then source order.
+    rank = lambda d, s, i: ("!important" in d.get("white-space", ""), specificity(s), i)
+    fixes = [(rank(d, s, i), s) for i, (m, sels, d) in enumerate(parsed)
+             if same_media(m, NARROW) and value(d) in ("normal", "pre-wrap", "pre-line", "break-spaces")
+             for s in sels if label(s)]
     if not fixes:
         return [f"{CSS}: no rule under {NARROW} sets .cols td.nowrap::before{{white-space:normal}}, "
                 f"so a long card label inherits nowrap and scrolls the card"]
-    # The plain .cols td.nowrap rule alone reaches first cells, so the weakest fix sets the bar. Any media counts.
-    spec, last = min(fixes)
-    return [f"{CSS}: later or stronger rule {s} sets white-space:{decls['white-space']} on the stacked card label, "
+    # Only nowrap and pre stop wrapping. A td + td fix misses first cells, so it only clears a td + td rule.
+    return [f"{CSS}: later or stronger rule {s} sets white-space:{d['white-space']} on the stacked card label, "
             f"so a long label scrolls the card"
-            for i, (m, sels, decls) in enumerate(parsed)
-            if decls.get("white-space", "normal").replace("!important", "").strip() != "normal"
-            for s in sels if reaches(s) and (specificity(s) > spec or (specificity(s) == spec and i > last)
-                                             or "!important" in decls["white-space"])]
+            for i, (m, sels, d) in enumerate(parsed) if value(d) in ("nowrap", "pre")
+            for s in sels if reaches(s)
+            and not any(r > rank(d, s, i) and ("+" not in f or "+" in s) for r, f in fixes)]
 
 
 def main():
