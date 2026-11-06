@@ -70,10 +70,6 @@ def parsed(slug):
     return study().parse(rendered()[slug])
 
 
-def body(slug):
-    return re.search(r'<main id="main">(.*)</main>', rendered()[slug], re.S).group(1)
-
-
 class Chrome(unittest.TestCase):
     def test_skipLinkFirst(self):
         for slug in rendered():
@@ -95,15 +91,13 @@ class Chrome(unittest.TestCase):
                     self.assertEqual((label.tag, label.classes(), study().spaced(label)), ("p", ["part"], part))
 
     def test_sourceLineNamesPageRuns(self):
-        sha = snap().sha[:7]
-        for slug in rendered():
+        # Consistency pools the rep-1 and rep-2 replicates per method, so full-1 would misname its source.
+        expected = {"data/contrasts": "Source runs rep-1 and rep-2", "data/methods": "Source run full-1",
+                    "results/consistency": "Source runs rep-1 and rep-2"}
+        for slug, said in expected.items():
             with self.subTest(slug):
-                runs = kalah("snapshot").named_runs(snap(), body(slug)) or [snap().run]
                 prov = next(n for n in parsed(slug).root.iter() if "prov" in n.classes())
-                said = runs[0] if len(runs) == 1 else f"{', '.join(runs[:-1])} and {runs[-1]}"
-                self.assertEqual(study().spaced(prov),
-                                 f"Source run{'s' if len(runs) > 1 else ''} {said} at tdd-experiment {sha}")
-        self.assertEqual(kalah("snapshot").named_runs(snap(), body("results/consistency")), [])
+                self.assertEqual(study().spaced(prov), f"{said} at tdd-experiment {snap().sha[:7]}")
 
     def test_hashOpensClosedDetails(self):
         # Pins the opener: a hash on load, a hash change or a followed link opens every fold around its target.
