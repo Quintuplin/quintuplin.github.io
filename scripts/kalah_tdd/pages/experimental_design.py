@@ -201,8 +201,8 @@ def body(page, snap, idx):
           f"sha256 of the methods doc each run was built under. The methods text quoted on the study pages is doc "
           f"{snap.doc}.</p>" + runs_table(snap),
         '<h2 id="replicate-protocol">Replicate protocol</h2>'
-        "<p>rep-1 and rep-2 test planned contrasts between arms. Both follow one protocol, and the build refuses to run "
-        "if their shapes differ.</p>"
+        f'<p>rep-1 and rep-2 test <a href="{links.url("methodology/measures", "planned-contrast")}">planned contrasts</a> '
+        "between arms. Both follow one protocol, and the build refuses to run if their shapes differ.</p>"
         + parts.figure(next(n), "replicate-flow", "Replicate protocol of rep-1 and rep-2", rep_svg,
                        f"Arm, replicate, wave and cap counts come from facts.json {parts.tag('recomputed')}. The test "
                        f"and its correction follow contrast.py {parts.tag('verified')}. "

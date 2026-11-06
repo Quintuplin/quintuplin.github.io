@@ -13,6 +13,7 @@
 <body>
 <div class="backdrop" aria-hidden="true"></div>
 <div class="sheet">
+<a class="skip" href="#main">Skip to content</a>
 <nav class="site-bar" aria-label="Site">
   <a href="/">Home</a>
   <a href="/about">About</a>
@@ -31,48 +32,47 @@
 .site-bar .ext { margin-left: auto; }
 @media (max-width: 600px) { .site-bar .ext { margin-left: 0; } }
 </style>
-<a class="skip" href="#main">Skip to content</a>
 <div class="study">
 <header class="study-head">
 <p class="eyebrow">Kalah TDD study · Part 21 of 29 · Designs</p>
 <h1>Held-out TDD</h1>
 <p class="lede">Visible tests drive the loop. Hidden tests measure overfitting.</p>
-<p class="prov">Source run full-1 at tdd-experiment <code>c3dd988</code></p>
+<p class="prov">Source runs full-1, rep-2 and rep-1 at tdd-experiment <code>c3dd988</code></p>
 </header>
 <nav class="pager" aria-label="Previous and next page, top">
 <a rel="prev" href="/studies/kalah-tdd-study/designs/property-based/"><span>Previous</span> <b>Property-based TDD</b></a>
-<a class="pager-home" href="/studies/kalah-tdd-study/"><span>Study</span> <b>Contents</b></a>
+<a class="pager-home" href="/studies/kalah-tdd-study/#contents"><span>Study</span> <b>Contents</b></a>
 <a rel="next" href="/studies/kalah-tdd-study/designs/anchor-engineering/"><span>Next</span> <b>Anchor Engineering</b></a>
 </nav>
 <details class="toc" id="toc"><summary>Contents</summary>
 <nav aria-label="Study contents">
-<p class="part">Introduction</p>
-<ol>
+<p class="part" id="part-introduction">Introduction</p>
+<ol aria-labelledby="part-introduction">
 <li><a href="/studies/kalah-tdd-study/">12 ways to test-drive Kalah</a></li>
 </ol>
-<p class="part">Approach</p>
-<ol>
+<p class="part" id="part-approach">Approach</p>
+<ol aria-labelledby="part-approach">
 <li><a href="/studies/kalah-tdd-study/experimental-design/">Experimental design and approach</a></li>
 </ol>
-<p class="part">Methodology</p>
-<ol>
+<p class="part" id="part-methodology">Methodology</p>
+<ol aria-labelledby="part-methodology">
 <li><a href="/studies/kalah-tdd-study/methodology/">Harness and protocol</a></li>
 <li><a href="/studies/kalah-tdd-study/methodology/measures/">Measures</a></li>
 <li><a href="/studies/kalah-tdd-study/methodology/analysis/">Analysis and validity</a></li>
 </ol>
-<p class="part">Results</p>
-<ol>
+<p class="part" id="part-results">Results</p>
+<ol aria-labelledby="part-results">
 <li><a href="/studies/kalah-tdd-study/results/survey/">Survey (full-1)</a></li>
 <li><a href="/studies/kalah-tdd-study/results/contrasts/">Planned contrasts</a></li>
 <li><a href="/studies/kalah-tdd-study/results/consistency/">Consistency across runs</a></li>
 <li><a href="/studies/kalah-tdd-study/results/test-order/">Test order (tcp-1)</a></li>
 </ol>
-<p class="part">Discussion</p>
-<ol>
+<p class="part" id="part-discussion">Discussion</p>
+<ol aria-labelledby="part-discussion">
 <li><a href="/studies/kalah-tdd-study/questions/">Critical questions</a></li>
 </ol>
-<p class="part">Designs</p>
-<ol>
+<p class="part" id="part-designs">Designs</p>
+<ol aria-labelledby="part-designs">
 <li><a href="/studies/kalah-tdd-study/designs/classic/">Classic greedy TDD</a></li>
 <li><a href="/studies/kalah-tdd-study/designs/noun-verb/">Noun-verb map</a></li>
 <li><a href="/studies/kalah-tdd-study/designs/mapped-path/">Mapped-path TDD</a></li>
@@ -87,12 +87,12 @@
 <li><a href="/studies/kalah-tdd-study/designs/anchor-engineering/">Anchor Engineering</a></li>
 <li><a href="/studies/kalah-tdd-study/designs/a02-reference/">A02 reference (not part of the comparison)</a></li>
 </ol>
-<p class="part">Reference</p>
-<ol>
+<p class="part" id="part-reference">Reference</p>
+<ol aria-labelledby="part-reference">
 <li><a href="/studies/kalah-tdd-study/glossary/">Glossary</a></li>
 </ol>
-<p class="part">Data</p>
-<ol>
+<p class="part" id="part-data">Data</p>
+<ol aria-labelledby="part-data">
 <li><a href="/studies/kalah-tdd-study/data/">Findings</a></li>
 <li><a href="/studies/kalah-tdd-study/data/contrasts/">Contrasts and replicates</a></li>
 <li><a href="/studies/kalah-tdd-study/data/methods/">Method table</a></li>
@@ -601,7 +601,7 @@ Credits and time are measured by the harness.
 </main>
 <nav class="pager" aria-label="Previous and next page, bottom">
 <a rel="prev" href="/studies/kalah-tdd-study/designs/property-based/"><span>Previous</span> <b>Property-based TDD</b></a>
-<a class="pager-home" href="/studies/kalah-tdd-study/"><span>Study</span> <b>Contents</b></a>
+<a class="pager-home" href="/studies/kalah-tdd-study/#contents"><span>Study</span> <b>Contents</b></a>
 <a rel="next" href="/studies/kalah-tdd-study/designs/anchor-engineering/"><span>Next</span> <b>Anchor Engineering</b></a>
 </nav>
 </div>

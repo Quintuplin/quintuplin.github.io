@@ -13,6 +13,7 @@
 <body>
 <div class="backdrop" aria-hidden="true"></div>
 <div class="sheet">
+<a class="skip" href="#main">Skip to content</a>
 <nav class="site-bar" aria-label="Site">
   <a href="/">Home</a>
   <a href="/about">About</a>
@@ -31,47 +32,46 @@
 .site-bar .ext { margin-left: auto; }
 @media (max-width: 600px) { .site-bar .ext { margin-left: 0; } }
 </style>
-<a class="skip" href="#main">Skip to content</a>
 <div class="study">
 <header class="study-head">
 <p class="eyebrow">Kalah TDD study · Part 1 of 29 · Introduction</p>
 <h1>12 ways to test-drive Kalah</h1>
 <p class="lede">An AI coding agent built the same Java Kalah game with each test-driven design. 6 awards pick the stand-outs.</p>
-<p class="prov">Source run full-1 at tdd-experiment <code>c3dd988</code></p>
+<p class="prov">Source runs full-1, tcp-1-list2, rep-1, rep-2 and tcp-1 at tdd-experiment <code>c3dd988</code></p>
 </header>
 <nav class="pager" aria-label="Previous and next page, top">
-<a class="pager-home" href="/studies/kalah-tdd-study/"><span>Study</span> <b>Contents</b></a>
+<a class="pager-home" href="/studies/kalah-tdd-study/#contents"><span>Study</span> <b>Contents</b></a>
 <a rel="next" href="/studies/kalah-tdd-study/experimental-design/"><span>Next</span> <b>Experimental design and approach</b></a>
 </nav>
 <details class="toc" id="toc"><summary>Contents</summary>
 <nav aria-label="Study contents">
-<p class="part">Introduction</p>
-<ol>
+<p class="part" id="part-introduction">Introduction</p>
+<ol aria-labelledby="part-introduction">
 <li><a href="/studies/kalah-tdd-study/" aria-current="page">12 ways to test-drive Kalah</a><ol><li><a href="/studies/kalah-tdd-study/#kalah-tdd-experiment">The study</a></li><li><a href="/studies/kalah-tdd-study/#awards">Awards</a></li><li><a href="/studies/kalah-tdd-study/#methods">The designs</a></li><li><a href="/studies/kalah-tdd-study/#headline">Headline</a><ol><li><a href="/studies/kalah-tdd-study/#key-findings">Key findings</a></li></ol></li><li><a href="/studies/kalah-tdd-study/#about-the-data">About the data</a></li><li><a href="/studies/kalah-tdd-study/#terms">Terms</a></li><li><a href="/studies/kalah-tdd-study/#contents">Contents</a></li></ol></li>
 </ol>
-<p class="part">Approach</p>
-<ol>
+<p class="part" id="part-approach">Approach</p>
+<ol aria-labelledby="part-approach">
 <li><a href="/studies/kalah-tdd-study/experimental-design/">Experimental design and approach</a></li>
 </ol>
-<p class="part">Methodology</p>
-<ol>
+<p class="part" id="part-methodology">Methodology</p>
+<ol aria-labelledby="part-methodology">
 <li><a href="/studies/kalah-tdd-study/methodology/">Harness and protocol</a></li>
 <li><a href="/studies/kalah-tdd-study/methodology/measures/">Measures</a></li>
 <li><a href="/studies/kalah-tdd-study/methodology/analysis/">Analysis and validity</a></li>
 </ol>
-<p class="part">Results</p>
-<ol>
+<p class="part" id="part-results">Results</p>
+<ol aria-labelledby="part-results">
 <li><a href="/studies/kalah-tdd-study/results/survey/">Survey (full-1)</a></li>
 <li><a href="/studies/kalah-tdd-study/results/contrasts/">Planned contrasts</a></li>
 <li><a href="/studies/kalah-tdd-study/results/consistency/">Consistency across runs</a></li>
 <li><a href="/studies/kalah-tdd-study/results/test-order/">Test order (tcp-1)</a></li>
 </ol>
-<p class="part">Discussion</p>
-<ol>
+<p class="part" id="part-discussion">Discussion</p>
+<ol aria-labelledby="part-discussion">
 <li><a href="/studies/kalah-tdd-study/questions/">Critical questions</a></li>
 </ol>
-<p class="part">Designs</p>
-<ol>
+<p class="part" id="part-designs">Designs</p>
+<ol aria-labelledby="part-designs">
 <li><a href="/studies/kalah-tdd-study/designs/classic/">Classic greedy TDD</a></li>
 <li><a href="/studies/kalah-tdd-study/designs/noun-verb/">Noun-verb map</a></li>
 <li><a href="/studies/kalah-tdd-study/designs/mapped-path/">Mapped-path TDD</a></li>
@@ -86,12 +86,12 @@
 <li><a href="/studies/kalah-tdd-study/designs/anchor-engineering/">Anchor Engineering</a></li>
 <li><a href="/studies/kalah-tdd-study/designs/a02-reference/">A02 reference (not part of the comparison)</a></li>
 </ol>
-<p class="part">Reference</p>
-<ol>
+<p class="part" id="part-reference">Reference</p>
+<ol aria-labelledby="part-reference">
 <li><a href="/studies/kalah-tdd-study/glossary/">Glossary</a></li>
 </ol>
-<p class="part">Data</p>
-<ol>
+<p class="part" id="part-data">Data</p>
+<ol aria-labelledby="part-data">
 <li><a href="/studies/kalah-tdd-study/data/">Findings</a></li>
 <li><a href="/studies/kalah-tdd-study/data/contrasts/">Contrasts and replicates</a></li>
 <li><a href="/studies/kalah-tdd-study/data/methods/">Method table</a></li>
@@ -137,7 +137,7 @@
 <div class="grid contents"><div class="design"><h3>Introduction</h3><ol start="1"><li><a href="/studies/kalah-tdd-study/" aria-current="page">12 ways to test-drive Kalah</a> <span class="blurb">An AI coding agent built the same Java Kalah game with each test-driven design. 6 awards pick the stand-outs.</span></li></ol></div><div class="design"><h3>Approach</h3><ol start="2"><li><a href="/studies/kalah-tdd-study/experimental-design/">Experimental design and approach</a> <span class="blurb">The study question, the task, the runs and arms, their caps and where the study sits in the course.</span></li></ol></div><div class="design"><h3>Methodology</h3><ol start="3"><li><a href="/studies/kalah-tdd-study/methodology/">Methodology: harness and protocol</a> <span class="blurb">How each design runs: stages, prompts and agents, the held-out split, blind review and the audit.</span></li><li><a href="/studies/kalah-tdd-study/methodology/measures/">Methodology: measures</a> <span class="blurb">Every metric with its formula, inputs and source module.</span></li><li><a href="/studies/kalah-tdd-study/methodology/analysis/">Methodology: analysis and validity</a> <span class="blurb">Award scoring, the statistical tests and the threats to validity.</span></li></ol></div><div class="design"><h3>Results</h3><ol start="6"><li><a href="/studies/kalah-tdd-study/results/survey/">Results: survey (full-1)</a> <span class="blurb">One build of each design in the survey run full-1.</span></li><li><a href="/studies/kalah-tdd-study/results/contrasts/">Results: planned contrasts</a> <span class="blurb">Planned contrasts over five replicates per arm in runs rep-1 and rep-2.</span></li><li><a href="/studies/kalah-tdd-study/results/consistency/">Results: consistency across runs</a> <span class="blurb">How much each design varies between replicate builds.</span></li><li><a href="/studies/kalah-tdd-study/results/test-order/">Results: test order (tcp-1)</a> <span class="blurb">One candidate test list built in five orders in run tcp-1.</span></li></ol></div><div class="design"><h3>Discussion</h3><ol start="10"><li><a href="/studies/kalah-tdd-study/questions/">Critical questions</a> <span class="blurb">The questions the study set out to answer and the status of each answer.</span></li></ol></div><div class="design"><h3>Designs</h3><ol start="11"><li><a href="/studies/kalah-tdd-study/designs/classic/">Classic greedy TDD</a> <span class="blurb">Smallest failing test then smallest passing change.</span></li><li><a href="/studies/kalah-tdd-study/designs/noun-verb/">Noun-verb map</a> <span class="blurb">Plan classes from spec nouns and methods from verbs. Fill linked stubs.</span></li><li><a href="/studies/kalah-tdd-study/designs/mapped-path/">Mapped-path TDD</a> <span class="blurb">Walk the map leaves first toward one acceptance test at a time.</span></li><li><a href="/studies/kalah-tdd-study/designs/functions-first/">Functions first, classes later</a> <span class="blurb">Test-drive pure functions. Cluster them into classes later.</span></li><li><a href="/studies/kalah-tdd-study/designs/tpp/">Transformation Priority Premise TDD</a> <span class="blurb">Pick tests the simplest ranked transformation can pass.</span></li><li><a href="/studies/kalah-tdd-study/designs/coarse-to-fine/">Coarse-to-fine TDD</a> <span class="blurb">One big step per feature. Drop a gear when it stalls.</span></li><li><a href="/studies/kalah-tdd-study/designs/annealed/">Annealed refactoring</a> <span class="blurb">Uphill refactors allowed early on a fixed cooling schedule.</span></li><li><a href="/studies/kalah-tdd-study/designs/multi-start/">Multi-start TDD</a> <span class="blurb">Independent attempts on one locked suite. Score rule fixed first.</span></li><li><a href="/studies/kalah-tdd-study/designs/mutation-guided/">Most informative next test</a> <span class="blurb">Write the test that rules out the most wrong implementations.</span></li><li><a href="/studies/kalah-tdd-study/designs/property-based/">Property-based TDD</a> <span class="blurb">State rules over input regions. Generators sample and shrink.</span></li><li><a href="/studies/kalah-tdd-study/designs/held-out/">Held-out TDD</a> <span class="blurb">Visible tests drive the loop. Hidden tests measure overfitting.</span></li><li><a href="/studies/kalah-tdd-study/designs/anchor-engineering/">Anchor Engineering</a> <span class="blurb">Write claims that must hold with their checks. Build milestones behind a mutation gate and a judge.</span></li><li><a href="/studies/kalah-tdd-study/designs/a02-reference/">A02 reference (not part of the comparison)</a> <span class="blurb">The A02 reference build by a human with AI, shown beside the designs and not compared with them.</span></li></ol></div><div class="design"><h3>Reference</h3><ol start="24"><li><a href="/studies/kalah-tdd-study/glossary/">Glossary</a> <span class="blurb">Every term the study pages use.</span></li></ol></div><div class="design"><h3>Data</h3><ol start="25"><li><a href="/studies/kalah-tdd-study/data/">Supporting data: findings</a> <span class="blurb">The findings table and the audit flag dispositions.</span></li><li><a href="/studies/kalah-tdd-study/data/contrasts/">Supporting data: contrasts and replicates</a> <span class="blurb">Contrast, consistency and replicate tables for rep-1 and rep-2.</span></li><li><a href="/studies/kalah-tdd-study/data/methods/">Supporting data: method table</a> <span class="blurb">The method table, with each column linked to its measure.</span></li><li><a href="/studies/kalah-tdd-study/data/ratings/">Supporting data: ratings</a> <span class="blurb">List reliability and rating agreement for each run.</span></li><li><a href="/studies/kalah-tdd-study/data/runs/">Supporting data: run records</a> <span class="blurb">The run records of full-1, rep-1 and rep-2.</span></li></ol></div></div>
 </main>
 <nav class="pager" aria-label="Previous and next page, bottom">
-<a class="pager-home" href="/studies/kalah-tdd-study/"><span>Study</span> <b>Contents</b></a>
+<a class="pager-home" href="/studies/kalah-tdd-study/#contents"><span>Study</span> <b>Contents</b></a>
 <a rel="next" href="/studies/kalah-tdd-study/experimental-design/"><span>Next</span> <b>Experimental design and approach</b></a>
 </nav>
 </div>

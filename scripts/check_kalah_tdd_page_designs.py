@@ -371,7 +371,8 @@ class Ids(unittest.TestCase):
                 self.assertEqual([i for i in source if not kept(i)], [])
                 self.assertEqual(idx[s.REPORT][heading], (here, heading))
                 self.assertIn(heading, ids)
-                for href in re.findall(r'href="([^"]*)"', html(here).split('<main id="main">', 1)[1]):
+                # The body alone, as the pager after main links the landing #contents.
+                for href in re.findall(r'href="([^"]*)"', html(here).split('<main id="main">', 1)[1].split("</main>", 1)[0]):
                     if href.startswith(BASE) and not href.startswith(BASE + "designs/"):
                         self.assertNotIn("#", href)
                 columns = next(n for n in tree(here).iter() if n.attrs.get("id") == "columns")

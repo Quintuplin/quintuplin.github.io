@@ -100,7 +100,3 @@ def neighbours(slug):
 def number(slug):
     """The page's 1-based place in reading order, as in "Part N of 29"."""
     return PAGES.index(BY_SLUG[slug]) + 1
-
-
-def part_of(slug):
-    return BY_SLUG[slug].part

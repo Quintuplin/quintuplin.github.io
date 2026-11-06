@@ -207,6 +207,21 @@ class GlossaryData(unittest.TestCase):
                     self.assertEqual(" ".join(after.text().split()), "Its formula and inputs are on Measures.")
         refused(self, {kalah("snapshot").REPORT: report().replace(entry("Kendall distance"), "")}, "Kendall distance")
 
+    def test_method_headers_link_dfns(self):
+        built = SCRIPTS.parent / MEASURES.lstrip("/") / "index.html"
+        defined = study().parse(built.read_text(encoding="utf-8")).ids
+        heads = [th for th in main("data/methods").iter() if th.tag == "th" and th.closest("thead")]
+        self.assertEqual(len({study().spaced(th) for th in heads}), 32)
+        for th in heads:
+            with self.subTest(study().spaced(th)):
+                [a] = [a for a in th.iter() if a.tag == "a"]
+                self.assertEqual(study().spaced(a), study().spaced(th))
+                page, _, frag = a.attrs["href"].partition("#")
+                self.assertEqual((page, getattr(defined.get(frag), "tag", None)), (MEASURES, "dfn"))
+        with self.assertRaises(ValueError) as caught:
+            body().column_links('<th class="nowrap" scope="col">Twig</th>')
+        self.assertIn("Twig", str(caught.exception))
+
     def test_ids_kept(self):
         idx = kalah("links").index(snap())[kalah("snapshot").REPORT]
         homed = [(slug, frag) for slug, frag in idx.values() if slug in PAGES and frag]

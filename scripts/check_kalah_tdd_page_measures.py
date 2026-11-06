@@ -631,18 +631,27 @@ class Measures(unittest.TestCase):
             with self.subTest(sorted(table)), mock.patch.object(m, "FACT_LABELS", table):
                 self.assertEqual(fields.where(pick), f"Table header on {order}.")
 
-    def test_figure_titles_name_a_metric(self):
-        records = {measures().slug(n) for id, _, names in measures().FAMILIES if id == "records" for n in names}
-        metric = set()
-        for dfn in (n for n in page().root.iter() if n.tag == "dfn"):
-            if dfn.attrs["id"] not in records and dfn.closest(cls="fields") is None:
-                metric |= dfn_words(dfn)
-        within = re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, sorted(metric, key=len, reverse=True))) + r")(?!\w)")
-        titles = sorted({text for _, what, text in snapshot_labels() if what == "figure title"})
-        self.assertEqual(len(titles), 12)
-        for title in titles:
-            with self.subTest(title):
-                self.assertRegex(title.casefold(), within)
+    def test_holm_p_in_metric_family(self):
+        # Figure titles name Holm p, and only metric cards define a figure title.
+        self.assertEqual([id for id, _, names in measures().FAMILIES if "Holm p" in names], ["combined-and-consistency"])
+        self.assertIsNone(page().ids["holm-p"].closest(cls="records"))
+        self.assertIn("records", page().ids["method"].closest(cls="shaped").classes())
+
+    def test_f4HoldsDrawnWidth(self):
+        _, root = f4_svg()
+        self.assertEqual(root.get("viewBox").split()[2], "872")
+        self.assertEqual(root.get("style"), "max-width:872px;min-width:872px")
+        # Other wide flows keep shrinking to study.css's flow min-width.
+        sized = kalah("figures.stage_flow").sized
+        wide = '<svg viewBox="0 0 900 9">'
+        self.assertEqual(sized(wide), '<svg style="max-width:900px" viewBox="0 0 900 9">')
+        self.assertEqual(sized(wide, hold=True), '<svg style="max-width:900px;min-width:900px" viewBox="0 0 900 9">')
+
+    def test_f4CaptionHintsScroll(self):
+        caption = check().spaced(first_p(next(n for n in page().ids["f4"].iter() if n.tag == "figcaption")))
+        self.assertTrue(caption.startswith("On a narrow screen scroll sideways to see the whole diagram. "
+                                           "The text version below lists the same steps. "), caption)
+        self.assertNotIn("the diagram scrolls sideways", caption)
 
     def test_aliases_are_labels(self):
         texts = [t for _, _, t in snapshot_labels()] + fact_texts()

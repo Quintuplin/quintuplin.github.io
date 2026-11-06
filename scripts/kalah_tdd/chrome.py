@@ -5,10 +5,15 @@ from html import escape
 
 from . import pagemap
 from .links import BASE, url
-from .snapshot import ID_ATTR
+from .snapshot import ID_ATTR, named_runs
+
+
+def part_id(part):
+    return "part-" + re.sub(r"[^a-z0-9]+", "-", part.lower()).strip("-")
+
 
 # Ids the chrome itself uses, which page bodies must not take.
-IDS = ("main", "toc")
+IDS = ("main", "toc", *map(part_id, pagemap.PARTS))
 # Mono 600 is for the .medal labels.
 FONTS = ("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600"
          "&family=IBM+Plex+Mono:wght@400;500;600&display=swap")
@@ -64,10 +69,10 @@ def shell(page, snap, body, stub):
 <body>
 <div class="backdrop" aria-hidden="true"></div>
 <div class="sheet">
-{SITE_BAR}
 <a class="skip" href="#main">Skip to content</a>
+{SITE_BAR}
 <div class="study">
-{header(page, snap)}
+{header(page, snap, body)}
 {pager(page, "top")}
 {sidebar(page, body)}
 <main id="main">
@@ -82,13 +87,16 @@ def shell(page, snap, body, stub):
 """
 
 
-def header(page, snap):
+def header(page, snap, body):
     n = pagemap.number(page.slug)
+    # The runs the body names, or the snapshot's own run where it names none.
+    runs = named_runs(snap, body) or [snap.run]
+    said = runs[0] if len(runs) == 1 else f"{', '.join(runs[:-1])} and {runs[-1]}"
     return f"""<header class="study-head">
 <p class="eyebrow">Kalah TDD study · Part {n} of {len(pagemap.PAGES)} · {page.part}</p>
 <h1>{escape(page.title)}</h1>
 <p class="lede">{escape(page.blurb)}</p>
-<p class="prov">Source run {snap.run} at tdd-experiment <code>{snap.sha[:7]}</code></p>
+<p class="prov">Source run{"s" * (len(runs) > 1)} {said} at tdd-experiment <code>{snap.sha[:7]}</code></p>
 </header>"""
 
 
@@ -97,7 +105,8 @@ def pager(page, where):
     card = lambda rel, label, p: (f'<a rel="{rel}" href="{url(p.slug)}"><span>{label}</span> <b>{escape(p.title)}</b></a>\n'
                                   if p else "")
     return (f'<nav class="pager" aria-label="Previous and next page, {where}">\n{card("prev", "Previous", prev)}'
-            f'<a class="pager-home" href="{BASE}"><span>Study</span> <b>Contents</b></a>\n{card("next", "Next", nxt)}</nav>')
+            f'<a class="pager-home" href="{url("", "contents")}"><span>Study</span> <b>Contents</b></a>\n'
+            f'{card("next", "Next", nxt)}</nav>')
 
 
 def sidebar(page, body):
@@ -105,7 +114,8 @@ def sidebar(page, body):
     parts = []
     for part in pagemap.PARTS:
         items = "".join(item(p, page, body) for p in pagemap.PAGES if p.part == part)
-        parts.append(f'<p class="part">{part}</p>\n<ol>\n{items}</ol>\n')
+        # The label names each list, so a screen reader announces the part on entering it.
+        parts.append(f'<p class="part" id="{part_id(part)}">{part}</p>\n<ol aria-labelledby="{part_id(part)}">\n{items}</ol>\n')
     return (f'<details class="toc" id="toc"><summary>Contents</summary>\n<nav aria-label="Study contents">\n'
             f'{"".join(parts)}</nav>\n</details>')
 

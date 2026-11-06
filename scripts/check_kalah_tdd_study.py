@@ -323,9 +323,16 @@ def is_label_page(slug):
     return slug.startswith("results/") or slug == "data" or slug.startswith("data/")
 
 
+def is_flow(figure):
+    """A stage flow diagram, whose title names stages and no measure."""
+    return figure is not None and any(n.tag == "svg" and "flow" in n.classes() for n in figure.iter())
+
+
 def labels(root):
-    """(what, text) for each figure title, axis label, table header and tile label."""
+    """(what, text) for each figure title but a flow diagram's, axis label, table header and tile label."""
     for node in root.iter():
+        if node.tag in ("figcaption", "figure") and is_flow(node if node.tag == "figure" else node.closest("figure")):
+            continue
         if node.tag == "figcaption":
             yield from (("figure title", spaced(h)) for h in node.iter() if heading(h))
         elif node.tag == "figure":
@@ -343,10 +350,13 @@ def labels(root):
                         and "axis" in a.classes() and t.tag == "text" and t.attrs.get("text-anchor") == "middle")
 
 
-def dfn_names(page):
-    """Each dfn's text, its id read as words, and its data-alias names split on |."""
+def dfn_names(page, metric=False):
+    """Each dfn's text, its id read as words, and its data-alias names split on |. A metric dfn is in no field or
+    record list, which name a row's parts and not a measure."""
     names = set()
     for dfn in (n for n in page.root.iter() if n.tag == "dfn"):
+        if metric and any(dfn.closest(cls=c) is not None for c in ("fields", "records")):
+            continue
         names |= {spaced(dfn), (dfn.attrs.get("id") or "").replace("-", " ")}
         names |= set((dfn.attrs.get("data-alias") or "").split("|"))
     return {n.strip().casefold() for n in names if n.strip()}
@@ -362,14 +372,15 @@ def bare(label):
 
 
 def metric_defs(pages):
-    """(errors, labels checked). A figure title is defined when a dfn name on measures appears in it as whole words,
-    and any other label when it is a dfn name less its unit. Labels wait while measures is a stub."""
+    """(errors, labels checked). A figure title is defined when a metric dfn name on measures appears in it as whole
+    words, and any other label when it is a dfn name less its unit. Labels wait while measures is a stub."""
     measures = parse(pages[MEASURES]) if MEASURES in pages else None
     if measures and measures.stub:
         return [], 0
     names = dfn_names(measures) if measures else set()
-    alts = "|".join(map(re.escape, sorted(names, key=len, reverse=True)))
-    within = re.compile(r"(?<!\w)(?:" + alts + r")(?!\w)") if names else None
+    metric = dfn_names(measures, metric=True) if measures else set()
+    alts = "|".join(map(re.escape, sorted(metric, key=len, reverse=True)))
+    within = re.compile(r"(?<!\w)(?:" + alts + r")(?!\w)") if metric else None
 
     def defined(what, text):
         """A dfn name, which may hold a comma, is the label whole or less its unit."""
@@ -385,7 +396,7 @@ def metric_defs(pages):
                 continue
             checked += 1
             if not defined(what, text):
-                errors.append(f"{slug} {what} {text!r} has no dfn on {MEASURES}")
+                errors.append(f"{slug} {what} {text!r} has no {'metric ' * (what == 'figure title')}dfn on {MEASURES}")
     return errors, checked
 
 

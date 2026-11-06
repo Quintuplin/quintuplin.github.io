@@ -12,6 +12,9 @@ from ..figures import dots, flow
 from ..figures.stage_flow import sized
 
 CONTRASTS = "results/contrasts"
+CONSISTENCY = "results/consistency"
+# The consistency table sentence naming the runs C pools; the section itself names none, so the page lead quotes it.
+POOLS = re.compile(r"It (pools every replicate of runs [^.]+ per method)\.")
 # The rep-1 adjusted mutation chart is a report Headline figure, so it sits on the landing page.
 REP1_MUTATION = "rep-1-mutation"
 TITLE = re.compile(r"<h([23]) id=\"([^\"]+)\">(.*?)</h\1>")
@@ -100,6 +103,15 @@ def lead(snap, idx):
     href = links.target(f"#{REP1_MUTATION}", snapshot.REPORT, CONTRASTS, idx)
     return (f'<p>Adjusted mutation per replicate in rep-1 is a headline figure, so it is on the '
             f'<a href="{escape(href)}">study landing page</a>. This page holds the other planned contrast figures.</p>')
+
+
+def pooled(snap, idx):
+    """Lead naming the runs the consistency scores pool, quoted from the consistency table text."""
+    m = POOLS.search(plain(snapshot.section(snap.files[snapshot.REPORT], "consistency-table"), " "))
+    if not m:
+        raise ValueError("consistency-table no longer names the runs it pools")
+    href = links.target("#consistency-table", snapshot.REPORT, CONSISTENCY, idx)
+    return f'<p>Each consistency score {escape(m.group(1))}, as the <a href="{escape(href)}">consistency table</a> states.</p>'
 
 
 def found(regex, text):
@@ -300,5 +312,6 @@ def body(page, snap, idx):
         sec = section(snap, idx, page.slug, page.anchors[0], numbers,
                       lambda n: tcp_results(report, snap.facts, page.slug, idx, next(n)))
         return [sec, tcp_design(snap, next(numbers))]
-    out = [lead(snap, idx), contrast_holm(report, next(numbers))] if page.slug == CONTRASTS else []
+    out = ([lead(snap, idx), contrast_holm(report, next(numbers))] if page.slug == CONTRASTS
+           else [pooled(snap, idx)] if page.slug == CONSISTENCY else [])
     return out + [section(snap, idx, page.slug, id, numbers) for id in page.anchors]

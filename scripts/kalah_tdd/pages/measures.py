@@ -7,7 +7,7 @@ from typing import NamedTuple
 
 from .. import pagemap, parts, snapshot
 from ..blocks import plain
-from ..figures import flow
+from ..figures import flow, stage_flow
 from ..snapshot import named_runs  # noqa: F401, the page tests read it here
 
 ENTRY = re.compile(r'<div class="entry">(<p class="sub"><b>(.*?)</b>\. (?:Source: (.*?)\. )?Tag: (\w+)\.</p>.*?)</div>', re.S)
@@ -26,8 +26,9 @@ FAMILIES = (
     ("review-ratings", "Review ratings",
      ("Clear Presentation /5", "Explanatory Language /5", "Consistent Code /5", "Used Content /5", "Simple Constructs /5",
       "Minimal Duplication /5", "Modular Structure /5", "Problem Alignment (tentative) /5", "CQP", "CQP accepted")),
-    ("combined-and-consistency", "Combined and consistency", ("E", "Relative spread", "Consistency score C")),
-    ("records", "Records", ("Method", "Branch", "Audit flags", "Family", "Planned contrast", "Holm p")),
+    # Holm p is a metric, as figure titles name it. Records name a row's parts.
+    ("combined-and-consistency", "Combined and consistency", ("E", "Relative spread", "Consistency score C", "Holm p")),
+    ("records", "Records", ("Method", "Branch", "Audit flags", "Family", "Planned contrast")),
 )
 TEST_ORDER = ("test-order-measures", "Test order measures", ("APFD-I", "APFDc-H", "Kendall distance"))
 SECTIONS = {"measurement-pipeline": "Measurement pipeline", "columns": "Columns", "table-fields": "Table fields",
@@ -540,9 +541,9 @@ class MeasurePipeline:
             label = next(n.label for n in self.nodes if n.id == target).replace(", ", " and ")
             whose = f"the doc of function {name}" if kind == "function" else f"the glossary row {name}"
             said.append(f"{label} take{'' if ' and ' in label else 's'} {joined([t for terms in inputs.values() for t in terms])}, as {whose} states.")
-        return ("Each lane reads left to right from raw input to collected file to measure to score. " + " ".join(said)
-                + f" {self.undrawn()} Their cards below define them. On a narrow "
-                "screen the diagram scrolls sideways and the text version holds the same steps.")
+        return ("On a narrow screen scroll sideways to see the whole diagram. The text version below lists the same "
+                "steps. Each lane reads left to right from raw input to collected file to measure to score. "
+                + " ".join(said) + f" {self.undrawn()} Their cards below define them.")
 
     def undrawn(self):
         """The sentence naming each card in no lane and on no node, by whole family where a family has none drawn."""
@@ -564,7 +565,8 @@ class MeasurePipeline:
         title = "From raw inputs to scores"
         desc = (f"{len(LANES)} lanes, {', '.join(LANES)}, each from raw input to collected file to measure to score. "
                 "E draws on the Tests, Static analysis and Mutation lanes.")
-        svg = flow.svg("f4", title, desc, self.nodes, self.edges)
+        # Held at its drawn width: scaled to the column its five lanes drew labels too small to read.
+        svg = stage_flow.sized(flow.svg("f4", title, desc, self.nodes, self.edges), hold=True)
         return parts.figure(n, "f4", title, svg, escape(self.caption()), None,
                             flow.text_version(title, self.nodes, self.edges))
 
@@ -577,7 +579,9 @@ def pipeline(snap):
 
 
 def family(id, title, names, cards, typed, level=3):
-    return (f'<h{level} id="{id}">{escape(title)}</h{level}>\n<div class="shaped">'
+    # check_kalah_tdd_study reads a records dfn as no metric.
+    shape = "shaped records" if id == "records" else "shaped"
+    return (f'<h{level} id="{id}">{escape(title)}</h{level}>\n<div class="{shape}">'
             + "".join(cards.card(n, typed.get(n)) for n in names) + "</div>")
 
 

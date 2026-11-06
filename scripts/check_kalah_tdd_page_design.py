@@ -148,6 +148,15 @@ class Design(unittest.TestCase):
                     with self.subTest(line=line[:50]):
                         self.assertIn(study.squash(line), text)
 
+    def test_planned_contrast_links_dfn(self):
+        head = page().ids["replicate-protocol"]
+        lead = head.parent.elements()[head.parent.elements().index(head) + 1]
+        hrefs = {study.spaced(a): a.attrs["href"] for a in lead.iter() if a.tag == "a"}
+        measures = "/studies/kalah-tdd-study/methodology/measures/"
+        self.assertEqual(hrefs, {"planned contrasts": measures + "#planned-contrast"})
+        built = study.parse((SCRIPTS.parent / measures.lstrip("/") / "index.html").read_text(encoding="utf-8"))
+        self.assertEqual(built.ids["planned-contrast"].tag, "dfn")
+
     def test_sidebar_children_differ_from_parent(self):
         """No sidebar entry repeats its parent's text, as Task under Task did."""
         pairs = []

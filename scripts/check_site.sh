@@ -94,7 +94,8 @@ python3 -I scripts/check_build_kalah_tdd_study.py || err "Kalah TDD study page b
 # Study sidebar and cross-page links reach a real page and id, and ids are unique per page (#60).
 python3 -I scripts/check_check_study_nav.py || err "study navigation check failed"
 # Built Kalah TDD study pages keep every snapshot figure, row, tile and term, and define their labels on measures (#61).
-python3 -I scripts/check_kalah_tdd_study.py || err "Kalah TDD study completeness check failed"
+# --final fails a stub page, as every page is built (#113).
+python3 -I scripts/check_kalah_tdd_study.py --final || err "Kalah TDD study completeness check failed"
 python3 -I scripts/check_check_kalah_tdd_study.py || err "Kalah TDD study completeness check self-test failed"
 # Each study page group brings its own test file, so no group edits this line (#79).
 . scripts/run_kalah_tdd_page_checks.sh

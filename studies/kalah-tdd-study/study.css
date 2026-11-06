@@ -1,12 +1,12 @@
 /* Kalah TDD study pages (#55). Glass tokens match css/main.css and the crew study; scripts/check_contrast.py
    checks them in both modes and requires the two dark blocks to match.
-   Expected page shape: .sheet > nav.site-bar, a.skip, div.study > header.study-head, nav.pager, details.toc, main, nav.pager.
+   Expected page shape: .sheet > a.skip, nav.site-bar, div.study > header.study-head, nav.pager, details.toc, main, nav.pager.
    Source fragments keep their class names; the render and showcase token names are aliased below. */
 :root{
   color-scheme:light;
   --bg:#2B3A4A; --surface:rgba(255,255,255,.78); --ink:#15202B; --muted:#4A5866; --line:#D8DEE5;
   --accent:#185E78; --accent-soft:#E3F0F5; --wash:#EEF2F5;
-  --s1:#1F6E8C; --s2:#9A6200; --s3:#A23B72; --s4:#3F7D4E;
+  --s1:#07519D; --s2:#9A6200; --s3:#A23B72; --s4:#3F7D4E;
   --good:#2F6B3E; --warn:#8A5A00; --serious:#B8403A; --open:#4A5866;
   --gold:#8A6500; --silver:#5E6369; --bronze:#9A4A22; --axis:#6B7785;
   --glass:rgba(252,251,247,.86); --glass-solid:rgba(252,251,247,.97); --glass-border:rgba(255,255,255,.55);
@@ -25,7 +25,7 @@
     color-scheme:dark;
     --bg:#0F1419; --surface:rgba(24,33,42,.80); --ink:#E4EAF0; --muted:#97A5B4; --line:#2A3743;
     --accent:#6BB8D6; --accent-soft:#1A2F3A; --wash:#1F2A35;
-    --s1:#6BB8D6; --s2:#E9B85C; --s3:#E58BBB; --s4:#8CCB9A;
+    --s1:#4C8EDF; --s2:#CC7D1B; --s3:#E58BBB; --s4:#8CCB9A;
     --good:#9FD9AE; --warn:#EBC57A; --serious:#EE8A84; --open:#B3C0CC;
     --gold:#E0B43A; --silver:#C0C3C7; --bronze:#D9935A; --axis:#7D8B99;
     --glass:rgba(18,23,30,.86); --glass-solid:rgba(18,23,30,.97); --glass-border:rgba(255,255,255,.10);
@@ -36,7 +36,7 @@
   color-scheme:dark;
   --bg:#0F1419; --surface:rgba(24,33,42,.80); --ink:#E4EAF0; --muted:#97A5B4; --line:#2A3743;
   --accent:#6BB8D6; --accent-soft:#1A2F3A; --wash:#1F2A35;
-  --s1:#6BB8D6; --s2:#E9B85C; --s3:#E58BBB; --s4:#8CCB9A;
+  --s1:#4C8EDF; --s2:#CC7D1B; --s3:#E58BBB; --s4:#8CCB9A;
   --good:#9FD9AE; --warn:#EBC57A; --serious:#EE8A84; --open:#B3C0CC;
   --gold:#E0B43A; --silver:#C0C3C7; --bronze:#D9935A; --axis:#7D8B99;
   --glass:rgba(18,23,30,.86); --glass-solid:rgba(18,23,30,.97); --glass-border:rgba(255,255,255,.10);
