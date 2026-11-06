@@ -6,6 +6,7 @@ import re
 from html import unescape
 
 from .. import links, pagemap, parts
+from ..blocks import plain
 from ..figures import class_diagram, stage_flow
 from ..snapshot import REPORT, SHOWCASE, section, view
 
@@ -97,7 +98,7 @@ def wrap_tables(fragments, slug):
     found, label, enclosing = [], "", []
     for m in (m for fragment in fragments for m in LABEL.finditer(fragment)):
         if m.group(1):
-            label = " ".join(unescape(re.sub(r"<[^>]+>", "", m.group(2))).split())
+            label = plain(m.group(2), "")
             if m.group(1) != "summary":
                 level = int(m.group(1)[1])
                 enclosing = [h for h in enclosing if h[0] < level] + [(level, label)]
