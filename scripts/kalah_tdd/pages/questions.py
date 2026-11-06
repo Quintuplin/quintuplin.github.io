@@ -67,7 +67,7 @@ def rows(qtable):
     for tr in TR.findall(qtable.split("<tbody>", 1)[-1]):
         m = ROW.fullmatch(tr)
         if not m or m[2] != m[1].lower():
-            raise ValueError(f"section {ID} has a status row of no known form {plain(tr, " ")[:60]!r}")
+            raise ValueError(f"section {ID} has a status row of no known form {plain(tr, ' ')[:60]!r}")
         n, _, question, cell = m.groups()
         chip = CHIP.fullmatch(cell)
         if not chip:
