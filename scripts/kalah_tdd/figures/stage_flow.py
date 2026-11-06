@@ -122,11 +122,11 @@ def chart(checked):
     return nodes, edges, [flow.loop(s["id"], s["unit"]) for s in chain if s["kind"] == "L"]
 
 
-def sized(svg):
-    """The chart capped at its drawn size, and held there when narrower than study.css's flow min-width.
+def sized(svg, hold=False):
+    """The chart capped at its drawn size, and held there when narrower than study.css's flow min-width or when hold.
     Scaled to the column, a one column chart drew 42px to 51px labels."""
     width = int(re.match(r'<svg [^>]*viewBox="0 0 (\d+) ', svg).group(1))
-    style = f"max-width:{width}px" + (f";min-width:{width}px" if width < FLOW_MIN_WIDTH else "")
+    style = f"max-width:{width}px" + (f";min-width:{width}px" if hold or width < FLOW_MIN_WIDTH else "")
     return svg.replace("<svg ", f'<svg style="{style}" ', 1)
 
 
