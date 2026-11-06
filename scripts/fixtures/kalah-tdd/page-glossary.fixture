@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en"><head><title>Glossary</title></head><body><main id="main">
+<h1>Glossary</h1>
+<details open><summary>Glossary, 2 rows and 3 columns</summary><div class="shaped">
+<div class="entry"><p class="sub"><b>Kalah</b>. Tag: verified.</p><p><b>Definition:</b> A board game for two players.</p></div>
+<div class="entry"><p class="sub"><b>Family</b>. Tag: verified.</p><p><b>Definition:</b> One of four groups of methods.</p></div>
+</div></details>
+<h2 id="terms">Showcase terms</h2>
+<dl class="terms"><dt>PMD</dt><dd>A static analysis tool for Java.</dd></dl>
+<dl class="terms"><dt>Seed</dt><dd>One stone in a pit.</dd><dt>Store</dt><dd>The pit that keeps a player's seeds.</dd></dl>
+</main></body></html>

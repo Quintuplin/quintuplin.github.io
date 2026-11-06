@@ -1,0 +1,7 @@
+import re
+
+WEIGHT_TEXT = ("Weighted tokens count input 1 and output 5 per token. "
+               "These state no dollar cost.")
+HOST_PATH = re.compile(r"^(/|~|[A-Za-z]:)|://|Obi-Done|Cryptomator")
+NOTATION = ("Once means one agent runs the steps. "
+            "Tag: verified.")

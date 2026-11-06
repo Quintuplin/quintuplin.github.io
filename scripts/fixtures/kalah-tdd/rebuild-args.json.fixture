@@ -1,0 +1,9 @@
+{
+  "tag": "rep-2",
+  "blind_dir": "/Users/someone/project/tdd-experiment-wt/_blind/rep-2",
+  "methods": {"rep-2-r04": {"method": "Held-out TDD"}},
+  "waves": [["rep-2-r04"]],
+  "harness": {"commit": "cc8c8cbb06373ce400666528458a349eb0ae4d7a"},
+  "harness_delta": {"path": "/Users/someone/project/tdd-experiment-runs/rep-2/rebuild-harness-delta.patch",
+                    "sha256": "8fde5d73aecf82700e53426dcbca82f2bd86cc1a421e20fa57f0176d86958cdf"}
+}

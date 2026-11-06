@@ -1,0 +1,18 @@
+{
+  "tag": "full-1",
+  "model": "opus",
+  "effort": "medium",
+  "doc_sha256": "6460695052da555ae469d575fbe2ce5b3ae57df5825abf102a290ce4e65cba21",
+  "clones_dir": "/Users/someone/project/tdd-experiment-wt",
+  "split": "C:\\Users\\someone\\split.sh",
+  "notes": ["kept note", "see https://example.com/run", "Obi-Done/Claude/Notes/run.md"],
+  "caps": {"iterations": 15, "cycles": 15, "starts": 3},
+  "methods": {
+    "classic": {
+      "method": "Classic greedy TDD",
+      "steps": ["List test scenarios.", "Pick the smallest one."],
+      "home": "~/project"
+    },
+    "/Users/someone/project/tdd-experiment-wt/extra": {"method": "Keyed by a host path"}
+  }
+}

@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><title>Results: survey (full-1)</title></head><body><main id="main">
+<h1>Results: survey (full-1)</h1>
+<div class="tiles"><div class="tile"><span class="sub">Cost</span><b>0.8 to 2.1 million</b></div></div>
+<figure id="pmd-cost"><figcaption><h3>Figure 1. PMD violations against weighted tokens</h3></figcaption><div class="plot"><svg viewBox="0 0 520 320" role="img" aria-label="Scatter of PMD violations against weighted tokens, one mark per method"><line class="axis" x1="52" x2="504" y1="274" y2="274"/><text x="278" y="312" text-anchor="middle">Weighted tokens, millions</text><line class="axis" x1="52" x2="52" y1="14" y2="274"/><text transform="rotate(-90)" x="-144" y="14" text-anchor="middle">PMD violations</text><path class="mk s1" d="M199 14h10Z"><title>classic: 843,734 weighted tokens, 10 PMD violations</title></path><path class="mk s2" d="M220 269h10Z"><title>noun-verb: 961,206 weighted tokens, 0 PMD violations</title></path></svg></div>
+<details><summary>Table view, 2 rows and 3 columns</summary><div class="table-scroll" tabindex="0" role="region" aria-label="Table view"><table class="cols"><thead><tr><th scope="col">Method</th><th scope="col">Weighted tokens</th><th scope="col">PMD violations</th></tr></thead><tbody>
+<tr><th scope="row">classic</th><td>843,734</td><td>10</td></tr>
+<tr><th scope="row">noun-verb</th><td>961,206</td><td>0</td></tr>
+</tbody></table></div></details></figure>
+</main></body></html>
