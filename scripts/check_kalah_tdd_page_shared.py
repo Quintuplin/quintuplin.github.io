@@ -12,12 +12,17 @@ from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
 SHAPED = '<div class="shaped"><div class="entry"><p>x</p></div></div>'
+sys.path.insert(0, str(SCRIPTS))
 
 
 @functools.cache
 def kalah(name):
-    sys.path.insert(0, str(SCRIPTS))
     return importlib.import_module(f"kalah_tdd.{name}")
+
+
+def page(name):
+    """A page module, which callers of the shared helpers are, imported past kalah so a stand-in for it skips them."""
+    return importlib.import_module(f"kalah_tdd.pages.{name}")
 
 
 @functools.cache
@@ -58,11 +63,18 @@ class Blocks(unittest.TestCase):
         self.assertEqual(kalah("blocks").close("<div><div>a</div>", "div", len("<div>")), -1)
 
     def test_plain_keeps_separator(self):
-        # results passes " " and glossary_data passes "", as their page text differs today.
+        # results strips tags to " " and glossary_data to "".
         plain = kalah("blocks").plain
         self.assertEqual(plain("a<b>c</b>", " "), "a c")
         self.assertEqual(plain("a<b>c</b>", ""), "ac")
         self.assertEqual(plain(" <p>x &amp;\n y</p> ", ""), "x & y")
+
+    def test_plain_strips_tags_before_unescape(self):
+        self.assertEqual(kalah("blocks").plain("x &lt;b&gt; y", ""), "x <b> y")
+
+    def test_glossary_heading_text_joins_tags(self):
+        table = '<div class="shaped"><table class="cols"><tr><td>t</td></tr></table></div>'
+        self.assertIn('aria-label="ab"', page("glossary_data").frame("s", f'<h3 id="x">a<b>b</b></h3>{table}'))
 
     def test_open_reads_tag_and_attrs(self):
         m = kalah("blocks").OPEN.match(' \n<div class="shaped">x</div>')
@@ -83,6 +95,7 @@ class Runs(unittest.TestCase):
     def test_named_runs_skip_paths_and_words(self):
         html = '<p><a href="runs/full-1/report.html">report</a> of xfull-1 and full-1x.</p>'
         self.assertEqual(kalah("snapshot").named_runs(snap(), html), [])
+        self.assertEqual(kalah("snapshot").named_runs(fake("a"), "<p>runs/a/x, a-b and b-a</p>"), [])
 
     def test_named_runs_read_text_between_tags(self):
         self.assertEqual(kalah("snapshot").named_runs(snap(), "<b>a</b>tcp-1<i>b</i>"), ["tcp-1"])
