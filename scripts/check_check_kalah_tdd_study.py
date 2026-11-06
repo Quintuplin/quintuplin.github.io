@@ -178,7 +178,7 @@ class MetricDefs(unittest.TestCase):
         found = " ".join(errors({"results/survey": [(">Weighted tokens, millions<", ">Seeds sown<")]}))
         self.assertRegex(found, "results/survey axis label 'Seeds sown' has no dfn")
         found = " ".join(errors({"results/survey": [("Figure 1. PMD violations against weighted tokens", "Figure 1. Seeds sown")]}))
-        self.assertRegex(found, "results/survey figure title 'Figure 1. Seeds sown' has no dfn")
+        self.assertRegex(found, "results/survey figure title 'Figure 1. Seeds sown' has no metric dfn")
         # The id names a dfn too, so "Weighted tokens" needs id weighted-tokens.
         found = " ".join(errors({"methodology/measures": [('id="weighted-tokens"', 'id="wt"')]}))
         self.assertRegex(found, "table header 'Weighted tokens' has no dfn")
@@ -194,7 +194,25 @@ class MetricDefs(unittest.TestCase):
         # A figure title needs a whole dfn name, so "Methods" does not contain "method".
         title = "Figure 1. PMD violations against weighted tokens"
         found = " ".join(errors({"results/survey": [(title, "Figure 1. Methods")]}))
-        self.assertRegex(found, "figure title 'Figure 1. Methods' has no dfn")
+        self.assertRegex(found, "figure title 'Figure 1. Methods' has no metric dfn")
+
+    def test_figureTitleNeedsMetricDfn(self):
+        # A field or record dfn names a row part, so it defines a header but never a figure title.
+        rows = ('<div class="shaped fields"><p><dfn id="seed">Seed</dfn></p></div>'
+                '<div class="shaped records"><p><dfn id="arm">Arm</dfn></p></div><h2 ')
+        title = "Figure 1. PMD violations against weighted tokens"
+        for name in ("Seed", "Arm"):
+            with self.subTest(name):
+                found = " ".join(errors({"methodology/measures": [("<h2 ", rows)],
+                                         "results/survey": [(title, f"Figure 1. {name} per pit")]}))
+                self.assertRegex(found, f"figure title 'Figure 1. {name} per pit' has no metric dfn")
+                header = {"methodology/measures": [("<h2 ", rows)],
+                          "results/survey": [('<th scope="col">PMD violations</th>', f'<th scope="col">{name}</th>')]}
+                self.assertEqual(errors(header), [])
+        # A stage flow names stages, not measures, so its title is not checked.
+        flow = {"results/survey": [(title, "Figure 1. Stage flow"), ('<svg viewBox', '<svg class="flow" viewBox')]}
+        self.assertEqual(errors(flow), [])
+        self.assertEqual(study().metric_defs(pages(flow))[1], 6)
 
     def test_bare_dfn_id(self):
         # An id with no value names nothing and must not crash the check.

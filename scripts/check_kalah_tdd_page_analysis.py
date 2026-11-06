@@ -500,9 +500,16 @@ class Analysis(unittest.TestCase):
         lead = next(n for n in main.iter() if n.tag == "p")
         hrefs = {a.attrs.get("href") for a in lead.iter() if a.tag == "a"}
         self.assertLessEqual({BASE + "methodology/measures/", BASE + "glossary/"}, hrefs)
-        for href in re.findall(r'href="([^"]*)"', html()):
-            if href.startswith(BASE) and not href.startswith(HERE + "#"):
-                self.assertNotIn("#", href)
+        # M, E and C link to their dfns, and any other body link to a study page fragment lands on a measures dfn.
+        measures = BASE + "methodology/measures/"
+        named = {spaced(a): a.attrs["href"] for a in lead.iter() if a.tag == "a"}
+        self.assertEqual([named.get(k) for k in "MEC"], [measures + "#m", measures + "#e", measures + "#consistency-score-c"])
+        built = script("build_kalah_tdd_study").render_page(kalah("pagemap").BY_SLUG["methodology/measures"], snap(), idx())
+        dfns = script("check_kalah_tdd_study").parse(built).ids
+        for href in (a.attrs.get("href", "") for a in main.iter() if a.tag == "a"):
+            if href.startswith(BASE) and not href.startswith(HERE + "#") and "#" in href:
+                page, _, frag = href.partition("#")
+                self.assertEqual((page, getattr(dfns.get(frag), "tag", None)), (measures, "dfn"), href)
 
     def test_deterministic(self):
         # Set order follows the hash seed, so a second process with another seed shows any order the page relies on.

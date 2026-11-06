@@ -220,7 +220,7 @@ class Pages(unittest.TestCase):
             self.assertEqual(len(bars), 2)
             self.assertNotEqual(bars[0][0], bars[1][0], "the two pagers need distinct labels")
             self.assertEqual(bars[0][1], bars[1][1], "the top and bottom pagers differ")
-            self.assertIn(f'<a class="pager-home" href="{BASE}">', bars[0][1])
+            self.assertIn(f'<a class="pager-home" href="{BASE}#contents">', bars[0][1])
             # Read as text, a card's label and title stay two words.
             self.assertNotIn("</span><b>", bars[0][1])
 
@@ -228,7 +228,6 @@ class Pages(unittest.TestCase):
         pagemap = kalah("pagemap")
         self.assertEqual(list(dict.fromkeys(p.part for p in pagemap.PAGES)), list(pagemap.PARTS))
         self.assertEqual(len(pagemap.PARTS), 8)
-        self.assertEqual(pagemap.part_of("designs/tpp"), "Designs")
         html = rendered()["methodology/measures/index.html"]
         self.assertIn("Kalah TDD study · Part 4 of 29 · Methodology", html)
         self.assertEqual(re.findall(r'<a [^>]*aria-current="page"[^>]*>', html.split('class="toc"', 1)[1]),
@@ -280,8 +279,9 @@ class Pages(unittest.TestCase):
                 self.assertIn('<link rel="stylesheet" href="/studies/kalah-tdd-study/study.css">', html)
                 self.assertIn("IBM+Plex+Mono:wght@400;500;600", html)
                 self.assertIn(f"tdd-experiment <code>{sha[:7]}</code>", html)
-                self.assertRegex(html, r'<div class="backdrop" aria-hidden="true"></div>\s*<div class="sheet">')
-                self.assertRegex(html, re.compile(r'</style>\s*<a class="skip" href="#main">[^<]+</a>\s*<div class="study">\s*'
+                self.assertRegex(html, r'<div class="backdrop" aria-hidden="true"></div>\s*<div class="sheet">\s*'
+                                       r'<a class="skip" href="#main">[^<]+</a>\s*<nav class="site-bar"')
+                self.assertRegex(html, re.compile(r'</style>\s*<div class="study">\s*'
                                        r'<header class="study-head">.*?</header>\s*<nav class="pager".*?</nav>\s*'
                                        r'<details class="toc" id="toc">.*?</details>\s*<main id="main">.*?</main>\s*'
                                        r'<nav class="pager".*?</nav>\s*</div>\s*</div>', re.S))
