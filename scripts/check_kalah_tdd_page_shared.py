@@ -96,6 +96,7 @@ class Runs(unittest.TestCase):
         html = '<p><a href="runs/full-1/report.html">report</a> of xfull-1 and full-1x.</p>'
         self.assertEqual(kalah("snapshot").named_runs(snap(), html), [])
         self.assertEqual(kalah("snapshot").named_runs(fake("a"), "<p>runs/a/x, a-b and b-a</p>"), [])
+        self.assertEqual(kalah("snapshot").named_runs(fake("a"), "<p>runs/a and a/x</p>"), [])
 
     def test_named_runs_read_text_between_tags(self):
         self.assertEqual(kalah("snapshot").named_runs(snap(), "<b>a</b>tcp-1<i>b</i>"), ["tcp-1"])
