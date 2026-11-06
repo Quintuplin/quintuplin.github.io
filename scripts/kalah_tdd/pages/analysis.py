@@ -10,6 +10,7 @@ from ..blocks import plain
 from ..figures import flow
 
 SLUG = "methodology/analysis"
+MEASURES = "methodology/measures"
 REBUILD, REP = "rep-2/rebuild", "rep-2"
 # (facts group, file, function, phrase): a limit the analysis code states in a docstring.
 CODE_LIMITS = (("stats", "stats.py", "mann_whitney_exact", "suit small samples only"),
@@ -73,8 +74,8 @@ def code(text):
     return f"<code>{escape(str(text))}</code>"
 
 
-def link(slug, text):
-    return f'<a href="{links.url(slug)}">{escape(text)}</a>'
+def link(slug, text, frag=""):
+    return f'<a href="{links.url(slug, frag)}">{escape(text)}</a>'
 
 
 def listed(items):
@@ -85,8 +86,9 @@ def listed(items):
 
 def lead():
     return p(f"This page sets out how the study scores its awards, which test answers each question and what the study "
-             f"cannot show. It defines no metric. M, E, C and every other measure are defined on "
-             f"{link('methodology/measures', 'Methodology: measures')}, and short labels such as CQP and PMD in the "
+             f"cannot show. It defines no metric. {link(MEASURES, 'M', 'm')}, {link(MEASURES, 'E', 'e')}, "
+             f"{link(MEASURES, 'C', 'consistency-score-c')} and every other measure are defined on "
+             f"{link(MEASURES, 'Methodology: measures')}, and short labels such as CQP and PMD in the "
              f"{link('glossary', 'Glossary')}. The test results are on the results pages for the "
              f"{link('results/survey', 'survey')}, the {link('results/contrasts', 'planned contrasts')} and "
              f"{link('results/consistency', 'consistency')}.") + p(f"The medals are on the {link('', 'landing page')}.",

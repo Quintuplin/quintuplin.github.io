@@ -42,8 +42,9 @@ SCOPE = (f'<p>The other scope sections have pages of their own. <a href="{links.
 # One site sentence above the report text, as the page title alone does not say what its tables hold.
 LEADS = {
     "data/contrasts": "<p>The planned contrasts, the consistency table and every replicate build of runs rep-1 and rep-2.</p>",
-    "data/methods": (f'<p>One row per method of run full-1. <a href="{links.url(MEASURES, "columns")}">Columns</a> '
-                     "on the measures page defines each of the 32 columns.</p>"),
+    "data/methods": (f'<p>One row per method of run full-1. Each column heading links to its definition, and '
+                     f'<a href="{links.url(MEASURES, "columns")}">Columns</a> on the measures page lists all 32 '
+                     "columns.</p>"),
     "data/ratings": ("<p>How far a second lister agreed on the test list of run tcp-1-list, and how far the three blind "
                      "raters agreed in runs full-1, rep-1 and rep-2.</p>"),
     "data/runs": ("<p>The run records of full-1, rep-1 and rep-2: their settings, cap hits, failed collection steps and "
@@ -136,6 +137,17 @@ def measured_link(name):
     return f'<p class="sub">Its formula and inputs are on <a href="{href}">Measures</a>.</p>'
 
 
+def column_links(html):
+    """Each column heading linked to its card on measures. ValueError names a heading no family card holds."""
+    known = {n for _, _, names in measures.FAMILIES + (measures.TEST_ORDER,) for n in names}
+
+    def head(m):
+        if (name := plain(m[2], "")) not in known:
+            raise ValueError(f"data/methods column {name!r} has no card on {MEASURES}")
+        return f'<th{m[1]}><a href="{links.url(MEASURES, measures.slug(name))}">{m[2]}</a></th>'
+    return re.sub(r'<th([^>]*scope="col"[^>]*)>(.*?)</th>', head, html)
+
+
 def term_id(name):
     return "term-" + re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
@@ -191,4 +203,5 @@ def body(page, snap, idx):
         return [section(page, snap, idx, "scope-and-terms", lambda: SCOPE), glossary(page, snap, idx)]
     extras = {"supporting-data": lambda: lead(page)}
     out = [LEADS[page.slug]] if page.slug in LEADS else []
-    return out + [section(page, snap, idx, a, extras.get(a, lambda: "")) for a in page.anchors]
+    sections = [section(page, snap, idx, a, extras.get(a, lambda: "")) for a in page.anchors]
+    return out + (list(map(column_links, sections)) if page.slug == "data/methods" else sections)
