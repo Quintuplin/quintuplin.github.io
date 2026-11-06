@@ -45,6 +45,18 @@ def run_doc(snap, run):
     return snap.facts["runs"][run]["doc_sha256"][:8]
 
 
+def named_runs(snap, html):
+    """Each snapshot run the text of html names, in first-mention order. tcp-1 inside tcp-1-list2 is no mention."""
+    keys = "|".join(map(re.escape, sorted(snap.facts["runs"], key=len, reverse=True)))
+    found = re.findall(rf"(?<![\w/-])({keys})(?![\w/-])", re.sub(r"<[^>]+>", " ", html))
+    return list(dict.fromkeys(found))
+
+
+def doc_versions(snap, html):
+    """Each run html names with its methods doc short sha256, in first-mention order."""
+    return [f"{run} {run_doc(snap, run)}" for run in named_runs(snap, html)]
+
+
 def section(html, id):
     """From the heading with this id up to the next heading with an id of the same or a higher level, or the end of main."""
     head = re.search(rf'<h([1-6])\b[^>]*{ID_ATTR}{re.escape(id)}"', html)
