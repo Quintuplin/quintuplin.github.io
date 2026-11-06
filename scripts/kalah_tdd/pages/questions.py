@@ -2,11 +2,11 @@
 bar, the status table in a labelled region and every answer with its id, a status line and its claim tag."""
 
 import re
-from html import unescape
 from itertools import zip_longest
 from typing import NamedTuple
 
 from .. import links, parts, snapshot
+from ..blocks import OPEN, close, plain
 
 ID = "questions"
 # The statuses the section intro defines.
@@ -14,7 +14,6 @@ STATUSES = ("answered", "partly answered", "pending run", "open")
 # The blocks after the heading in order, then one answer per question.
 LEAD = ("p", "qbar", "qlegend", "qtable")
 TABLE = "Status of each question"
-OPEN = re.compile(r"\s*<([a-z][a-z0-9]*)\b([^>]*)>")
 TITLE = re.compile(r'<h2 id="([^"]+)">(.*?)</h2>')
 DIV = re.compile(r' class="(qbar|qlegend|qtable|answer)"(?= |$)')
 TR = re.compile(r"<tr>(?:(?!</tr>).)*</tr>", re.S)
@@ -31,16 +30,6 @@ class Row(NamedTuple):
     status: str
     kind: str  # the chip's data-k
     chip: str  # HTML
-
-
-def close(html, tag, at):
-    """The end of the element whose start tag ends at at, counting nested elements of the same tag."""
-    depth = 1
-    for m in re.compile(rf"<(/?){tag}\b[^>]*>").finditer(html, at):
-        depth += -1 if m.group(1) else 1
-        if not depth:
-            return m.end()
-    return -1
 
 
 def kind(block):
@@ -72,17 +61,13 @@ def split(html):
     return head.group(2), out
 
 
-def plain(html):
-    return " ".join(unescape(re.sub(r"<[^>]+>", " ", html)).split())
-
-
 def rows(qtable):
     """The status table rows. Each needs one chip of a known status, one chip kind per status."""
     out, kinds = [], {}
     for tr in TR.findall(qtable.split("<tbody>", 1)[-1]):
         m = ROW.fullmatch(tr)
         if not m or m[2] != m[1].lower():
-            raise ValueError(f"section {ID} has a status row of no known form {plain(tr)[:60]!r}")
+            raise ValueError(f"section {ID} has a status row of no known form {plain(tr, " ")[:60]!r}")
         n, _, question, cell = m.groups()
         chip = CHIP.fullmatch(cell)
         if not chip:
@@ -138,8 +123,8 @@ def answers(rows, blocks):
             raise ValueError(f"answer {len(out) + 1} is {got} where the table has {want or 'no row'}")
         if m[2] != row.n:
             raise ValueError(f"answer {want} is labelled {m[2]} where its row is {row.n}")
-        if plain(m[3]) != plain(row.question):
-            raise ValueError(f"answer {want} asks {plain(m[3])!r} where its row asks {plain(row.question)!r}")
+        if plain(m[3], " ") != plain(row.question, " "):
+            raise ValueError(f"answer {want} asks {plain(m[3], ' ')!r} where its row asks {plain(row.question, ' ')!r}")
         tags, marked = TAG.findall(block), block.count('class="tag"')
         if len(tags) != 1 or marked != 1:
             raise ValueError(f"answer {want} holds {marked} tag spans, {len(tags)} of them plain parts.tag markup; "
