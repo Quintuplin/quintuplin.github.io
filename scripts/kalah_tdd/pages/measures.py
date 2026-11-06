@@ -6,7 +6,9 @@ from html import escape, unescape
 from typing import NamedTuple
 
 from .. import pagemap, parts, snapshot
+from ..blocks import plain
 from ..figures import flow
+from ..snapshot import named_runs  # noqa: F401, the page tests read it here
 
 ENTRY = re.compile(r'<div class="entry">(<p class="sub"><b>(.*?)</b>\. (?:Source: (.*?)\. )?Tag: (\w+)\.</p>.*?)</div>', re.S)
 FOLD = re.compile(r"<details><summary>(Column definitions[^<]*)</summary>(.*?)</details>", re.S)
@@ -208,10 +210,6 @@ def rows(html):
     return [Row(unescape(m.group(2)), m.group(3) or "", m.group(4), m.group(1), m.group(2)) for m in ENTRY.finditer(html)]
 
 
-def plain(html):
-    return " ".join(unescape(re.sub(r"<[^>]+>", " ", html)).split())
-
-
 class MetricSources:
     """The definitions the page quotes, read from the snapshot report, method pages and facts."""
 
@@ -224,15 +222,15 @@ class MetricSources:
 
     def method_rows(self):
         """Distinct method page Column definitions rows, less exact copies of a report column row."""
-        seen = {plain(r.inner) for r in self.columns}
+        seen = {plain(r.inner, " ") for r in self.columns}
         out = []
         for name, text in sorted(self.snap.files.items()):
             if not name.startswith("runs/full-1/methods/"):
                 continue
             for _, fold in FOLD.findall(text):
                 for r in rows(fold):
-                    if plain(r.inner) not in seen:
-                        seen.add(plain(r.inner))
+                    if plain(r.inner, " ") not in seen:
+                        seen.add(plain(r.inner, " "))
                         out.append(r)
         return out
 
@@ -291,7 +289,7 @@ class MetricCards:
         return by_name
 
     def source_text(self, name):
-        return plain(self.by_name[name].inner)
+        return plain(self.by_name[name].inner, " ")
 
     def marked(self, name):
         """The entry HTML with its dfn and its claim tag as a pill. A term's dfn marks its words in the definition."""
@@ -312,7 +310,7 @@ class MetricCards:
             return f"Module: <code>{escape(m.group(0))}</code>."
         if name in CITES:
             row = self.src.glossary_row(CITES[name])
-            if m := MODULE.search(plain(row.inner)):
+            if m := MODULE.search(plain(row.inner, " ")):
                 return f"Module: <code>{escape(m.group(0))}</code>, as the glossary row <i>{escape(row.name)}</i> states."
         return f"Module: {ABSENT}."
 
@@ -350,7 +348,7 @@ def joined(items):
 
 def cited(code, sentence, what):
     """Refuse a typed formula whose numbers are not all in the sentence it is read from."""
-    for number in re.findall(r"\d+(?:\.\d+)?", plain(code)):
+    for number in re.findall(r"\d+(?:\.\d+)?", plain(code, " ")):
         if not re.search(rf"(?<![\d.]){re.escape(number)}(?![\d.])", sentence):
             raise ValueError(f"{what} formula number {number} is not in its source sentence")
     return f"<code>{code}</code>"
@@ -379,15 +377,8 @@ def formulas(src, cards):
             "E": cited(e, error_doc, "E")}
 
 
-def named_runs(snap, html):
-    """Each snapshot run the text of html names, in first-mention order. A run inside a longer run name is none."""
-    runs = sorted(snap.facts["runs"], key=len, reverse=True)
-    pattern = re.compile(r"(?<![\w/-])(?:" + "|".join(map(re.escape, runs)) + r")(?![\w/-])")
-    return list(dict.fromkeys(m.group(0) for m in pattern.finditer(re.sub(r"<[^>]+>", " ", html))))
-
-
 def lead(snap, rest):
-    docs = joined([f"{run} {snapshot.run_doc(snap, run)}" for run in named_runs(snap, rest)])
+    docs = joined(snapshot.doc_versions(snap, rest))
     return ("<p>Each card quotes a column or term definition from the snapshot with its claim tag. The lines under it "
             "give the typed formula where the page has one, the inputs when the definition names no Source, and the "
             "module that computes it. Formula, Inputs, Module and Also labelled lines, this lead and the Figure 4.1 "
@@ -397,7 +388,7 @@ def lead(snap, rest):
 
 
 def heading_text(html):
-    return plain(m.group(2)) if (m := re.search(r"<h([1-6])\b[^>]*>(.*?)</h\1>", html, re.S)) else ""
+    return plain(m.group(2), " ") if (m :=re.search(r"<h([1-6])\b[^>]*>(.*?)</h\1>", html, re.S)) else ""
 
 
 class TableFields:
@@ -425,7 +416,7 @@ class TableFields:
                         own = own.replace(snapshot.section(report, b), "")
                 for thead in re.findall(r"<thead\b.*?</thead>", own, re.S):
                     for th in re.findall(r"<th\b[^>]*>(.*?)</th>", thead, re.S):
-                        titles = heads.setdefault(plain(th).casefold(), [])
+                        titles = heads.setdefault(plain(th, " ").casefold(), [])
                         if (title := heading_text(own)) not in titles:
                             titles.append(title)
         return heads
@@ -445,20 +436,20 @@ class TableFields:
             raise ValueError(f"field '{f.name}': no list phase step of run {run} says {where!r}")
         if kind == "glossary":
             row = self.src.glossary.get(where)
-            if row and said[0] in plain(row.inner):
+            if row and said[0] in plain(row.inner, " "):
                 return f"The glossary row <i>{escape(row.name)}</i> says: {escape(said[0])} Tag: {parts.tag(row.tag)}."
             raise ValueError(f"field '{f.name}': the glossary row {where!r} no longer says {said[0]!r}")
         if kind == "method":  # an untagged paragraph every method page of the run repeats, so no pill
             pages = {n: t for n, t in self.src.snap.files.items() if n.startswith(f"runs/{where}/methods/")}
             if lacking := sorted(n for n, t in pages.items()
-                                 if not any(said[0] in plain(p) for p in re.findall(r"<p\b[^>]*>.*?</p>", t, re.S))):
+                                 if not any(said[0] in plain(p, " ") for p in re.findall(r"<p\b[^>]*>.*?</p>", t, re.S))):
                 raise ValueError(f"field '{f.name}': method pages {lacking} do not say {said[0]!r}")
             if not pages:
                 raise ValueError(f"field '{f.name}': run {where} has no method pages")
             return f"Each method page of run <code>{where}</code> says: {escape(said[0])}"
         section = snapshot.section(self.src.report, where)
         for para in re.findall(r"<p\b[^>]*>.*?</p>", section, re.S):
-            if said[0] in plain(para) and (tag := re.search(r"Tag: (\w+)\.", plain(para))):
+            if said[0] in plain(para, " ") and (tag := re.search(r"Tag: (\w+)\.", plain(para, " "))):
                 return (f"The report section <i>{escape(heading_text(section))}</i> says: {escape(said[0])} "
                         f"Tag: {parts.tag(tag.group(1))}.")
         raise ValueError(f"field '{f.name}': no tagged paragraph of report section {where!r} says {said[0]!r}")
@@ -523,17 +514,17 @@ class MeasurePipeline:
         return next(n.lane for n in self.nodes if n.id == id)
 
     def sentence(self, kind, name):
-        return self.src.fact_doc(name) if kind == "function" else plain(self.src.glossary_row(name).inner)
+        return self.src.fact_doc(name) if kind == "function" else plain(self.src.glossary_row(name).inner, " ")
 
     def check(self):
         for n in self.nodes:
-            fields = " ".join(plain(self.cards.by_name[c].source) for c in LANES[n.lane])
+            fields = " ".join(plain(self.cards.by_name[c].source, " ") for c in LANES[n.lane])
             for name in FILE.findall(f"{n.label} {n.note}"):
                 if name not in fields:
                     raise ValueError(f"Figure 4.1 node {n.label!r} names {name} but no {n.lane} card Source does")
             # A module must be in a lane card, the glossary row its Module line cites, or the card the node is.
             named = list(LANES[n.lane]) +[n.label] * (n.label in self.cards.by_name)
-            stated = set(MODULE.findall(" ".join(f"{self.cards.source_text(c)} {plain(self.cards.module(c))}" for c in named)))
+            stated = set(MODULE.findall(" ".join(f"{self.cards.source_text(c)} {plain(self.cards.module(c), ' ')}" for c in named)))
             stated |= {s.rsplit("/", 1)[-1] for s in stated}  # a bare file name matches its path's last part
             for name in MODULE.findall(f"{n.label} {n.note}"):
                 if name not in stated:

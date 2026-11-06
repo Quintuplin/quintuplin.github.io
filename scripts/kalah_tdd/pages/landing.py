@@ -6,7 +6,7 @@ from html import escape, unescape
 
 from .. import pagemap, parts
 from ..links import rewrite, unique_ids, url
-from ..snapshot import ID, REPORT, SHOWCASE, run_doc, section, view
+from ..snapshot import ID, REPORT, SHOWCASE, named_runs, run_doc, section, view
 
 TAG = re.compile(r"Tag: (recomputed|verified|unchecked)\.")
 CAPTIONED = re.compile(r'<figure id="[^"]+">.*?</figure>', re.S)
@@ -52,13 +52,6 @@ def intro(snap, paragraphs, summary, rest):
             f"<p>The methods text on these pages is from methods doc {snap.doc}. The runs this page names were built "
             f"under these doc versions, by short sha256: {docs}.</p>\n"
             f'<p>Read on with {read_on}, or pick any of the <a href="#contents">{len(pagemap.PAGES)} parts</a>.</p>')
-
-
-def named_runs(snap, html):
-    """Each snapshot run the text of html names, in first-mention order. tcp-1 inside tcp-1-list2 is no mention."""
-    keys = "|".join(map(re.escape, sorted(snap.facts["runs"], key=len, reverse=True)))
-    found = re.findall(rf"(?<![\w/-])({keys})(?![\w/-])", re.sub(r"<[^>]+>", " ", html))
-    return list(dict.fromkeys(found))
 
 
 class ShowcaseParts:

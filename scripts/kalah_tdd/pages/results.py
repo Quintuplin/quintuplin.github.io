@@ -7,12 +7,13 @@ from html import escape, unescape
 from typing import NamedTuple
 
 from .. import links, parts, snapshot
+from ..blocks import OPEN, elements, plain
 from ..figures import dots, flow
+from ..figures.stage_flow import sized
 
 CONTRASTS = "results/contrasts"
 # The rep-1 adjusted mutation chart is a report Headline figure, so it sits on the landing page.
 REP1_MUTATION = "rep-1-mutation"
-OPEN = re.compile(r"\s*<([a-z][a-z0-9]*)\b([^>]*)>")
 TITLE = re.compile(r"<h([23]) id=\"([^\"]+)\">(.*?)</h\1>")
 # Each contrast section: its run, how many planned contrasts its cells hold and the outcome of a cell that names none.
 CONTRAST_RUNS = {"planned-contrasts-rep-1": ("rep-1", 2, "adjusted mutation"),
@@ -48,16 +49,6 @@ class Contrast(NamedTuple):
     p: str
 
 
-def close(html, tag, at):
-    """The end of the element whose start tag ends at at, counting nested elements of the same tag."""
-    depth = 1
-    for m in re.compile(rf"<(/?){tag}\b[^>]*>").finditer(html, at):
-        depth += -1 if m.group(1) else 1
-        if not depth:
-            return m.end()
-    return -1
-
-
 def kind(block):
     """p, figure, tables or entries, or None for a block the page does not know."""
     m = OPEN.match(block)
@@ -79,15 +70,11 @@ def split(id, html):
     head = TITLE.match(html)
     if not head or head.group(2) != id:
         raise ValueError(f"section {id} does not open with its h2 or h3")
-    at, out = head.end(), []
-    while html[at:].strip():
-        m = OPEN.match(html, at)
-        end = close(html, m.group(1), m.end()) if m else -1
-        block = html[at:end].strip() if end != -1 else html[at:].strip()
-        if end == -1 or not (k := kind(block)):
+    out = []
+    for _, _, block in elements(id, html[head.end():]):
+        if not (k := kind(block)):
             raise ValueError(f"section {id} holds an unrecognised block {block[:60]!r}")
         out.append((k, block))
-        at = end
     return out
 
 
@@ -120,10 +107,6 @@ def found(regex, text):
     return unescape(next(g for g in m.groups() if g is not None)) if m else None
 
 
-def plain(html):
-    return " ".join(unescape(re.sub(r"<[^>]+>", " ", html)).split())
-
-
 def cap(text):
     return text[:1].upper() + text[1:]
 
@@ -150,7 +133,7 @@ def holm(report):
     out = []
     for id, (run, want, default) in CONTRAST_RUNS.items():
         sec = own(report, id)
-        lead = plain(re.search(r"<p>(.*?)</p>", sec, re.S).group(1))
+        lead = plain(re.search(r"<p>(.*?)</p>", sec, re.S).group(1), " ")
         sides, reps = cells(sec, run, default)
         done, pairs = set(), []
         for outcome, a, b in sides:
@@ -210,7 +193,7 @@ def contrast_holm(report, n):
 def q20(report):
     """{order: (APFD-I, APFDc-H)} as the Q20 answer states them."""
     answer = re.search(r'<div class="answer" id="q20">(.*?)</div>', report, re.S)
-    m = answer and Q20.search(plain(answer.group(1)))
+    m = answer and Q20.search(plain(answer.group(1), " "))
     if not m:
         raise ValueError("Q20 no longer states APFD-I and APFDc-H per order in the known form")
     g = m.groups()
@@ -249,12 +232,6 @@ def tcp_stages(facts):
 
 def ol(items):
     return "<ol>" + "".join(f"<li>{escape(i)}</li>" for i in items) + "</ol>"
-
-
-def sized(svg):
-    """The flow held at its drawn width, so a one column chart does not scale up to study.css's flow min-width."""
-    width = re.match(r'<svg [^>]*viewBox="0 0 (\d+) ', svg).group(1)
-    return svg.replace("<svg ", f'<svg style="max-width:{width}px;min-width:{width}px" ', 1)
 
 
 def tcp_results(report, facts, slug, idx, n):

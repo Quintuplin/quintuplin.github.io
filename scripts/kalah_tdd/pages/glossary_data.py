@@ -4,14 +4,14 @@ measures link after each measured row and ends with the showcase short forms, ea
 
 import re
 from collections import Counter
-from html import escape, unescape
+from html import escape
 
 from .. import links, pagemap, parts, snapshot
+from ..blocks import elements, plain
 from . import measures
 
 ANCHORS = {a for p in pagemap.PAGES for a in p.anchors}
 HEADING = re.compile(r'<h[1-6]\b[^>]*' + snapshot.ID_ATTR + r'([^"]+)"')
-OPEN = re.compile(r"\s*<([a-z][a-z0-9]*)\b([^>]*)>")
 TITLE = re.compile(r'<h([2-4]) id="([^"]+)">(.*?)</h\1>', re.S)
 FOLD = re.compile(r'<details( id="[^"]+")?>(<summary>[^<]*</summary>)(<div class="shaped">.*</div>)</details>', re.S)
 ENTRY, COLS = ("div", ' class="entry"'), ("table", ' class="cols"')
@@ -51,29 +51,6 @@ LEADS = {
 }
 
 
-def close(html, tag, at):
-    """The end of the element whose start tag ends at at, counting nested elements of the same tag."""
-    depth = 1
-    for m in re.compile(rf"<(/?){tag}\b[^>]*>").finditer(html, at):
-        depth += -1 if m.group(1) else 1
-        if not depth:
-            return m.end()
-    return -1
-
-
-def elements(id, html):
-    """(tag, attrs, block) of each top-level element in order. Refuses text outside them."""
-    at, out = 0, []
-    while html[at:].strip():
-        m = OPEN.match(html, at)
-        end = close(html, m.group(1), m.end()) if m else -1
-        if end == -1:
-            raise ValueError(f"section {id} holds an unrecognised block {html[at:].strip()[:60]!r}")
-        out.append((m.group(1), m.group(2), html[at:end].strip()))
-        at = end
-    return out
-
-
 def shaped(id, block):
     """(ENTRY or COLS, its children) of a div.shaped, which holds entries or table column slices alone."""
     kids = elements(id, block[len('<div class="shaped">'):-len("</div>")])
@@ -111,10 +88,6 @@ def cut(html, id):
     return sec[:next((m.start() for m in HEADING.finditer(sec, 1) if m.group(1) in ANCHORS), len(sec))].strip()
 
 
-def plain(html):
-    return " ".join(unescape(re.sub(r"<[^>]+>", "", html)).split())
-
-
 def frame(id, html, entry=lambda block: block):
     """The page html of one section's blocks, with entry applied to each entry. A table's region is labelled by its
     headings, numbered when they hold several, as a wide report table comes in column slices."""
@@ -122,7 +95,7 @@ def frame(id, html, entry=lambda block: block):
     for k, block in split(id, html):
         if k == "heading":
             level, hid, text = TITLE.fullmatch(block).groups()
-            chain = [c for c in chain if c[0] < level] + [(level, plain(text))]
+            chain = [c for c in chain if c[0] < level] + [(level, plain(text, ""))]
             block = f'<h{LEVEL[level]} id="{hid}">{text}</h{LEVEL[level]}>'
         elif k in ("shaped", "fold"):
             attrs, summary, inner = FOLD.fullmatch(block).groups() if k == "fold" else ("", "", block)
@@ -181,7 +154,7 @@ def short_forms(showcase, names):
     if "".join(f"<dt>{t}</dt><dd>{d}</dd>" for t, d in pairs) != terms:
         raise ValueError(f"the showcase term list holds more than dt and dd pairs: {terms[:60]!r}")
     for dt, dd in pairs:
-        if (term := plain(dt)) not in SHORT_FORMS:
+        if (term := plain(dt, "")) not in SHORT_FORMS:
             raise ValueError(f"showcase term {term!r} has no glossary row in SHORT_FORMS")
         if (row := SHORT_FORMS[term]) not in names:
             raise ValueError(f"glossary row {row!r}, the full entry of showcase term {term!r}, is missing")
@@ -198,7 +171,7 @@ def glossary(page, snap, idx):
         m = ROW.match(block)
         if not m:
             raise ValueError(f"section glossary holds a row of no known form {block[:60]!r}")
-        names.append(name := plain(m.group(1)))
+        names.append(name := plain(m.group(1), ""))
         inner = block[len('<div class="entry">'):-len("</div>")]
         if name in MEASURED:
             # The link closes the row's card, so it reads as the row's; a div keeps the row's text whole for coverage.

@@ -2,10 +2,11 @@
 validity, from the report Limits, the run records and the code docstrings in facts.json."""
 
 import re
-from html import escape, unescape
+from html import escape
 from typing import NamedTuple
 
 from .. import links, pagemap, parts, snapshot
+from ..blocks import plain
 from ..figures import flow
 
 SLUG = "methodology/analysis"
@@ -203,8 +204,7 @@ def sentence(snap, use):
     """The first sentence of the use's report section that holds all its test words, as plain text."""
     text = snapshot.section(snap.files[snapshot.REPORT], use.section)
     for m in BLOCK.finditer(text):
-        plain = " ".join(unescape(re.sub(r"<[^>]+>", "", m.group(2))).split())
-        for s in SENTENCE.split(plain):
+        for s in SENTENCE.split(plain(m.group(2), "")):
             if all(w in s for w in use.words):
                 return s
     raise ValueError(f"report section {use.section} has no sentence with {' and '.join(map(repr, use.words))}")
