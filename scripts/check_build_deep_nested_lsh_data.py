@@ -17,7 +17,7 @@ GENERATOR = Path(__file__).resolve().parent / "build_deep_nested_lsh_data.py"
 
 
 def load_generator():
-    # study_sha needs no numpy, and CI does not install it.
+    # study_sha needs no numpy, so the check also runs where numpy is not installed.
     try:
         import numpy  # noqa: F401
     except ImportError:
