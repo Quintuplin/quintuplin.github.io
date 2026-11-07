@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head><title>Demo part</title></head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<details class="toc" id="toc"><summary>Contents</summary>
+<nav aria-label="Study contents">
+<ol>
+<li><a href="/studies/demo/">Demo</a></li>
+<li><a href="/studies/demo/part/" aria-current="page">Part</a>
+<ol><li><a href="#columns">Columns</a></li></ol></li>
+</ol>
+</nav>
+</details>
+<main id="main">
+<h2 id="columns">Columns</h2>
+<svg><title id="t">Chart</title></svg>
+<p>Back to the <a href="../#intro">intro</a>.</p>
+</main>
+</body>
+</html>

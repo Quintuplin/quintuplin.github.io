@@ -1,0 +1,6 @@
+{
+  "classic": {"method": "Classic greedy TDD", "stages": [
+    {"id": "s1", "kind": "S", "steps": [1]},
+    {"id": "L2-7", "kind": "L", "steps": [2, 3], "unit": "feature", "note": "An impasse is a bar that stays red."}
+  ]}
+}

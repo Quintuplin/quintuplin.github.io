@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="en"><head><title>Classic greedy TDD</title></head><body><main id="main">
+<h1>Classic greedy TDD</h1>
+<div class="kpis"><div class="kpi"><b>804,727</b><span>Cost to completion</span></div></div>
+<div class="tiles"><div class="tile"><span class="sub">Functional mark</span><b>15/15</b></div></div>
+<details><summary>Replicates (rep-1), 1 rows and 2 columns</summary><div class="shaped"><table class="cols"><thead><tr><th scope="col">Replicate</th><th scope="col">Adjusted mutation</th></tr></thead><tbody><tr><th scope="row">rep-1-r01</th><td>0.984</td></tr></tbody></table></div></details>
+</main></body></html>
