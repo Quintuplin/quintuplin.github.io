@@ -62,7 +62,9 @@ def design(page, snap, idx, numbers=None):
     lead = shown["chip"] + links.rewrite(shown["lead"], SHOWCASE, here, idx) + "\n" + intro.group(1)
     family, pre = union(slug, card["card"], how["family"]), merge_steps(slug, shown["steps"], how["code"])
     flow = stage_flow.figure(next(numbers or parts.numbers(here)), slug, snap.facts["stages"], pre)
-    steps = (f'<section id="steps"><h2 id="how-it-works">How it builds code</h2>\n{shown["intro"]}\n<p>{family}</p>\n'
+    source = ('<p>Source and inspiration: <a href="https://nappingtoheavymetal.com/series/anchor-engineering/">'
+              'Anchor Engineering</a> at Napping to Heavy Metal.</p>\n') if slug == "anchor-engineering" else ""
+    steps = (f'<section id="steps"><h2 id="how-it-works">How it builds code</h2>\n{source}{shown["intro"]}\n<p>{family}</p>\n'
              f'{pre}\n{how["kinds"]}\n{flow}</section>')
     verdict = f'<h2 id="conclusion">Verdict</h2>\n<p>{union(slug, shown["verdict"], end.group(1))}</p>'
     summary = links.rewrite(f'<h2 id="{card["id"]}">Report summary</h2>\n{card["figure"]}\n{card["kv"] or ""}', REPORT, here, idx)
