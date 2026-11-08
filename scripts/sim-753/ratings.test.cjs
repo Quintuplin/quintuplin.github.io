@@ -168,7 +168,7 @@ test("flat Pearson vectors have zero weight and fall back to the target bias bas
   }
 });
 
-test("batch holds weights fixed for a pass and SGD applies each residual gradient immediately", () => {
+test("interpolation updates follow finite differences of batch or single-rating SSE", () => {
   const spec = specs.get("learned-interpolation");
   for (const p of spec.presets) for (const method of spec.params[0].options) {
     const rows = p.rows.slice(0, 3), base = referenceBaseline(rows);
@@ -181,9 +181,16 @@ test("batch holds weights fixed for a pass and SGD applies each residual gradien
     for (let epoch = 0; epoch < 3; epoch++) {
       const groups = batch ? [[0, 1, 2]] : [[0], [1], [2]];
       for (const group of groups) {
-        const delta = group.map(j => rows[0][j] - base(0, j) - inner(w, x[j]));
-        w = w.map((old, i) => old + 0.1 * avg(group.map((j, n) => delta[n] * x[j][i])));
-        w.forEach((v, i) => near(updates[step].nodes[i].value, v));
+        const loss = weights => sum(group.map(j => (base(0, j) + inner(weights, x[j]) - rows[0][j]) ** 2));
+        const after = updates[step].nodes.map(n => n.value);
+        const h = 1e-5;
+        w.forEach((old, i) => {
+          const plus = [...w], minus = [...w];
+          plus[i] += h;
+          minus[i] -= h;
+          near((old - after[i]) / params.rate, (loss(plus) - loss(minus)) / (2 * h));
+        });
+        w = after;
         step++;
       }
     }

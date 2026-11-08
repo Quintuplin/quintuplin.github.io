@@ -191,15 +191,15 @@
 const epochs = slider("epochs", "Training passes", 1, 6, 1, 2);
   register({
     id: "learned-interpolation", title: "Learning interpolation weights", topic,
-    description: "Fit two neighbour weights to Ada’s observed ratings. Apply them to the neighbours’ residuals on Fir.",
+    description: "Fit two neighbour weights by minimising the sum of squared errors on Ada’s observed ratings. Apply them to the neighbours’ residuals on Fir.",
     params: [choice("method", "Gradient update", ["Batch gradient descent", "Stochastic gradient descent"]),
       slider("rate", "Learning rate", 0.01, 0.2, 0.01, 0.08), epochs],
     presets: decks,
     code: ["B ← biasBaselines(observed(R)); w ← [0, 0]",
       "for j: x[j] ← [R[u,j] − B[u,j] for u in [Bo,Cy]]",
       "for epoch, j in trainingOrder: estimate ← B[Ada,j] + dot(w, x[j])",
-      "g[j] ← (estimate − R[Ada,j]) × x[j]",
-      "if SGD: w ← w − ηg[j]; else if last(j): w ← w − η mean(g)",
+      "g[j] ← 2 × (estimate − R[Ada,j]) × x[j]",
+      "if SGD: w ← w − ηg[j]; else if last(j): w ← w − η sum(g)",
       "return B[Ada,Fir] + dot(w, x[Fir])"],
     trace(p, { method, rate, epochs }, rng) {
       const names = users.slice(0, 3);
@@ -228,12 +228,12 @@ const epochs = slider("epochs", "Training passes", 1, 6, 1, 2);
           const estimate = model.at(0, j) + dot(weights, features[j]);
           const error = estimate - rows[0][j];
           frames.push(frame(2, `Pass ${pass}, ${items[j]}: ${fmt(model.at(0, j))} + ${vec(weights)} · ${vec(features[j])} = ${fmt(estimate)}.`, draw(j)));
-          const gradient = features[j].map(x => error * x);
-          frames.push(frame(3, `(${fmt(estimate)} − ${fmt(rows[0][j])}) × ${vec(features[j])} = ${vec(gradient)}.`, draw(j)));
+          const gradient = features[j].map(x => 2 * error * x);
+          frames.push(frame(3, `2 × (${fmt(estimate)} − ${fmt(rows[0][j])}) × ${vec(features[j])} = ${vec(gradient)}.`, draw(j)));
           if (batch) gradient.forEach((g, i) => { total[i] += g; });
           else update(gradient, j);
         }
-        if (batch) update(total.map(g => g / 3), 2);
+        if (batch) update(total, 2);
       }
       const estimate = model.at(0, 3) + dot(weights, features[3]);
       rows[0][3] = estimate;
