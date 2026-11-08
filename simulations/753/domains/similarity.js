@@ -171,9 +171,9 @@
   const signatureScene = (sig, row, doc) => sig.flatMap((pair, i) => pair.map((v, d) =>
     ({ ...cell(i + '-' + d, 'AB'[d] + (i + 1) + '=' + show(v), i, Number.isFinite(v) ? v : 7, d * 2, d,
       i === row && (doc === undefined || doc === d)), ...(Number.isFinite(v) ? { value: v } : {}) })));
-  function agreement(frames, sig) {
+  function agreement(frames, sig, label = 'Estimated Jaccard', comparison = '') {
     const matches = sig.filter(([a, b]) => a === b).length;
-    frames.push({ line: 3, work: `Equal signature rows = ${matches}/${sig.length}. Estimated Jaccard = ${(matches / sig.length).toFixed(3)}.`,
+    frames.push({ line: 3, work: `Equal signature rows = ${matches}/${sig.length}. ${label} = ${(matches / sig.length).toFixed(3)}.${comparison}`,
       nodes: signatureScene(sig) });
     return frames;
   }
@@ -323,10 +323,10 @@
 
   register({
     id: 'minhash-one-pass', title: 'One-pass MinHash',
-    description: 'Visit each feature once and update signature minima with affine permutations modulo seven. Depth separates the two document columns.',
+    description: 'Estimate agreement among the 42 affine permutations modulo seven in one pass. A uniformly shuffled feature order gives the Jaccard collision probability. Restricting the order to affine maps can change that probability.',
     params: [hashes], presets: setPairs,
     code: ['sig[:,:] ← ∞; for i in 0..count−1: hᵢ(x) ← (aᵢx + bᵢ) mod 7', 'for x in 0..6: docs ← {d where x ∈ d}',
-      '  for i in 0..count−1: for d in docs: sig[i,d] ← min(sig[i,d], hᵢ(x))', 'return countEqualRows(sig) / count'],
+      '  for i in 0..count−1: for d in docs: sig[i,d] ← min(sig[i,d], hᵢ(x))', 'return countEqualRows(sig) / count  # sampled affine agreement'],
     trace(preset, { count }, rng) {
       const sets = featureSets(preset, rng);
       const coeff = ints(count).map(() => [1 + draw(rng, 6), draw(rng, 7)]);
@@ -346,7 +346,15 @@
           frames.push({ line: 2, work: `h${i + 1}(${x}) = (${a}×${x}+${b}) mod 7 = ${h}. ${updates.join(', ')}.`, nodes: signatureScene(sig, i) });
         });
       }
-      return agreement(frames, sig);
+      let familyHits = 0;
+      for (let a = 1; a < 7; a++) for (let b = 0; b < 7; b++) {
+        const [left, right] = sets.map(set => Math.min(...set.map(x => (a * x + b) % 7)));
+        if (left === right) familyHits++;
+      }
+      const intersection = sets[0].filter(x => sets[1].includes(x)).length;
+      const union = new Set(sets.flat()).size;
+      return agreement(frames, sig, 'Sampled affine agreement',
+        ` Across all affine maps: ${familyHits}/42. For a uniform permutation, P(agree) = Jaccard = ${intersection}/${union}.`);
     },
   });
 })();

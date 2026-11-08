@@ -147,6 +147,22 @@ for (const id of ['minhash-permutation', 'minhash-one-pass']) {
   });
 }
 
+test('nested sets agree under 22 of 42 affine maps and half of uniform permutations', () => {
+  const spec = specs.get('minhash-one-pass');
+  const nested = spec.presets.find(p => p.name === 'Nested sets');
+  let hits = 0;
+  for (let a = 1; a <= 6; a++) for (let b = 0; b < 7; b++) {
+    const tape = [0,0,(a - 0.5)/6,(b + 0.5)/7];
+    const last = spec.trace(nested, {count: 1}, () => tape.shift()).at(-1);
+    hits += Number(last.nodes[0].value === last.nodes[1].value);
+  }
+  assert.equal(hits, 22);
+  const result = run(spec, nested).at(-1).work;
+  assert.match(result, /sampled affine agreement/i);
+  assert.match(result, /22\/42/);
+  assert.match(result, /uniform permutation.*Jaccard.*2\/4/i);
+});
+
 test('a candidate requires every signature row in at least one band', () => {
   const spec = specs.get('lsh-banding');
   for (const preset of spec.presets) for (const rows of spec.params[0].options) {
