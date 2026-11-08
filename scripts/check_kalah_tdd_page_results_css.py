@@ -125,6 +125,29 @@ addEventListener("load", async () => {
       if (f.width <= 899) for (const link of links)
         check("run-records", link.getBoundingClientRect().height >= 44, "rebuild link remains a touch target");
     }
+    const awards = [...d.querySelectorAll("article.award")];
+    if (awards.length) {
+      const original = f.width, fixture = f.dataset.name.includes("award");
+      counts.awardWidths = [];
+      counts.awardLabels = d.querySelectorAll("article.award li > a").length;
+      counts.firstAwardLabel = d.querySelector("article.award li > a").textContent;
+      for (const width of fixture ? [540, 548, 560, 1024, 1100] : [Number(original)]) {
+        f.width = width; counts.awardWidths.push(width);
+        for (const card of awards) {
+          const box = card.getBoundingClientRect(), walker = d.createTreeWalker(card, w.NodeFilter.SHOW_TEXT);
+          check("award-layout", box.left >= 0 && box.right <= d.documentElement.clientWidth + 1, "card at " + width);
+          for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+            if (!t.textContent.trim()) continue;
+            const range = d.createRange(); range.selectNodeContents(t);
+            const link = t.parentElement.closest("li > a"), bounds = link ? link.getBoundingClientRect() : box;
+            check("award-layout", [...range.getClientRects()].every(r => r.left >= bounds.left - 1 && r.right <= bounds.right + 1),
+              t.textContent.trim() + " at " + width);
+          }
+        }
+        check("award-layout", d.documentElement.scrollWidth <= d.documentElement.clientWidth, "page at " + width);
+      }
+      f.width = original;
+    }
     // Study dot charts hold their drawn width, so chart text stays at its 12px size and the region scrolls instead.
     for (const svg of d.querySelectorAll(".diagram svg.plot")) {
       counts.charts = (counts.charts || 0) + 1;
@@ -300,6 +323,15 @@ def frames():
     out.append(("small svg text 1440", 1440, doc("designs/annealed", css() + "\nsvg.flow text{font-size:11px!important}")))
     out.append(("obsolete axis 375", 375, doc("results/consistency", css()).replace(
         ">Relative spread, 1 = pooled reference spread</text>", ">Relative spread, 1 is the average</text>")))
+    longest = max(pagemap.DESIGNS, key=lambda design: len(design[2]))[2]
+    def award_doc(style):
+        return re.sub(r'(<article class="award">.*?<li\b[^>]*>.*?<a\b[^>]*>)[^<]+',
+                      lambda m: m[1] + escape(longest), doc("", style), count=1, flags=re.S)
+    minimum = "\n.grid > .award:first-child{width:240px;max-width:100%}"
+    out += [("long award 548", 548, award_doc(css())),
+            ("minimum award 548", 548, award_doc(css() + minimum)),
+            ("mutated award 548", 548, award_doc(css() + minimum +
+             "\n.award li{grid-template-columns:minmax(0,7rem) minmax(0,1fr)}.award li > a{overflow-wrap:normal}"))]
     return out
 
 
@@ -391,6 +423,18 @@ class ResultsCss(unittest.TestCase):
             with self.subTest(width):
                 self.assertGreater(probe()[name]["counts"].get("runLinks", 0), 0)
                 self.assertEqual(fails(name, "run-records"), [])
+
+    def test_long_canonical_award_label_fits_after_resizing(self):
+        longest = max(pagemap.DESIGNS, key=lambda design: len(design[2]))[2]
+        for name in ("long award 548", "minimum award 548"):
+            with self.subTest(name):
+                self.assertEqual(probe()[name]["counts"]["firstAwardLabel"], longest)
+                self.assertEqual(probe()[name]["counts"]["awardWidths"], [540, 548, 560, 1024, 1100])
+                self.assertEqual(probe()[name]["counts"]["awardLabels"], 13)
+                self.assertEqual(fails(name, "award-layout"), [])
+        for name in real(slugs=("",)):
+            self.assertEqual(fails(name, "award-layout"), [])
+        self.assertTrue(fails("mutated award 548", "award-layout"))
 
     def test_small_svg_labels_select_compact(self):
         name = "small svg text 1440"

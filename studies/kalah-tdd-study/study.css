@@ -146,8 +146,8 @@ img{max-width:100%;height:auto}
 .award,.design{padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-2);min-width:0}
 .award p{margin:0;font-size:14px;color:var(--muted)}
 .award :is(ol,ul),.medals{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-.award li{display:grid;grid-template-columns:minmax(0,7rem) minmax(0,1fr);gap:2px 10px;align-items:start;padding:6px 0}
-.award li > a{min-width:0;overflow-wrap:normal}
+.award li{display:grid;grid-template-columns:fit-content(7rem) minmax(0,1fr);gap:2px 10px;align-items:start;padding:6px 0}
+.award li > a{min-width:0;overflow-wrap:anywhere}
 .award :is(.medal,.chip){white-space:normal;max-width:7rem;text-align:center;line-height:1.5}
 .award .rule{margin-top:auto;line-height:1.5}
 .medals{flex-direction:row;flex-wrap:wrap;gap:var(--space-2)}
