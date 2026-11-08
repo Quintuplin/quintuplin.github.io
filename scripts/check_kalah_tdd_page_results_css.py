@@ -109,6 +109,16 @@ addEventListener("load", async () => {
       for (const t of svg.querySelectorAll("text"))
         check("chart-text", parseFloat(cs(t).fontSize) * scale >= 11.5, svg.closest("figure").id + " " + t.textContent.slice(0, 30));
     }
+    for (const svg of d.querySelectorAll("#rep-consistency .plot > svg")) {
+      const labels = [...svg.querySelectorAll("text")].filter(t => t.textContent === "Relative spread, 1 = pooled reference spread");
+      counts.consistencyAxis = labels.length;
+      check("consistency-axis", labels.length === 1, "one visible pooled reference axis label");
+      for (const label of labels) {
+        const a = label.getBoundingClientRect(), b = svg.getBoundingClientRect();
+        check("consistency-axis", a.width > 0 && a.left >= b.left - 1 && a.right <= b.right + 1 &&
+          a.top >= b.top - 1 && a.bottom <= b.bottom + 1, "axis label fits the SVG");
+      }
+    }
     const shown = (el) => {
       for (let p = el; p; p = p.parentElement) {
         const s = cs(p);
@@ -259,6 +269,8 @@ def frames():
                             '<td data-th="Notes">A longer explanation keeps the score intact.</td></tr></tbody></table>', 'Scores')
     out += [(f"formatted table {w}", w, doc("results/contrasts", css(), formatted)) for w in WIDTHS]
     out.append(("small svg text 1440", 1440, doc("designs/annealed", css() + "\nsvg.flow text{font-size:11px!important}")))
+    out.append(("obsolete axis 375", 375, doc("results/consistency", css()).replace(
+        ">Relative spread, 1 = pooled reference spread</text>", ">Relative spread, 1 is the average</text>")))
     return out
 
 
@@ -328,6 +340,14 @@ class ResultsCss(unittest.TestCase):
         self.assertEqual(probe()[name]["workflows"][0]["active"], ["compact"])
         for check in ("workflow-selection", "workflow-text", "workflow-label"):
             self.assertEqual(fails(name, check), [])
+
+    def test_consistency_axis_names_the_pooled_reference_and_fits(self):
+        for width in WIDTHS:
+            name = f"results/consistency {width}"
+            with self.subTest(width):
+                self.assertEqual(probe()[name]["counts"].get("consistencyAxis"), 1)
+                self.assertEqual(fails(name, "consistency-axis"), [])
+        self.assertTrue(fails("obsolete axis 375", "consistency-axis"))
 
     def test_stacked_cols_375(self):
         for name in real(375):

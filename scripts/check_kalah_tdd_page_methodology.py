@@ -414,7 +414,7 @@ class AgentRoles(unittest.TestCase):
         one = [s["name"] for s in f["pipeline"]["collect"]["collectOne"]]
         self.assertEqual(one[-4:], ["audit", "adherence", "review", "report"])
         found = dispositions()
-        want = {"clone": f"{builds} builds in {len(f['runs'])} runs", "lister": "2 list-only runs",
+        want = {"clone": f"{builds} entries / {len(f['runs'])} records", "lister": "2 list-only runs",
                 "throughout": f"{kinds['F']} stages join every prompt", "once": f"{kinds['S']} stages",
                 "writer": "held-out s2, every build", "harness": f"{kinds['H']} stage",
                 "repeat": f"{kinds['L']} stages, units {', '.join(units)}",

@@ -135,6 +135,14 @@ def answers(rows, blocks):
             raise ValueError(f"answer {want}: {e}") from None
         # The tag markup comes from parts.tag, so every page draws claim tags alike.
         block = TAG.sub(tag, block)
+        if want == "q3":
+            if block.count("<p>Yes.</p>") != 1:
+                raise ValueError("Q3 reference interpretation needs review")
+            block = block.replace("<p>Yes.</p>", "<p>The reference passes the grader.</p>")
+        if want == "q15":
+            block = block.removesuffix("</div>") + ('<p>The Held-out TDD contrast spans a later rebuild. See '
+                f'<a href="{links.url("results/contrasts", "planned-contrasts-rep-2")}">rep-2 planned contrasts</a> and '
+                f'<a href="{links.url("methodology/analysis", "limits")}">limits</a>.</p></div>')
         out.append(f"{block[:m.end()]}<p>Status: {row.chip}</p>{block[m.end():]}")
     return out
 

@@ -11,6 +11,55 @@ from ..snapshot import ID, REPORT, SHOWCASE, named_runs, run_doc, section, view
 TAG = re.compile(r"Tag: (recomputed|verified|unchecked)\.")
 CAPTIONED = re.compile(r'<figure id="[^"]+">.*?</figure>', re.S)
 READ_ON = ("experimental-design", "methodology", "results/survey")
+AWARD_RULES = {
+    "Best overall": ("Lowest plain sum of each method's ranks on M, E and alignment, ties sharing their average rank. Cheapest and consistency never count.",
+                     "Lowest sum of ranks on M, E and alignment. Ties use average ranks. Badges do not contribute."),
+    "Most cost effective": ("Lowest M, the cost to completion times 1 minus APFDc-H, among methods with a functional mark of 15/15. M_io leaves output tokens out.",
+                            "Lowest M among builds scoring 15/15. M_io recomputes the curve without output-token costs."),
+    "Fewest errors": ("Lowest E, the distinct PMD findings plus adjusted surviving mutants, hidden failures and unseen failures.",
+                      "Lowest additive count of PMD findings, adjusted surviving mutants and hidden and unseen failures."),
+    "Best CQP/PMD alignment": ("The blind CQP rating agrees with PMD on every principle and PMD reports no issue.",
+                               "CQP agrees with PMD on all eight principles and PMD reports no issue."),
+    "Cheapest": ("Lowest cost to completion. A bronze badge that never counts toward best overall.",
+                 "Lowest cost to completion. A bronze badge that does not contribute to best overall."),
+    "Most consistent design": (
+        "Lowest consistency score C. A bronze badge that never counts toward best overall. Exploratory. C covers only the 7 replicated methods of runs rep-1 and rep-2, pooling every replicate, n per method Functions first, classes later 5, Noun-verb map 5, Anchor Engineering 5, Classic greedy TDD 10, Held-out TDD 5, Coarse-to-fine TDD 5, Most informative next test 5. The raw costs mix CLI builds 2.1.308 and 2.1.309. The drift test of Classic greedy TDD between rep-1 and rep-2 gives M p 0.310. The test of its variance across methods gives p 0.464, so no method is shown to be more consistent than another.",
+        "Lowest observed C among seven replicated designs. Exploratory. The global spread test did not detect a difference (p 0.464)."),
+}
+
+
+def award_places(card, title):
+    entries = re.findall(r"<li\b[^>]*>.*?</li>", card, re.S)
+    medals = [re.search(r'data-(?:medal|k)="(gold|silver|bronze)"', e).group(1) for e in entries]
+    badge = title in ("Cheapest", "Most consistent design")
+    if badge and any(medal != "bronze" for medal in medals):
+        raise ValueError(f"{title}: badge medal needs review")
+    def place(m):
+        attrs, body = m.groups()
+        medal = re.search(r'data-(?:medal|k)="(gold|silver|bronze)"', m.group()).group(1)
+        label = "Bronze badge" if badge else "Joint third · Bronze" if medal == "bronze" and medals.count(medal) > 1 else medal.title()
+        body, n = re.subn(r">(Gold|Silver|Bronze)</span>", f">{label}</span>", body, count=1)
+        if n != 1 or "value=" in attrs:
+            raise ValueError(f"{title}: award place markup needs review")
+        rank = "" if badge else f' value="{("gold", "silver", "bronze").index(medal) + 1}"'
+        return f"<li{attrs}{rank}>{body}</li>"
+    card = re.sub(r"<li\b([^>]*)>(.*?)</li>", place, card, flags=re.S)
+    return card.replace("<ol>", "<ul>").replace("</ol>", "</ul>") if badge else card
+
+
+def award_cards(html):
+    def card(m):
+        block = m.group()
+        title = re.search(r"<(h3|b)>(.*?)</\1>", block).group(2)
+        old, new = AWARD_RULES[title]
+        para = re.search(r"<p\b[^>]*>(.*?)</p>", block, re.S)
+        if unescape(para.group(1)) != old:
+            raise ValueError(f"{title}: award description needs review")
+        detail = (f' <a href="{url("results/consistency", "rep-consistency")}">Scope and limits</a>.' if title == "Most consistent design" else
+                  f' <a href="{url("methodology/analysis", "limits")}">Agreement limits</a>.' if title == "Best CQP/PMD alignment" else "")
+        block = block[:para.start(1)] + escape(new) + detail + block[para.end(1):]
+        return award_places(block, title)
+    return re.sub(r'<(article|div) class="award">.*?</\1>', card, html, flags=re.S)
 
 
 def body(page, snap, idx):
@@ -65,8 +114,13 @@ class ShowcaseParts:
     def awards(self, report):
         """One Awards section: the report scoring rule, the showcase cards, then the report places in a fold."""
         rule, places = re.search(r'<h3 id="awards">Awards</h3>\s*(<p>.*?</p>)\s*(.*)', report, re.S).groups()
-        return (f'<h2 id="awards">Awards</h2>\n{rule}\n{self.parts.pop("Awards")}\n'
-                f"<details><summary>Award places as the report states them</summary>\n{places}\n</details>")
+        old = "Each award ranks the survey methods of one run, lower first, and ties share a place."
+        if rule.count(old) != 1:
+            raise ValueError("award population statement needs review")
+        rule = rule.replace(old, "The first five awards rank the 11 full-1 survey builds, lower first, with ties sharing a place. "
+                            "The consistency badge covers seven replicated designs in rep-1 and rep-2. The full-1 survey ended 2026-10-16.")
+        return (f'<h2 id="awards">Awards</h2>\n{rule}\n{award_cards(self.parts.pop("Awards"))}\n'
+                f"<details><summary>Award places as the report states them</summary>\n{award_cards(places)}\n</details>")
 
     def designs(self, report):
         """The report methods intro over the showcase design cards, which link each design's page."""

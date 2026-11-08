@@ -8,6 +8,7 @@ import functools
 import importlib
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -106,6 +107,35 @@ class Runs(unittest.TestCase):
         self.assertEqual(kalah("snapshot").doc_versions(snap(), html),
                          ["tcp-1-list 1f11dd37", "full-1 64606950", "tcp-1 1f11dd37"])
         self.assertEqual(kalah("snapshot").doc_versions(snap(), "<p>No run.</p>"), [])
+
+
+class ReviewedClaims(unittest.TestCase):
+    def test_reviewed_claims_keep_scope_and_units(self):
+        build = importlib.import_module("build_kalah_tdd_study")
+        rendered = build.render_pages(snap())
+        self.assertIn("67 build entries in 9 run records", rendered["methodology/index.html"])
+        self.assertIn("pooled reference spread", rendered["results/consistency/index.html"])
+        self.assertIn("pooled mean absolute deviation across eligible builds", rendered["methodology/measures/index.html"])
+        self.assertIn("No recorded LOG.md checkpoint reduced the hidden-pass count.", rendered["questions/index.html"])
+        self.assertIn("The reference passes the grader.", rendered["questions/index.html"])
+        for slug, *_ in kalah("pagemap").DESIGNS:
+            self.assertIn("The procedure supplied to the agents.", rendered[f"designs/{slug}/index.html"])
+
+    def test_editorial_mapping_preserves_protected_and_unknown_content(self):
+        pages = kalah("pages")
+        phrase, replacement = "A uniquely reviewed sentence.", "A scoped correction."
+        protected = ''.join(f'<{tag}>{phrase}</{tag}>' for tag in ("pre", "code", "table", "svg", "h2"))
+        protected += f'<p title="{phrase}">An unchanged attribute.</p>'
+        quoted = f'<p class="sub">The glossary row Test says: {phrase}</p>'
+        html = protected + quoted + f'<p>{phrase}</p><p>An unknown added paragraph.</p>'
+        with mock.patch.object(pages, "REVIEWED", (({"questions": 1}, phrase, replacement),)):
+            out = pages.reviewed("questions", html)
+            self.assertIn(protected + quoted, out)
+            self.assertIn(f'<p>{replacement}</p><p>An unknown added paragraph.</p>', out)
+            self.assertEqual(pages.reviewed("data", html), html)
+            for changed in (html.replace(f'<p>{phrase}</p>', ""), html + f'<p>{phrase}</p>'):
+                with self.assertRaisesRegex(ValueError, "reviewed narrative"):
+                    pages.reviewed("questions", changed)
 
 
 if __name__ == "__main__":

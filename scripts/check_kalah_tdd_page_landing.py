@@ -13,6 +13,7 @@ import sys
 import unittest
 import unittest.mock
 from pathlib import Path
+from html import escape
 
 SCRIPTS = Path(__file__).resolve().parent
 ARTIFACT = "https://claude.ai/artifact/5g7jbNAxSnZPjQ2nLEJ15a"
@@ -91,6 +92,18 @@ def missing_text(s):
     for n in (n for source in sources for n in tree(source).root.iter() if n.tag in kinds):
         # Claim tag sentences render as a tag pill holding the kind.
         chunk = (n.tag, kalah("pages.landing").TAG.sub(r"\1", text(n)))
+        card = n.closest(cls="award")
+        if card:
+            title = text(next(c for c in card.elements() if c.tag == "h3"))
+            old, new = kalah("pages.landing").AWARD_RULES[title]
+            if n.tag == "p" and chunk[1] == old:
+                detail = " Scope and limits ." if title == "Most consistent design" else " Agreement limits ." if title == "Best CQP/PMD alignment" else ""
+                chunk = (n.tag, new + detail)
+            if n.tag == "li" and n.attrs.get("data-medal") == "bronze":
+                label = "Bronze badge" if title in ("Cheapest", "Most consistent design") else "Joint third · Bronze" if title == "Fewest errors" else "Bronze"
+                chunk = (n.tag, re.sub(r"^Bronze\b", label, chunk[1]))
+        revised = kalah("pages").reviewed("", f"<{n.tag}>{escape(chunk[1])}</{n.tag}>", strict=False)
+        chunk = (n.tag, text(tree(revised).root))
         if left[chunk]:
             left[chunk] -= 1
         elif chunk[1] != "Kalah TDD showcase":

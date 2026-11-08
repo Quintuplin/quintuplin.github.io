@@ -302,10 +302,11 @@ class Measures(unittest.TestCase):
         items, _ = check().inventory(snap().files)
         rows = {i.key: i.shown for i in items if i.page == check().SHARED and i.source.startswith(check().METHODS)}
         self.assertEqual(len(rows), 12)
+        canonical = check().parse(check().source_version(SLUG, html()))
         for key in rows:
-            self.assertEqual(page().texts[key], 1, rows[key])
+            self.assertEqual(canonical.texts[key], 1, rows[key])
         key = next(iter(rows))
-        root = check().Tree(html()).root
+        root = canonical.root
         text = {}
         check().squashed(root, text)
         node = next(n for n in root.iter() if text.get(id(n)) == key and text.get(id(n.parent)) != key)
@@ -328,7 +329,7 @@ class Measures(unittest.TestCase):
 
     def test_keeps_all_source_text(self):
         have = tagged_texts(page().root)
-        section = check().Tree(kalah("snapshot").section(report(), "columns")).root
+        section = check().Tree(kalah("pages").reviewed(SLUG, kalah("snapshot").section(report(), "columns"), strict=False)).root
         chunks = tagged_texts(section)
         wanted = [(t, s) for t, s in chunks if t in ("p", "li", "dt", "dd") and s]
         self.assertGreater(len(wanted), 64)
@@ -615,7 +616,8 @@ class Measures(unittest.TestCase):
         self.assertGreater(check().metric_defs({**label_pages(), SLUG: html().replace("data-alias=", "data-x=")})[0], [])
 
     def test_fact_labels_defined(self):
-        self.assertEqual(sorted(fact_labels()), ["results/contrasts", "results/test-order"])
+        self.assertEqual(sorted(fact_labels()), ["results/consistency", "results/contrasts", "results/test-order"])
+        self.assertIn("Relative spread, 1 = pooled reference spread", fact_labels()["results/consistency"]["axis label"])
         self.assertIn("Candidates in order", fact_labels()["results/test-order"]["table header"])
         built = {slug: fact_page(labels) for slug, labels in fact_labels().items()}
         for slug, labels in fact_labels().items():

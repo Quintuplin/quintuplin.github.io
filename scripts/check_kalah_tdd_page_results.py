@@ -221,6 +221,10 @@ class Results(unittest.TestCase):
                 self.assertEqual([f[1] for f in figs], [f"{part}.{k}" for k in range(1, len(figs) + 1)])
                 bodies = {id: body for id, _, body in figs}
                 for id, source in zip(ids, want):
+                    if id == "rep-consistency":
+                        self.assertEqual(source.count(">Relative spread, 1 is the average</text>"), 1)
+                        source = source.replace(">Relative spread, 1 is the average</text>",
+                                                ">Relative spread, 1 = pooled reference spread</text>")
                     self.assertEqual(SVG.findall(bodies[id]), SVG.findall(source), id)
                 ids = set(study().parse(html(slug)).ids)
                 for target in re.findall(r'<a href="#([^"]+)"[^>]*>Data</a>', html(slug)):
@@ -231,7 +235,8 @@ class Results(unittest.TestCase):
         squash = study().squash
         for slug in SLUGS:
             texts = study().parse(html(slug)).texts
-            want = [squash(study().Tree(m).root.text()) for sec in sources(slug) for m in P_OR_ENTRY.findall(sec)]
+            want = [squash(study().Tree(m).root.text()) for sec in sources(slug)
+                    for m in P_OR_ENTRY.findall(kalah("pages").reviewed(slug, sec, strict=False))]
             with self.subTest(slug):
                 self.assertTrue(want)
                 self.assertEqual([t for t in want if not texts[t]], [])
@@ -511,7 +516,8 @@ class Results(unittest.TestCase):
         checks = script("check_kalah_tdd_flow")
         fig, root = figure_of("results/test-order", "fig-9-2")
         boxes = checks.node_boxes(root)
-        self.assertEqual(len(boxes), len(re.findall(r"<li>", fig)))
+        disclosure = next(n for n in study().Tree(fig).root.iter() if n.tag == "details")
+        self.assertEqual(len(boxes), sum(n.tag == "li" for n in disclosure.iter()))
         self.assertEqual(len(boxes), len(snap().facts["stages"]["tcp-random"]["stages"]))
         texts = ["".join(t.itertext()) for t in root.iter(NS + "text")]
         self.assertIn("repeat per candidate", texts)

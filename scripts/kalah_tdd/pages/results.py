@@ -93,7 +93,14 @@ def section(snap, idx, slug, id, numbers, extra=lambda numbers: ""):
     then the HTML of extra(numbers), built after the section's figures so its own figures number after theirs."""
     html = links.rewrite(own(snap.files[snapshot.REPORT], id), snapshot.REPORT, slug, idx)
     title = TITLE.match(html).group(3)
-    framed = {"p": str, "entries": str, "figure": lambda b: parts.source_figure(next(numbers), b),
+    def figure(block):
+        if block.startswith('<figure id="rep-consistency">'):
+            old = ">Relative spread, 1 is the average</text>"
+            if block.count(old) != 1:
+                raise ValueError("rep-consistency axis interpretation needs review")
+            block = block.replace(old, ">Relative spread, 1 = pooled reference spread</text>")
+        return parts.source_figure(next(numbers), block)
+    framed = {"p": str, "entries": str, "figure": figure,
               "tables": lambda b: parts.table(b.removeprefix('<div class="shaped">').removesuffix("</div>"), title)}
     body = "".join(framed[k](b) for k, b in split(id, html))
     return f'<section aria-labelledby="{id}"><h2 id="{id}">{title}</h2>{body}{extra(numbers)}</section>'
@@ -111,7 +118,10 @@ def pooled(snap, idx):
     if not m:
         raise ValueError("consistency-table no longer names the runs it pools")
     href = links.target("#consistency-table", snapshot.REPORT, CONSISTENCY, idx)
-    return f'<p>Each consistency score {escape(m.group(1))}, as the <a href="{escape(href)}">consistency table</a> states.</p>'
+    return (f'<p>Each consistency score {escape(m.group(1))}, as the <a href="{escape(href)}">consistency table</a> states.</p>'
+            '<p>C combines unadjusted mutation, classes and cost to completion. It pools raw costs across CLI builds '
+            '2.1.308 and 2.1.309 without correcting that change. The Classic greedy TDD drift test gave M p 0.310. '
+            'The global spread test did not detect a difference (p 0.464).</p>')
 
 
 def found(regex, text):
