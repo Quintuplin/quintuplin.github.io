@@ -26,11 +26,11 @@
   for (const select of [false, true]) {
     register({
       id: select ? "quickselect" : "random-pivot-quicksort", title: select ? "Random-pivot quickselect" : "Random-pivot quicksort",
-      presets: runs, params: select ? [range("rank", "Rank from smallest (1 is first)", 1, 6, 3)] :
+      presets: runs, params: select ? [range("rank", "Rank from smallest (capped at input length)", 1, Math.max(...runs.map(p => p.values.length)), 3)] :
         [{ key: "order", label: "Sort order", options: ["Smallest first", "Largest first"], value: "Smallest first" }],
       description: select ? "Partition around a random pivot. Continue only in the part containing the requested rank. Equal values occupy consecutive ranks." :
         "Choose a random pivot in each subarray. Group smaller, equal and larger values, then sort the two outer groups.",
-      code: ["A ← input", "visit(lo, hi):", select ? "    if hi − lo = 1: return A[lo]" : "    if hi − lo ≤ 1: return",
+      code: [select ? "A ← input; rank ← min(requested, length(A))" : "A ← input", "visit(lo, hi):", select ? "    if hi − lo = 1: return A[lo]" : "    if hi − lo ≤ 1: return",
         "    pivot ← uniformChoice(A[lo:hi]); groups ← [[], [], []]",
         "    for x in A[lo:hi]: groups[1 + compare(x,pivot,order)].append(x)",
         "    before, equal, after ← groups; A[lo:hi] ← before ++ equal ++ after",
@@ -44,13 +44,17 @@
         const frames = [];
         const vals = list => list.map(item => item.v);
         const order = params.order === "Largest first" ? -1 : 1;
+        const rank = select ? Math.min(params.rank, a.length) : undefined;
         function emit(line, work, lo, hi, groups = new Map(), focus) {
           record(frames, line, work, a.map((item, i) => {
             const lane = groups.get(item) ?? (i >= lo && i < hi ? 0 : -1);
             return cell(item.id, String(item.v), i * 2, item.v / 8, lane * 2, lane + 1, item === focus, "bar");
           }));
         }
-        emit(0, "Input A = " + show(vals(a)) + (select ? ". Requested rank = " + params.rank : ". Order = " + params.order) + ".", 0, a.length);
+        const setting = select ? "Valid ranks = 1…" + a.length + ". " +
+          (rank < params.rank ? "Requested " + params.rank + " exceeds " + a.length + ". " : "") + "Rank = " + rank :
+          "Order = " + params.order;
+        emit(0, "Input A = " + show(vals(a)) + ". " + setting + ".", 0, a.length);
         function visit(lo, hi) {
           if (hi - lo <= 1) {
             emit(2, "A[" + lo + ":" + hi + "] = " + show(vals(a.slice(lo, hi))) + ". Base case.", lo, hi);
@@ -72,7 +76,6 @@
           const first = lo + parts[0].length, last = first + parts[1].length;
           emit(5, "A[" + lo + ":" + hi + "] ← " + parts.map(p => show(vals(p))).join(" ++ ") + ".", lo, hi, groups);
           if (select) {
-            const rank = params.rank;
             const side = rank <= first ? "left" : rank <= last ? "equal" : "right";
             emit(side === "left" ? 6 : side === "equal" ? 7 : 8, "Pivot ranks = " + (first + 1) + "…" + last +
               ". Rank " + rank + " lies in " + side + ".", lo, hi, groups, pivot);
@@ -84,7 +87,7 @@
           visit(last, hi);
         }
         const answer = visit(0, a.length);
-        emit(select ? 9 : 7, select ? "Rank " + params.rank + " = " + answer + "." : "Sorted A = " + show(vals(a)) + ".", 0, a.length);
+        emit(select ? 9 : 7, select ? "Rank " + rank + " = " + answer + "." : "Sorted A = " + show(vals(a)) + ".", 0, a.length);
         return frames;
       }
     });

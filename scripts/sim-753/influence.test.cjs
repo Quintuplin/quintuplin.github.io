@@ -267,6 +267,26 @@ test("greedy scores every remaining node against the updated seed set", () => {
   });
 });
 
+test("quickselect exposes every rank and switches safely between six and eight entries", () => {
+  const spec = specs.get("quickselect");
+  const control = spec.params.find(p => p.key === "rank");
+  assert.equal(control.min, 1);
+  for (const i of [1, 2, 1, 0, 2]) {
+    const n = spec.presets[i].values.length;
+    assert.ok(control.max >= n);
+    for (let rank = 1; rank <= n; rank += control.step) {
+      const frames = lesson(spec.id, i, { rank });
+      const sorted = bracket(frames[0].work).map(Number).sort((a,b) => a - b);
+      assert.equal(frames.at(-1).work, "Rank " + rank + " = " + sorted[rank - 1] + ".");
+    }
+    const carried = lesson(spec.id, i, { rank: 8 });
+    assert.ok(carried.at(-1).work.startsWith("Rank " + n + " = "));
+    if (n < 8) assert.ok(carried[0].work.includes("Requested 8 exceeds " + n));
+  }
+  assert.equal(lesson(spec.id, 2, { rank: 7 }).at(-1).work, "Rank 7 = 31.");
+  assert.equal(lesson(spec.id, 2, { rank: 8 }).at(-1).work, "Rank 8 = 36.");
+});
+
 for (const id of ["quickselect", "random-pivot-quicksort"]) {
   test(id + " preserves duplicates, partitions around the pivot and returns the exact answer", () => {
     examples(id, run => {
