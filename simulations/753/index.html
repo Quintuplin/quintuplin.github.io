@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Algorithm simulator directory · COMPSCI 753</title>
+<meta name="description" content="Explore algorithms step by step with small datasets, a 3D view and a working notebook.">
+<link rel="stylesheet" href="catalog.css">
+<style>
+.backdrop { background-image: url("/assets/bg.jpg"); }
+.local .backdrop { background-image: url("../../assets/bg.jpg"); }
+.lab-sheet { backdrop-filter: blur(12px); }
+@media (prefers-color-scheme: dark) { .backdrop { filter: brightness(.5); } }
+</style>
+<script>if (location.protocol === "file:") document.documentElement.classList.add("local");</script>
+</head>
+<body>
+<div class="backdrop" aria-hidden="true"></div>
+<main class="lab-sheet directory">
+<nav class="site-bar" aria-label="Site">
+  <a href="/">Home</a>
+  <a href="/about">About</a>
+  <a href="/cv">Resume</a>
+  <a href="/projects">Projects</a>
+  <a class="external" href="https://www.linkedin.com/in/jack-fraser-3a137ba3/">LinkedIn</a>
+  <a href="https://github.com/quintuplin">GitHub</a>
+</nav>
+<header>
+<p class="course">COMPSCI 753</p>
+<h1>Algorithm simulator directory</h1>
+<p>Explore algorithms step by step with small datasets, a 3D view and a working notebook.</p>
+</header>
+<nav class="topics" aria-label="Jump to topic">
+  <a href="#topic-1">Graphs</a>
+  <a href="#topic-2">Hashing and similarity</a>
+  <a href="#topic-3">Influence</a>
+  <a href="#topic-4">Latent factors</a>
+  <a href="#topic-5">Nearest-neighbour search</a>
+  <a href="#topic-6">Randomised algorithms</a>
+  <a href="#topic-7">Recommenders</a>
+  <a href="#topic-8">Streams and sketches</a>
+</nav>
+<section aria-labelledby="topic-1">
+<h2 id="topic-1">Graphs</h2>
+<ul class="lab-list">
+  <li><a href="brandes/index.html">Brandes edge betweenness</a><p>Count shortest paths breadth first. Send credit back through their parents in reverse order.</p></li>
+  <li><a href="clustering-coefficient/index.html">Clustering coefficient</a><p>Inspect every pair of neighbours around a vertex to see which possible triangles close.</p></li>
+  <li><a href="fiedler-partition/index.html">Fiedler spectral partition</a><p>Use the second-smallest Laplacian eigenvector to split connected vertices into two groups.</p></li>
+  <li><a href="girvan-newman/index.html">Girvan–Newman community detection</a><p>Remove one highest-betweenness edge and measure the remaining graph again. Ties follow input order.</p></li>
+  <li><a href="graph-cuts/index.html">Graph cuts</a><p>Try every two-sided partition of a small graph and compare the cost under three objectives.</p></li>
+  <li><a href="greedy-newman/index.html">Greedy Newman modularity</a><p>Start with one community per vertex and merge the pair with the greatest gain in modularity.</p></li>
+  <li><a href="link-farm/index.html">Link farm</a><p>Trace the feedback between a target and its supporting pages. Change the farm size to measure its effect.</p></li>
+  <li><a href="pagerank/index.html">PageRank</a><p>At link probability 1, the walk follows every available link step without ordinary teleportation. Walks at dead ends still restart uniformly.</p></li>
+  <li><a href="personalised-pagerank/index.html">Personalised PageRank</a><p>Watch a chosen restart set change where a walk spends its time.</p></li>
+  <li><a href="spectral-k-means/index.html">Spectral clustering with k-means</a><p>Embed each vertex in the lowest Laplacian eigenvectors and run k-means on those rows.</p></li>
+  <li><a href="trustrank/index.html">TrustRank and spam mass</a><p>Compare uniform PageRank with a walk that restarts on a trusted directory.</p></li>
+</ul>
+</section>
+<section aria-labelledby="topic-2">
+<h2 id="topic-2">Hashing and similarity</h2>
+<ul class="lab-list">
+  <li><a href="lsh-amplification/index.html">AND/OR amplification and sensitivity</a><p>Tune independent MinHash tests for near and far pairs. Depth separates the base, AND and OR stages. Height gives the collision probability.</p></li>
+  <li><a href="universal-hashing/index.html">Carter–Wegman universal hashing</a><p>Pack two base-17 fields into one number. A random nonzero multiplier and offset send distinct keys to distinct field residues before folding into slots. The collision probability is at most 1 / slots.</p></li>
+  <li><a href="chained-dictionary/index.html">Chained hash dictionary</a><p>Insert keys, search a bucket and unlink a matching entry. Depth measures position in the chain.</p></li>
+  <li><a href="shingling-jaccard/index.html">Character shingles and Jaccard similarity</a><p>Slide a window along each string. Each distinct shingle occupies one column, with a depth layer for each document.</p></li>
+  <li><a href="lsh-banding/index.html">LSH signature banding</a><p>Partition eight signature rows into equal bands. Depth separates bands, horizontal position identifies a row and height separates documents.</p></li>
+  <li><a href="minhash-permutation/index.html">MinHash by row permutation</a><p>Scan a shuffled feature order until each set records its first rank. Height shows the rank and depth identifies the set.</p></li>
+  <li><a href="minhash-one-pass/index.html">One-pass MinHash</a><p>Estimate agreement among the 42 affine permutations modulo seven in one pass. A uniformly shuffled feature order gives the Jaccard collision probability. Restricting the order to affine maps can change that probability.</p></li>
+  <li><a href="simhash/index.html">SimHash by random hyperplanes</a><p>Sample a plane with three independent standard normal coordinates for its normal. Its orientation is uniform in space. Two nonzero vectors at angle θ have matching sign bits with probability 1 − θ/π.</p></li>
+</ul>
+</section>
+<section aria-labelledby="topic-3">
+<h2 id="topic-3">Influence</h2>
+<ul class="lab-list">
+  <li><a href="live-edge-spread/index.html">Exact live-edge spread</a><p>Enumerate every live or blocked configuration of a small independent-cascade graph. Weight each reachable set by the probability of its configuration.</p></li>
+  <li><a href="greedy-influence/index.html">Greedy influence maximisation</a><p>Add the node with the largest gain in expected spread. Recalculate every remaining gain after each choice. Alphabetical order breaks ties.</p></li>
+  <li><a href="independent-cascade/index.html">Independent cascade</a><p>Follow a relay from its starting nodes. Each newly active node gets one independent attempt on each inactive neighbour.</p></li>
+  <li><a href="linear-threshold/index.html">Linear threshold</a><p>Each node draws a threshold once. At each wave, add the weights from already active neighbours and compare the sum with that threshold.</p></li>
+  <li><a href="mutually-exclusive-cascade/index.html">Mutually exclusive cascade</a><p>Each node independently picks at most one incoming edge. Its parent can activate it only if the relay reaches that parent.</p></li>
+</ul>
+</section>
+<section aria-labelledby="topic-4">
+<h2 id="topic-4">Latent factors</h2>
+<ul class="lab-list">
+  <li><a href="latent-factor-sgd/index.html">Latent factors with stochastic gradient descent</a><p>Learn one vector per user and item from observed ratings. Compare their dot products with and without learned bias offsets.</p></li>
+  <li><a href="truncated-svd/index.html">Truncated singular value decomposition</a><p>Decompose a complete ratings table into rank-one patterns. Reconstruct the table and measure what the discarded pattern costs.</p></li>
+</ul>
+</section>
+<section aria-labelledby="topic-5">
+<h2 id="topic-5">Nearest-neighbour search</h2>
+<ul class="lab-list">
+  <li><a href="exact-neighbours/index.html">Exact nearest-neighbour scan</a><p>Measure every point against the query. Watch the nearest k change as each point arrives.</p></li>
+  <li><a href="greedy-graph/index.html">Greedy graph search</a><p>Expand the closest discovered point first. The expansion budget decides how far the search can travel from its entry point.</p></li>
+  <li><a href="hnsw/index.html">Hierarchical navigable small-world graph</a><p>Insert points into nested graph layers, then route a query from the highest layer to the base. Each layer view shows the original three coordinates.</p></li>
+  <li><a href="inverted-file/index.html">Inverted file search</a><p>Index points by their closest trained centre. Probe the nearest lists and measure the original vectors inside them.</p></li>
+  <li><a href="k-means-codebook/index.html">K-means coarse codebook training</a><p>Train a small set of representatives for an inverted index. Each update moves one centre to the mean of its assigned points.</p></li>
+  <li><a href="lsh-radius/index.html">Locality-sensitive hashing for a radius query</a><p>When a point lies within the target radius, the search aims to find one within factor × radius. Random coordinate cuts form the bits. Match every bit in one table to become a candidate.</p></li>
+  <li><a href="product-quantization/index.html">Product quantization distance lookup</a><p>Split four coordinates into two pairs and store one code per pair. Compare an uncompressed query to these codes by adding two lookup entries. The plot shows the first three coordinates.</p></li>
+</ul>
+</section>
+<section aria-labelledby="topic-6">
+<h2 id="topic-6">Randomised algorithms</h2>
+<ul class="lab-list">
+  <li><a href="monte-carlo-find-a/index.html">Bounded Monte Carlo find-a</a><p>Probe uniform random positions with replacement. A miss at the probe limit is inconclusive.</p></li>
+  <li><a href="card-guessing/index.html">Card guessing</a><p>Guess before turning over each card. Compare the number correct with the expectation for the chosen memory rule.</p></li>
+  <li><a href="coupon-collector/index.html">Coupon collector</a><p>Draw uniform coupons with replacement until each type has appeared. Watch the probability of finding a new type fall as the collection grows.</p></li>
+  <li><a href="las-vegas-find-a/index.html">Las Vegas find-a</a><p>Probe uniform random positions with replacement until an a is found. Every successful return identifies its position.</p></li>
+  <li><a href="quickselect/index.html">Random-pivot quickselect</a><p>Partition around a random pivot. Continue only in the part containing the requested rank. Equal values occupy consecutive ranks.</p></li>
+  <li><a href="random-pivot-quicksort/index.html">Random-pivot quicksort</a><p>Choose a random pivot in each subarray. Group smaller, equal and larger values, then sort the two outer groups.</p></li>
+</ul>
+</section>
+<section aria-labelledby="topic-7">
+<h2 id="topic-7">Recommenders</h2>
+<ul class="lab-list">
+  <li><a href="bias-residual/index.html">Bias baseline and residual prediction</a><p>Estimate a usual rating from user and item biases. Correct it with the neighbours’ weighted surprises.</p></li>
+  <li><a href="content-profile/index.html">Content ranking with TF-IDF</a><p>Turn tag counts into item profiles. Rank unread titles by their cosine similarity to a reader’s liked titles.</p></li>
+  <li><a href="item-collaborative-filtering/index.html">Item-based collaborative filtering</a><p>Compare items to fill one missing rating. Inspect how common observations and negative similarities affect the estimate.</p></li>
+  <li><a href="learned-interpolation/index.html">Learning interpolation weights</a><p>Fit two neighbour weights by minimising the sum of squared errors on Ada’s observed ratings. Apply them to the neighbours’ residuals on Fir.</p></li>
+  <li><a href="ranking-evaluation/index.html">Precision, recall and ROC area</a><p>Evaluate a scored list against held-out likes. Sweep a score threshold through tied groups to draw the ROC curve.</p></li>
+  <li><a href="rating-rmse/index.html">Root mean squared rating error</a><p>Compare predictions with held-out ratings on the same scale. Shift every prediction to see how calibration changes the error.</p></li>
+  <li><a href="user-collaborative-filtering/index.html">User-based collaborative filtering</a><p>Compare users to fill one missing rating. Inspect how common observations and negative similarities affect the estimate.</p></li>
+</ul>
+</section>
+<section aria-labelledby="topic-8">
+<h2 id="topic-8">Streams and sketches</h2>
+<ul class="lab-list">
+  <li><a href="count-min-sketch/index.html">Count-Min Sketch</a><p>Hash each tag to one counter per row. Other tags can inflate those counters, so take the smallest reading.</p></li>
+  <li><a href="fixed-proportion-sampling/index.html">Fixed-proportion key sampling</a><p>Hash each bird tag into one of six buckets. Every sighting of a tag follows its first sighting into or out of the sample.</p></li>
+  <li><a href="misra-gries/index.html">Misra–Gries frequent items</a><p>Keep a short list of candidate tags. When every counter is occupied, cancel one sighting of each candidate together with the incoming sighting.</p></li>
+  <li><a href="partitioned-bloom-filter/index.html">Partitioned Bloom filter</a><p>Each hash owns an equal slice of the bit array. A query checks one bit in each slice.</p></li>
+  <li><a href="repeated-bloom-filter/index.html">Repeated Bloom filter</a><p>Insert each tag into independent copies. A membership query passes only when every copy accepts it.</p></li>
+  <li><a href="reservoir-sampling/index.html">Reservoir sampling</a><p>Draw a uniform sample of sightings as they arrive. One slot gives RS1, several give RSs, and independent copies can sample the same sighting.</p></li>
+  <li><a href="count-sketch/index.html">Signed Count Sketch</a><p>Signed counters can move below zero. Undo the tag’s sign in each row and take the median to estimate its frequency.</p></li>
+  <li><a href="standard-bloom-filter/index.html">Standard Bloom filter</a><p>Several hashes set bits in one shared array. A zero at any queried address proves the tag is absent.</p></li>
+</ul>
+</section>
+</main>
+<script>
+if (location.protocol === "file:") {
+  for (const a of document.querySelectorAll('.site-bar a[href^="/"]')) {
+    a.href = "https://quintuplin.github.io" + a.getAttribute("href");
+  }
+}
+</script>
+</body>
+</html>

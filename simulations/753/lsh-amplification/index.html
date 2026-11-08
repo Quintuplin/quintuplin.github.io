@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AND/OR amplification and sensitivity · COMPSCI 753</title>
+<meta name="description" content="Tune independent MinHash tests for near and far pairs. Depth separates the base, AND and OR stages. Height gives the collision probability.">
+<link rel="stylesheet" href="../catalog.css">
+<style>
+.backdrop { background-image: url("/assets/bg.jpg"); }
+.local .backdrop { background-image: url("../../../assets/bg.jpg"); }
+.lab-sheet { backdrop-filter: blur(12px); }
+@media (prefers-color-scheme: dark) { .backdrop { filter: brightness(.5); } }
+</style>
+<script>if (location.protocol === "file:") document.documentElement.classList.add("local");</script>
+<link rel="stylesheet" href="../shared/player.css">
+</head>
+<body class="lab-route">
+<div class="backdrop" aria-hidden="true"></div>
+<header class="lab-sheet lab-heading">
+<nav class="site-bar" aria-label="Site">
+  <a href="/">Home</a>
+  <a href="/about">About</a>
+  <a href="/cv">Resume</a>
+  <a href="/projects">Projects</a>
+  <a class="external" href="https://www.linkedin.com/in/jack-fraser-3a137ba3/">LinkedIn</a>
+  <a href="https://github.com/quintuplin">GitHub</a>
+</nav>
+<a class="catalog-link" href="../index.html">← Simulator directory</a>
+<h1>AND/OR amplification and sensitivity</h1>
+<p>Tune independent MinHash tests for near and far pairs. Depth separates the base, AND and OR stages. Height gives the collision probability.</p>
+</header>
+<main id="sim" data-source="../domains/similarity.js"></main>
+<script>
+if (location.protocol === "file:") {
+  for (const a of document.querySelectorAll('.site-bar a[href^="/"]')) {
+    a.href = "https://quintuplin.github.io" + a.getAttribute("href");
+  }
+}
+</script>
+<script src="../shared/renderer.js"></script>
+<script src="../shared/player.js"></script>
+<script src="../domains/similarity.js"></script>
+<script>Sims.boot("lsh-amplification");</script>
+</body>
+</html>
