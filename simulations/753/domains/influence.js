@@ -8,7 +8,7 @@
   const seeds = { key: "seeds", label: "Starting nodes", options: ["A", "B", "A and B"], value: "A" };
   const boost = { key: "boost", label: "Extra edge weight (sixteenths)", min: 0, max: 3, step: 1, value: 1 };
   const positions = { A: [-2, 1, -1], B: [0, 2, 1], C: [1, 0, -1], D: [3, 1, 1], E: [3, -1, -2] };
-  const names = set => [...set].join(", ") || "∅";
+  const names = set => [...set].join(", ");
   const runCount = active => "Activated nodes in this run = |{" + names(active) + "}| = " + active.size + ".";
   const freezeList = items => Object.freeze(items.map(Object.freeze));
   const register = spec => globalThis.Sims.register({ topic: "Influence", presets, ...spec });

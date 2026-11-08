@@ -132,6 +132,18 @@ test("independent cascade uses one trial per eligible edge per frontier", () => 
   });
 });
 
+test("handwritten seed and frontier sets have zero members when empty", () => {
+  const initial = lesson("greedy-influence")[0];
+  assert.deepEqual(lit(initial), []);
+  assert.ok(initial.work.endsWith("Initial seeds = {}."));
+  const frames = lesson("independent-cascade");
+  const waves = onLine(frames, 5);
+  const [previous, last] = waves.slice(-2);
+  assert.deepEqual(lit(last), lit(previous));
+  assert.ok(last.work.startsWith("Activate {}."));
+  assert.ok(frames.every(f => !f.work.includes("{∅}")));
+});
+
 test("linear thresholds persist and only the previous wave contributes to each comparison", () => {
   examples("linear-threshold", run => {
     for (const seeds of ["A", "A and B"]) {
