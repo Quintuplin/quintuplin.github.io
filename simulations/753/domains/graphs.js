@@ -507,6 +507,7 @@
       previous = groups;
     }
   }
+  const signTolerance = 1e-10;
   for (const kway of [false, true]) {
     register({
       id: kway ? "spectral-k-means" : "fiedler-partition",
@@ -522,7 +523,7 @@
         ...(kway ? ["centres ← farthestFirst(rows,k)",
           "group[i] ← argmin(c, ‖rows[i]−centres[c]‖²); if unchanged: return group",
           "for c in clusters: centres[c] ← mean(rows[group == c]); repeat"] :
-          ["v ← U[:,2]; group[i] ← (v[i] > 0) if signRule else inUpperHalf(v,i)"])],
+          [`v ← U[:,2]; group[i] ← (v[i] > ${signTolerance}) if signRule else inUpperHalf(v,i)`])],
       trace(preset, params, rng) {
         const g = graph(preset, rng);
         const { frames, show } = notebook(g);
@@ -541,10 +542,10 @@
         } else {
           const order = indices(g.n).sort((a, b) => v[a] - v[b]);
           const bySign = params.split === "Sign of the Fiedler vector";
-          const groups = v.map((x, i) => Number(bySign ? x > 1e-10 : order.indexOf(i) >= g.n / 2));
+          const groups = v.map((x, i) => Number(bySign ? x > signTolerance : order.indexOf(i) >= g.n / 2));
           const rowProduct = sum(lap[0].map((x, j) => x * v[j]));
           show(2, `Check A. (Lv) at A = ${nfmt(rowProduct)} = λ₂ × v[A] = ${nfmt(pairs[1].lambda)} × ${nfmt(v[0])}.`, { values: v, depth: v, active: [0] });
-          show(3, `${bySign ? "Positive coordinates versus zero or negative" : "Split the sorted coordinates halfway"}. Partition = ${partition(groups)}.`, { values: v, depth: v, groups });
+          show(3, `${bySign ? `Coordinates above ${signTolerance} enter group 1. All others enter group 0` : "Split the sorted coordinates halfway"}. Partition = ${partition(groups)}.`, { values: v, depth: v, groups });
         }
         return frames;
       }

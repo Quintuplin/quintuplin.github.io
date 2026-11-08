@@ -283,6 +283,17 @@ function lapTimes(W, v) {
   return W.map((row, i) => sum(row.map((w, j) => w * (v[i] - v[j]))));
 }
 const dot = (a, b) => sum(a.map((x, i) => x * b[i]));
+test("Fiedler sign split explains where a tiny positive coordinate goes", () => {
+  const spec = specs.get("fiedler-partition");
+  const p = spec.presets.find(p => p.name === "Neighbourhood footpaths");
+  const final = spec.trace(p, { split: "Sign of the Fiedler vector" }, playerRandom(1)).at(-1);
+  const nearZero = final.nodes.filter(n => n.value > 0 && n.value <= 1e-10);
+  assert.ok(nearZero.length);
+  nearZero.forEach(n => assert.equal(n.group, 0));
+  assert.match(spec.code[final.line], /v\[i\] > 1e-10/);
+  assert.match(final.work, /1e-10/);
+});
+
 test("Fiedler eigenvector has unit norm, zero sum, second eigenvalue and the requested split", () => {
   each("fiedler-partition", trace => {
     const fs = trace({}), W = matrix(fs[0]), final = fs.at(-1);
