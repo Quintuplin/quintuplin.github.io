@@ -38,6 +38,21 @@ def frame(text=("One", UNSAFE)):
 
 
 class Parts(unittest.TestCase):
+    def test_table_classifies_numbers_without_changing_values(self):
+        table = '<table><thead><tr><th>Value</th><th>Meaning</th></tr></thead><tbody><tr><th>Score</th>' \
+                '<td class="nowrap">1,234.50</td><td>12 designs share a task</td><td>15/15</td></tr></tbody></table>'
+        out = kalah("parts").table(table, "Scores")
+        self.assertIn('<td class="nowrap number">1,234.50</td>', out)
+        self.assertIn('<td class="number">15/15</td>', out)
+        self.assertIn('<td>12 designs share a task</td>', out)
+        self.assertIn('<th scope="col">Value</th>', out)
+        self.assertIn('<th scope="row">Score</th>', out)
+
+    def test_source_figure_tables_get_named_keyboard_regions(self):
+        fig = CAPTIONED.search(report()).group(0)
+        out = kalah("parts").source_figure("1.1", fig)
+        self.assertRegex(out, r'<div class="table-scroll" role="region" tabindex="0" aria-label="[^"]+"><table')
+
     def test_table_is_named_scroll_region(self):
         self.assertEqual(kalah("parts").table("<table></table>", UNSAFE),
                          '<div class="table-scroll" role="region" tabindex="0" aria-label="a &lt;b&gt; &amp; &quot;c&quot;">'

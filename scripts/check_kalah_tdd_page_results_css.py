@@ -21,7 +21,7 @@ from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
-from kalah_tdd import pagemap  # noqa: E402
+from kalah_tdd import pagemap, parts  # noqa: E402
 
 STUDY = SCRIPTS.parent / "studies/kalah-tdd-study"
 FIXTURE = SCRIPTS / "fixtures/kalah-tdd/results-qtable.fixture"
@@ -86,6 +86,18 @@ addEventListener("load", async () => {
       const s = cs(n);
       check("nested-border", [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth].every(b => b === "0px"),
         n.className);
+    }
+    const formatted = d.getElementById("format-table");
+    if (formatted) {
+      const cells = [...formatted.querySelectorAll("td.number")], region = formatted.parentElement;
+      counts.numbers = cells.length;
+      check("table-format", region.scrollWidth <= region.clientWidth && cells.length === 2, "numeric records fit");
+      for (const cell of cells) {
+        const range = d.createRange(); range.selectNodeContents(cell);
+        check("table-format", range.getClientRects().length === 1 && cs(cell).overflowWrap === "normal" &&
+          cs(cell).fontVariantNumeric.includes("tabular-nums"), cell.textContent);
+      }
+      if (f.width <= 640) check("table-format", cs(region).borderTopWidth === "0px", "record cards have one border");
     }
     // Study dot charts hold their drawn width, so chart text stays at its 12px size and the region scrolls instead.
     for (const svg of d.querySelectorAll(".diagram svg.plot")) {
@@ -236,6 +248,12 @@ def frames():
     out.append(("forced workflow overflow 375", 375, doc("experimental-design", forced)))
     hidden = css() + "\n.diagram svg.flow text:first-of-type,.diagram [data-node]{visibility:hidden!important}"
     out.append(("hidden workflow label 375", 375, doc("experimental-design", hidden)))
+    formatted = parts.table('<table id="format-table" class="cols"><thead><tr><th>Method</th><th>Score</th><th>Notes</th>'
+                            '</tr></thead><tbody><tr><td data-th="Method">Functions first, classes later</td>'
+                            '<td data-th="Score">1,234.50</td><td data-th="Notes">A descriptive cell wraps naturally.</td></tr>'
+                            '<tr><td data-th="Method">Most informative next test</td><td data-th="Score">15/15</td>'
+                            '<td data-th="Notes">A longer explanation keeps the score intact.</td></tr></tbody></table>', 'Scores')
+    out += [(f"formatted table {w}", w, doc("results/contrasts", css(), formatted)) for w in WIDTHS]
     return out
 
 
@@ -294,6 +312,11 @@ class ResultsCss(unittest.TestCase):
                 self.assertEqual(probe()[name]["counts"]["summaries"], probe()[name]["summaries in html"])
         # One contents summary per frame; the rest are figure table views.
         self.assertGreater(sum(probe()[n]["counts"]["summaries"] - 1 for n in real()), 0)
+
+    def test_numeric_tokens_and_record_cards_remain_readable(self):
+        for width in WIDTHS:
+            with self.subTest(width):
+                self.assertEqual(fails(f"formatted table {width}", "table-format"), [])
 
     def test_stacked_cols_375(self):
         for name in real(375):

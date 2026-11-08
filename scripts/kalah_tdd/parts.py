@@ -20,6 +20,15 @@ def numbers(slug):
 
 def table(html, label):
     """A table in a named, keyboard-scrollable region, so a wide table scrolls inside the column."""
+    def cell(m):
+        attrs, content = m.groups()
+        value = unescape(re.sub(r"<[^>]+>", "", content)).strip()
+        if re.fullmatch(r"[-+−]?\d[\d.,%/()[\] ±–−+eE-]*", value):
+            attrs = re.sub(r'class="([^"]*)"', r'class="\1 number"', attrs) if 'class="' in attrs else attrs + ' class="number"'
+        return f"<td{attrs}>{content}</td>"
+    scope = lambda text, kind: re.sub(r'<th(?![^>]*\bscope=)(?=[\s>])', f'<th scope="{kind}"', text)
+    html = re.sub(r"<thead\b.*?</thead>", lambda m: scope(m.group(), "col"), html, flags=re.S)
+    html = re.sub(r"<td\b([^>]*)>(.*?)</td>", cell, scope(html, "row"), flags=re.S)
     return f'<div class="table-scroll" role="region" tabindex="0" aria-label="{escape(label)}">{html}</div>'
 
 
@@ -60,6 +69,7 @@ def source_figure(n, fig_html):
         raise ValueError(f"not a captioned report figure: {fig_html[:60]!r}")
     id, caption, title, plot, legend, details = m.groups()
     label = escape(unescape(re.sub(r"<[^>]+>", "", title)).strip())
+    details = re.sub(r"<table\b.*?</table>", lambda m: table(m.group(), unescape(label)), details, flags=re.S)
     return (f'<figure id="{id}" aria-label="Figure {n}: {label}"><figcaption><p class="fig-n">Figure {n}</p>{caption}'
             f'{plot}<div class="fig-foot">{legend}{foot(n, "#" + id + "-data")}</div>'
             f'<details id="{id}-data">{details}</details></figure>')
