@@ -203,6 +203,8 @@ class Merge(unittest.TestCase):
                 verdict = flat(re.search(r"<h2>Verdict</h2><p>(.*?)</p>", view(slug), re.S).group(1))
                 conclusion = flat(re.search(r'<h2 id="conclusion">Conclusion</h2>\s*<p>(.*?)</p>', method(slug), re.S).group(1))
                 self.assertEqual(conclusion, verdict + " Tag: recomputed.")
+                revised = lambda value: flat(kalah("pages").reviewed(f"designs/{slug}", f"<p>{value}</p>", strict=False))
+                conclusion, verdict = revised(conclusion), revised(verdict)
                 self.assertEqual(text(heading_after(f"designs/{slug}", "conclusion")), conclusion)
                 self.assertEqual(page.count(verdict), 1)
                 card = flat(re.search(r"</h3>\s*<p>(.*?)</p>", report_section(heading), re.S).group(1))
@@ -467,7 +469,7 @@ class StageFlow(unittest.TestCase):
                 width = int(svg.attrs["viewbox"].split()[2])
                 self.assertEqual(svg.attrs.get("style"), f"max-width:{width}px" + (f";min-width:{width}px" if width < least else ""))
                 nodes = [r for r in svg.iter() if r.tag == "rect" and "node" in r.classes()]
-                items = [li for li in fig.iter() if li.tag == "li"]
+                items = [li for li in fig.iter() if li.tag == "li" and li.closest("details")]
                 self.assertEqual((len(nodes), len(items)), (len(stages), len(stages)))
                 ids = [n.attrs["id"] for n in svg.iter() if n.attrs.get("id")]
                 self.assertTrue(ids and all(i.startswith("f5-") for i in ids), ids)

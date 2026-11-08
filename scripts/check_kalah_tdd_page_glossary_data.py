@@ -95,7 +95,7 @@ def cut(id):
 
 
 def source(slug):
-    return study().Tree("".join(cut(a) for a in page(slug).anchors)).root
+    return study().Tree(kalah("pages").reviewed(slug, "".join(cut(a) for a in page(slug).anchors), strict=False)).root
 
 
 def body():
@@ -152,7 +152,8 @@ class GlossaryData(unittest.TestCase):
         squash = study().squash
         dts = [k for k in terms.elements() if k.tag == "dt"]
         self.assertEqual([squash(study().pair(dt)) for dt in dts],
-                         [squash(study().Tree(f"<dt>{t}</dt><dd>{d}</dd>").root.text()) for t, d in want])
+                         [squash(study().Tree(kalah("pages").reviewed("glossary", f"<dt>{t}</dt><dd>{d}</dd>",
+                                                                 strict=False)).root.text()) for t, d in want])
         self.assertEqual([k.tag for k in terms.elements()], ["dt", "dd"] * 15)
         for dt in dts:
             with self.subTest(study().spaced(dt)):
@@ -198,7 +199,8 @@ class GlossaryData(unittest.TestCase):
                 if linked:
                     # The link closes the row's card, after a div that holds the report row's text whole.
                     *text, after = row.elements()
-                    self.assertEqual([(t.tag, squash(t.text())) for t in text], [("div", squash(study().Tree(entry(name)).root.text()))])
+                    expected = kalah("pages").reviewed("glossary", entry(name), strict=False)
+                    self.assertEqual([(t.tag, squash(t.text())) for t in text], [("div", squash(study().Tree(expected).root.text()))])
                     # The link goes to the dfn of the row's metric on the built measures page.
                     [href] = [a.attrs["href"] for a in after.iter() if a.tag == "a"]
                     page, _, frag = href.partition("#")

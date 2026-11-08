@@ -13,6 +13,7 @@ import sys
 import unittest
 import unittest.mock
 from pathlib import Path
+from html import escape
 
 SCRIPTS = Path(__file__).resolve().parent
 ARTIFACT = "https://claude.ai/artifact/5g7jbNAxSnZPjQ2nLEJ15a"
@@ -91,6 +92,18 @@ def missing_text(s):
     for n in (n for source in sources for n in tree(source).root.iter() if n.tag in kinds):
         # Claim tag sentences render as a tag pill holding the kind.
         chunk = (n.tag, kalah("pages.landing").TAG.sub(r"\1", text(n)))
+        card = n.closest(cls="award")
+        if card:
+            title = text(next(c for c in card.elements() if c.tag == "h3"))
+            old, new = kalah("pages.landing").AWARD_RULES[title]
+            if n.tag == "p" and chunk[1] == old:
+                detail = " Scope and limits ." if title == "Most consistent design" else " Agreement limits ." if title == "Best CQP/PMD alignment" else ""
+                chunk = (n.tag, new + detail)
+            if n.tag == "li" and n.attrs.get("data-medal") == "bronze":
+                label = "Bronze badge" if title in ("Cheapest", "Most consistent design") else "Joint third · Bronze" if title == "Fewest errors" else "Bronze"
+                chunk = (n.tag, re.sub(r"^Bronze\b", label, chunk[1]))
+        revised = kalah("pages").reviewed("", f"<{n.tag}>{escape(chunk[1])}</{n.tag}>", strict=False)
+        chunk = (n.tag, text(tree(revised).root))
         if left[chunk]:
             left[chunk] -= 1
         elif chunk[1] != "Kalah TDD showcase":
@@ -116,6 +129,19 @@ def doc_version_gaps(page):
 
 def hrefs(nodes):
     return [a.attrs["href"] for n in nodes for a in n.iter() if a.tag == "a" and "href" in a.attrs]
+
+
+def award_cards(nodes, tag):
+    cards = [n for s in nodes for n in s.iter() if n.tag == tag and "award" in n.classes()]
+    return {text(next(n for n in card.elements() if n.tag in ("h3", "b"))): card for card in cards}
+
+
+def award_entries(card):
+    return [n for n in card.iter() if n.tag == "li"]
+
+
+def award_label(entry):
+    return next(n for n in entry.iter() if "medal" in n.classes() or "chip" in n.classes())
 
 
 class LandingStructure(unittest.TestCase):
@@ -181,6 +207,53 @@ class LandingContent(unittest.TestCase):
                 self.assertEqual([text(li) for li in entries], [f"{p.title} {p.blurb}" for p in pages])
         current = [a for s in nodes for a in s.iter() if a.attrs.get("aria-current") == "page"]
         self.assertEqual([a.attrs["href"] for a in current], [links.url("")])
+
+    def test_shared_ranks_and_badges_are_explicit(self):
+        for tag in ("article", "div"):
+            cards = award_cards(section("awards"), tag)
+            entries = award_entries(cards["Fewest errors"])
+            rank, ranks = 0, []
+            for entry in entries:
+                rank = int(entry.attrs.get("value", rank + 1))
+                ranks.append(rank)
+            with self.subTest(group=tag, ranks=True):
+                self.assertIsNotNone(entries[0].closest("ol"), "shared places keep their ordered-list semantics")
+                self.assertEqual(ranks, [1, 2, 3, 3])
+            for entry in entries[2:]:
+                with self.subTest(group=tag, entry=text(entry)):
+                    self.assertRegex(text(award_label(entry)).casefold(), r"\bjoint third\b")
+            for name in ("Cheapest", "Most consistent design"):
+                entry, = award_entries(cards[name])
+                with self.subTest(group=tag, badge=name):
+                    self.assertRegex(text(award_label(entry)).casefold(), r"\bbronze badge\b")
+                    self.assertIsNone(entry.closest("ol"), "a badge has no numbered place")
+
+    def test_award_entries_values_and_links_are_preserved(self):
+        snapshot, tree = kalah("snapshot"), module("check_kalah_tdd_study").Tree
+        showcase = tree(snapshot.view(snap().files[snapshot.SHOWCASE], "summary")).root
+        report = tree(snapshot.section(snap().files[snapshot.REPORT], "awards")).root
+        for tag, source in (("article", showcase), ("div", report)):
+            expected, actual = award_cards([source], tag), award_cards(section("awards"), tag)
+            self.assertEqual(list(actual), list(expected))
+            for name, card in expected.items():
+                before, after = award_entries(card), award_entries(actual[name])
+                with self.subTest(group=tag, award=name):
+                    self.assertEqual(len(after), len(before))
+                    for a, b in zip(before, after):
+                        if tag == "article":
+                            self.assertEqual(b.attrs.get("data-medal"), a.attrs["data-medal"])
+                            old, = [n for n in a.iter() if n.tag == "a"]
+                            new, = [n for n in b.iter() if n.tag == "a"]
+                            self.assertEqual(text(new), text(old))
+                            self.assertEqual(new.attrs["href"], kalah("links").url(
+                                "designs/" + old.attrs["href"].removeprefix("#")))
+                            value = lambda entry: text(next(n for n in entry.iter() if "val" in n.classes()))
+                            self.assertEqual(value(b), value(a))
+                        else:
+                            old, new = award_label(a), award_label(b)
+                            self.assertEqual(new.attrs.get("data-k"), old.attrs["data-k"])
+                            self.assertEqual(text(b).removeprefix(text(new) + " "),
+                                             text(a).removeprefix(text(old) + " "))
 
     def test_figures_framed(self):
         report = snap().files[kalah("snapshot").REPORT]

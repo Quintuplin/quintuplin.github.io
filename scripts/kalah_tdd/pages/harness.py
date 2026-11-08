@@ -222,9 +222,11 @@ def runs(snap):
             versions.append([escape(run)] + [code(h[k]) for k in ("commit", "engine_sha256", "runner_tree")] +
                             [escape(h["claude_version"]), code(h["guard_base"]), code(delta) if delta else "none"])
     builds = sum(len(r["methods"]) for r in f["runs"].values())
+    rebuilds = sum(len(r["methods"]) for name, r in f["runs"].items() if name.endswith("/rebuild"))
     return section(
         "runs", "Runs and harness versions",
-        p(f"{len(f['runs'])} runs built {builds} clones. Doc version is the short sha256 of the methods doc a run was "
+        p(f"{builds} build entries in {len(f['runs'])} run records include {rebuilds} rebuild entries and exclude start clones. "
+          f"Doc version is the short sha256 of the methods doc a run was "
           f"built under. Redacted keys name run record fields the snapshot leaves out.", "recomputed"),
         grid("Runs", ["Run", "Tag", "Builds", "Model", "Effort", "Caps", "Waves", "Doc version", "Redacted keys"], rows),
         p(f"{len(versions)} runs record the harness they ran. rep-2/rebuild rebuilt "
@@ -338,7 +340,7 @@ def roles(snap):
     harness, method, other = "Harness and collect", "Method agent", "Other agents"
     nodes = [
         flow.node("clone", "Fresh clone and prompt", harness, 0,
-                  f"{sum(len(r['methods']) for r in f['runs'].values())} builds in {len(f['runs'])} runs"),
+                  f"{sum(len(r['methods']) for r in f['runs'].values())} entries / {len(f['runs'])} records"),
         flow.node("lister", "Test lister", other, 0, f"{sum('list_phase' in r for r in f['runs'].values())} list-only runs"),
         flow.node("throughout", "Throughout rule (F)", harness, 1, f"{n['F']} stages join every prompt"),
         flow.node("once", "Once stage (S)", method, 1, f"{n['S']} stages"),

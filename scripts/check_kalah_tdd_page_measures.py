@@ -14,7 +14,6 @@ import unittest
 import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
-from types import SimpleNamespace
 from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -303,10 +302,11 @@ class Measures(unittest.TestCase):
         items, _ = check().inventory(snap().files)
         rows = {i.key: i.shown for i in items if i.page == check().SHARED and i.source.startswith(check().METHODS)}
         self.assertEqual(len(rows), 12)
+        canonical = check().parse(check().source_version(SLUG, html()))
         for key in rows:
-            self.assertEqual(page().texts[key], 1, rows[key])
+            self.assertEqual(canonical.texts[key], 1, rows[key])
         key = next(iter(rows))
-        root = check().Tree(html()).root
+        root = canonical.root
         text = {}
         check().squashed(root, text)
         node = next(n for n in root.iter() if text.get(id(n)) == key and text.get(id(n.parent)) != key)
@@ -329,7 +329,7 @@ class Measures(unittest.TestCase):
 
     def test_keeps_all_source_text(self):
         have = tagged_texts(page().root)
-        section = check().Tree(kalah("snapshot").section(report(), "columns")).root
+        section = check().Tree(kalah("pages").reviewed(SLUG, kalah("snapshot").section(report(), "columns"), strict=False)).root
         chunks = tagged_texts(section)
         wanted = [(t, s) for t, s in chunks if t in ("p", "li", "dt", "dd") and s]
         self.assertGreater(len(wanted), 64)
@@ -494,7 +494,7 @@ class Measures(unittest.TestCase):
     def test_pipeline_text_version_matches(self):
         fig, root = f4_svg()
         nodes = flowcheck().node_boxes(root)
-        items = re.findall(r"<li>", re.search(r'<details id="f4-data">.*?</details>', fig, re.S).group(0))
+        items = re.findall(r"<li\b", re.search(r'<details id="f4-data">.*?</details>', fig, re.S).group(0))
         self.assertEqual(len(nodes), len(items))
         self.assertEqual(len(nodes), len(measures().pipeline(snap())[0]))
         self.assertIsNotNone(root.find(NS + "title"))
@@ -530,34 +530,45 @@ class Measures(unittest.TestCase):
             with self.subTest(new), self.assertRaisesRegex(ValueError, rf"names \S*{re.escape(old)} but"):
                 body(with_report(snap(), old, new))
 
-    def test_caption_names_undrawn(self):
-        m = measures()
-        # The caption prose only: the text version inside figcaption also names every node.
+    def test_caption_leaves_graph_detail_to_the_text_version(self):
         caption = check().spaced(first_p(next(n for n in page().ids["f4"].iter() if n.tag == "figcaption")))
-        families = m.FAMILIES + (m.TEST_ORDER,)
-        # Drawn as the generator counts it: lane cards and cards a node is, which the caption names by their sentence.
-        on_node = {n.label for n in m.pipeline(snap())[0]} & {c for _, _, names in families for c in names}
-        drawn = {c for names in m.LANES.values() for c in names} | on_node
-        for name in on_node:
-            with self.subTest(name):
-                self.assertRegex(caption, rf"(?<![\w-]){re.escape(name)}(?![\w-])")
-        for _, title, names in families:
-            if not drawn & set(names) and title in caption:
-                continue
-            for name in (n for n in names if n not in drawn):
-                with self.subTest(name):
-                    self.assertRegex(caption, rf"(?<![\w-]){re.escape(name)}(?![\w-])")
+        self.assertLessEqual(len(caption), 200)
+        self.assertIn("E", caption)
+        self.assertEqual(FILE.findall(caption), [])
+        self.assertEqual(len([n for n in page().ids["f4-data"].iter() if n.attrs.get("data-node")]), 17)
 
-    def test_undrawn_sentence_well_formed(self):
-        m = measures()
-        families = m.FAMILIES + (m.TEST_ORDER,)
-        undrawn = functools.partial(m.MeasurePipeline.undrawn, SimpleNamespace(nodes=[]))
-        with mock.patch.object(m, "LANES", {title: names[:1] for _, title, names in families}):
-            sentence = undrawn()
-        self.assertNotIn("famil", sentence)
-        self.assertRegex(sentence, r"^[^,]+(, [^,]+)* and [^,]+ are not drawn\.$")
-        with mock.patch.object(m, "LANES", {title: names for _, title, names in families if title != "Records"}):
-            self.assertEqual(undrawn(), "The Records family is not drawn.")
+    def test_responsive_graph_keeps_nodes_and_edges(self):
+        nodes, edges = measures().pipeline(snap())
+        diagram = next(n for n in page().ids["f4"].iter() if "diagram" in n.classes())
+        drawn = [n for n in diagram.iter() if "data-node" in n.attrs]
+        self.assertEqual(Counter(n.attrs["data-node"] for n in drawn), Counter(n.id for n in nodes))
+        by_id = {n.attrs["data-node"]: n for n in drawn}
+        for n in nodes:
+            with self.subTest(node=n.id):
+                shown = by_id[n.id]
+                self.assertEqual(shown.attrs.get("data-lane"), n.lane)
+                for label in (n.label, n.note):
+                    if label:
+                        self.assertIn(" ".join(label.split()), check().spaced(shown))
+                self.assertNotIn("hidden", shown.attrs)
+                self.assertNotEqual(shown.attrs.get("aria-hidden"), "true")
+        links = [n for n in diagram.iter() if "data-from" in n.attrs or "data-to" in n.attrs]
+        self.assertEqual(Counter((n.attrs.get("data-from"), n.attrs.get("data-to")) for n in links),
+                         Counter((e.src, e.dst) for e in edges))
+        for lane in measures().LANES:
+            self.assertEqual([n.attrs["data-node"] for n in drawn if n.attrs.get("data-lane") == lane],
+                             [n.id for n in nodes if n.lane == lane])
+        labels = {n.id: n.label for n in nodes}
+        for edge in links:
+            src, dst = edge.attrs["data-from"], edge.attrs["data-to"]
+            with self.subTest(edge=(src, dst)):
+                context = edge
+                while context.parent and context.attrs.get("data-node") != src:
+                    context = context.parent
+                self.assertTrue(context.attrs.get("data-node") == src or labels[src] in check().spaced(edge))
+                self.assertIn(labels[dst], check().spaced(edge))
+                self.assertNotIn("hidden", edge.attrs)
+                self.assertNotEqual(edge.attrs.get("aria-hidden"), "true")
 
     def test_pipeline_routes_and_limits(self):
         nodes, edges = measures().pipeline(snap())
@@ -605,7 +616,8 @@ class Measures(unittest.TestCase):
         self.assertGreater(check().metric_defs({**label_pages(), SLUG: html().replace("data-alias=", "data-x=")})[0], [])
 
     def test_fact_labels_defined(self):
-        self.assertEqual(sorted(fact_labels()), ["results/contrasts", "results/test-order"])
+        self.assertEqual(sorted(fact_labels()), ["results/consistency", "results/contrasts", "results/test-order"])
+        self.assertIn("Relative spread, 1 = pooled reference spread", fact_labels()["results/consistency"]["axis label"])
         self.assertIn("Candidates in order", fact_labels()["results/test-order"]["table header"])
         built = {slug: fact_page(labels) for slug, labels in fact_labels().items()}
         for slug, labels in fact_labels().items():
@@ -637,21 +649,17 @@ class Measures(unittest.TestCase):
         self.assertIsNone(page().ids["holm-p"].closest(cls="records"))
         self.assertIn("records", page().ids["method"].closest(cls="shaped").classes())
 
-    def test_f4HoldsDrawnWidth(self):
+    def test_f4_keeps_geometry_in_the_shared_responsive_frame(self):
         _, root = f4_svg()
         self.assertEqual(root.get("viewBox").split()[2], "872")
-        self.assertEqual(root.get("style"), "max-width:872px;min-width:872px")
-        # Other wide flows keep shrinking to study.css's flow min-width.
-        sized = kalah("figures.stage_flow").sized
-        wide = '<svg viewBox="0 0 900 9">'
-        self.assertEqual(sized(wide), '<svg style="max-width:900px" viewBox="0 0 900 9">')
-        self.assertEqual(sized(wide, hold=True), '<svg style="max-width:900px;min-width:900px" viewBox="0 0 900 9">')
+        diagram = next(n for n in page().ids["f4"].iter() if "diagram" in n.classes())
+        self.assertEqual(diagram.attrs.get("data-flow"), "compact")
+        self.assertTrue(any(n.attrs.get("data-node") for n in diagram.iter()))
 
-    def test_f4CaptionHintsScroll(self):
+    def test_f4_caption_points_to_definitions_without_scroll_instructions(self):
         caption = check().spaced(first_p(next(n for n in page().ids["f4"].iter() if n.tag == "figcaption")))
-        self.assertTrue(caption.startswith("On a narrow screen scroll sideways to see the whole diagram. "
-                                           "The text version below lists the same steps. "), caption)
-        self.assertNotIn("the diagram scrolls sideways", caption)
+        self.assertNotIn("scroll", caption.casefold())
+        self.assertIn("Definitions and formulas follow below.", caption)
 
     def test_aliases_are_labels(self):
         texts = [t for _, _, t in snapshot_labels()] + fact_texts()

@@ -139,7 +139,7 @@ def reaches(s, sel):
 
 
 # Methodology table cell links get the touch target where the nav rows do (#64).
-CELL_TOUCH = ((".cols td a", COARSE, 44, None),)
+CELL_TOUCH = tuple((sel, COARSE, 44, None) for sel in (".cols td a", ".matrix td a"))
 
 
 def touch_targets(parsed):
@@ -165,11 +165,12 @@ def touch_targets(parsed):
     return errors
 
 
-# Long words wrap so a 320px page never scrolls sideways, while code in table cells keeps short tokens such as a
-# doc sha whole and stacked cards keep their caption (#64).
+# Descriptive cells wrap naturally, code can wrap when needed, and numeric tokens stay whole.
 KEPT = (("dl.terms dd", None, "overflow-wrap", "anywhere"),
-        (".table-scroll > table.cols :is(th,td)", None, "overflow-wrap", "break-word"),
-        (".table-scroll > table.cols code", None, "overflow-wrap", "break-word"),
+        (".table-scroll > :is(table.cols,table.matrix) :is(th,td)", None, "overflow-wrap", "normal"),
+        (".table-scroll > table.cols code", None, "overflow-wrap", "anywhere"),
+        ("td.number", None, "overflow-wrap", "normal"),
+        ("td.number", None, "white-space", "nowrap"),
         (".cols caption", "@media (max-width:640px)", "display", "block"))
 
 

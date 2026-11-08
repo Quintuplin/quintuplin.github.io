@@ -20,6 +20,22 @@ def numbers(slug):
 
 def table(html, label):
     """A table in a named, keyboard-scrollable region, so a wide table scrolls inside the column."""
+    def cell(m):
+        attrs, content = m.groups()
+        value = unescape(re.sub(r"<[^>]+>", "", content)).strip()
+        if not re.search(r"<code\b", content) and re.fullmatch(r"[-+−]?\d[\d.,%/()[\] ±–−+eE-]*", value):
+            attrs = re.sub(r'class="([^"]*)"', r'class="\1 number"', attrs) if 'class="' in attrs else attrs + ' class="number"'
+        return f"<td{attrs}>{content}</td>"
+    scope = lambda text, kind: re.sub(r'<th(?![^>]*\bscope=)(?=[\s>])', f'<th scope="{kind}"', text)
+    html = re.sub(r"<thead\b.*?</thead>", lambda m: scope(m.group(), "col"), html, flags=re.S)
+    html = re.sub(r"<td\b([^>]*)>(.*?)</td>", cell, scope(html, "row"), flags=re.S)
+    def matrix(m):
+        block = m.group()
+        columns = {i for row in re.findall(r"<tr>(.*?)</tr>", block, re.S)
+                   for i, attrs in enumerate(re.findall(r"<(?:td|th)\b([^>]*)>", row))
+                   if re.search(r'class="[^"]*\bnumber\b', attrs)}
+        return re.sub(r'(<table\b[^>]*class=")cols(")', r'\1matrix\2', block, count=1) if len(columns) >= 2 else block
+    html = re.sub(r"<table\b.*?</table>", matrix, html, flags=re.S)
     return f'<div class="table-scroll" role="region" tabindex="0" aria-label="{escape(label)}">{html}</div>'
 
 
@@ -45,10 +61,12 @@ def figure(n, id, title, svg, caption, data_href, text, level=3):
         text = flow.details(title, "".join(f"<li>{escape(t)}</li>" for t in text))
     if not text.startswith("<details>"):
         raise ValueError(f"text is not a text version disclosure: {text[:60]!r}")
+    cards = re.search(r'<ol class="flow-cards">.*</ol>', text, re.S)
+    compact, state = (cards.group(), ' data-flow="compact"') if cards else ("", "")
     text = f'<details id="{escape(id)}-data">' + text.removeprefix("<details>")
     data_href = data_href or f"#{id}-data"
     return (f'<figure id="{escape(id)}" aria-label="Figure {n}: {escape(title)}"><p class="fig-n">Figure {n}</p>'
-            f'<h{level}>{escape(title)}</h{level}><div class="diagram" role="region" tabindex="0" aria-label="Figure {n} diagram">{svg}</div>'
+            f'<h{level}>{escape(title)}</h{level}><div class="diagram"{state} role="region" tabindex="0" aria-label="Figure {n} diagram">{svg}{compact}</div>'
             f'<figcaption><p>{caption}</p><div class="fig-foot">{foot(n, data_href)}</div>{text}</figcaption></figure>')
 
 
@@ -60,6 +78,7 @@ def source_figure(n, fig_html):
         raise ValueError(f"not a captioned report figure: {fig_html[:60]!r}")
     id, caption, title, plot, legend, details = m.groups()
     label = escape(unescape(re.sub(r"<[^>]+>", "", title)).strip())
+    details = re.sub(r"<table\b.*?</table>", lambda m: table(m.group(), unescape(label)), details, flags=re.S)
     return (f'<figure id="{id}" aria-label="Figure {n}: {label}"><figcaption><p class="fig-n">Figure {n}</p>{caption}'
             f'{plot}<div class="fig-foot">{legend}{foot(n, "#" + id + "-data")}</div>'
             f'<details id="{id}-data">{details}</details></figure>')

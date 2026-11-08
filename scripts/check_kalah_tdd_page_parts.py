@@ -38,6 +38,36 @@ def frame(text=("One", UNSAFE)):
 
 
 class Parts(unittest.TestCase):
+    def test_table_classifies_numbers_without_changing_values(self):
+        table = '<table><thead><tr><th>Value</th><th>Meaning</th></tr></thead><tbody><tr><th>Score</th>' \
+                '<td class="nowrap">1,234.50</td><td>12 designs share a task</td><td>15/15</td></tr></tbody></table>'
+        out = kalah("parts").table(table, "Scores")
+        self.assertIn('<td class="nowrap number">1,234.50</td>', out)
+        self.assertIn('<td class="number">15/15</td>', out)
+        self.assertIn('<td>12 designs share a task</td>', out)
+        self.assertIn('<th scope="col">Value</th>', out)
+        self.assertIn('<th scope="row">Score</th>', out)
+
+    def test_source_figure_tables_get_named_keyboard_regions(self):
+        fig = CAPTIONED.search(report()).group(0)
+        out = kalah("parts").source_figure("1.1", fig)
+        self.assertRegex(out, r'<div class="table-scroll" role="region" tabindex="0" aria-label="[^"]+"><table')
+
+    def test_numeric_comparisons_keep_table_semantics(self):
+        table = '<table class="cols"><thead><tr><th>Method</th><th>M</th><th>E</th></tr></thead><tbody>' \
+                '<tr><td>A</td><td>470,362</td><td>5</td></tr><tr><td>B</td><td>at bound</td><td>2</td></tr></tbody></table>'
+        self.assertIn('<table class="matrix">', kalah("parts").table(table, "Comparison"))
+        narrative = '<table class="cols"><tr><td>A description</td><td>5</td></tr><tr><td>Another description</td><td>2</td></tr></table>'
+        self.assertIn('<table class="cols">', kalah("parts").table(narrative, "Records"))
+
+    def test_numeric_code_identifiers_do_not_make_a_measurement_column(self):
+        table = '<table class="cols"><thead><tr><th>Run</th><th>Builds</th><th>Methods doc</th></tr></thead>' \
+                '<tbody><tr><td>full-1</td><td>11</td><td><code>64606950</code></td></tr></tbody></table>'
+        out = kalah("parts").table(table, "Runs")
+        self.assertIn('<table class="cols">', out)
+        self.assertIn('<td><code>64606950</code></td>', out)
+        self.assertIn('<td class="number">11</td>', out)
+
     def test_table_is_named_scroll_region(self):
         self.assertEqual(kalah("parts").table("<table></table>", UNSAFE),
                          '<div class="table-scroll" role="region" tabindex="0" aria-label="a &lt;b&gt; &amp; &quot;c&quot;">'

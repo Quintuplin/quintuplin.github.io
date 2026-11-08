@@ -257,7 +257,7 @@ def test_figure(snap, n):
     left = (f" {escape(left)} name no stats.py function in the snapshot, so only the table lists them. "
             f"{parts.tag('unchecked')}" if left else "")
     return parts.figure(n, "test-flow", title, flow.svg("f7", title, desc, nodes, edges, loops),
-                        f"Each lane reads left to right.{left}", "#test-use", flow.text_version(title, nodes, edges, loops))
+                        f"Connections show the next step in each lane.{left}", "#test-use", flow.text_version(title, nodes, edges, loops))
 
 
 def rebuild(facts):
@@ -330,7 +330,13 @@ def threats(snap, idx):
         "threats", "Threats to validity",
         p("The report states its limits once, kept here word for word. The gaps after them come from the run records "
           "and the code docstrings in the snapshot.", "verified"),
-        limits, '<h3 id="record-gaps">Gaps in the records</h3>',
+        limits,
+        p("The overall rank sum is descriptive. Alignment uses all eight principles, including those with low or "
+          "unestimable agreement. E is an additive composite count and does not count unique defects.", "verified"),
+        p("M = T × (1 − APFDc-H) is a trapezoidal estimate over recorded checkpoints. Checkpoint spacing can miss "
+          "changes between observations. M_io recomputes the curve without output tokens as a sensitivity check. "
+          "It does not establish comparability across CLI versions. C pools costs without correcting those differences.", "verified"),
+        '<h3 id="record-gaps">Gaps in the records</h3>',
         p("Each row is derived from facts.json at the snapshot sha, so it changes when the snapshot does.", "recomputed"),
         f'<div class="shaped">{"".join(rows)}</div>')
 

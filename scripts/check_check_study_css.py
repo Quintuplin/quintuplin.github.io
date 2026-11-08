@@ -86,9 +86,12 @@ class TouchTargets(unittest.TestCase):
 
     def test_cell_link_is_44px_on_touch(self):
         # Design links in methodology table cells were 18px tall at 375px.
-        errors = touch(lambda t: re.sub(r"\.cols td a\{[^}]*\}", "", t))
-        self.assertRegex(" ".join(errors), r"\.cols td a has no min-height of 44px or more under @media")
-        self.assertRegex(" ".join(touch(lambda t: t + ".cols td a{min-height:20px}")), r"rule \.cols td a lowers")
+        for removed, remaining in ((".cols td a", ".matrix td a"), (".matrix td a", ".cols td a")):
+            with self.subTest(removed):
+                errors = touch(lambda t: t.replace(".cols td a,.matrix td a", remaining))
+                self.assertRegex(" ".join(errors), re.escape(removed) + r" has no min-height of 44px or more under @media")
+                errors = touch(lambda t: t + removed + "{min-height:20px}")
+                self.assertRegex(" ".join(errors), "rule " + re.escape(removed) + " lowers")
 
 
 def kept(edit=lambda text: text):
@@ -103,10 +106,14 @@ class KeptRules(unittest.TestCase):
         self.assertEqual(kept(), [])
 
     def test_each_rule_needed(self):
-        # A long stage note scrolled the 320px page sideways, a doc sha broke mid-token and the stacked caption hid.
+        text = (SCRIPTS.parent / css().CSS).read_text(encoding="utf-8")
         for sel, media, prop, value in css().KEPT:
             with self.subTest(sel):
-                errors = kept(lambda t: t.replace(f"{sel}{{{prop}:{value}", f"{sel}{{{prop}:normal"))
+                bad = {"normal": "anywhere", "anywhere": "normal", "nowrap": "normal", "block": "none"}[value]
+                edit = lambda t: re.sub(rf"({re.escape(sel)}\{{[^}}]*\b{re.escape(prop)}:){re.escape(value)}",
+                                        rf"\g<1>{bad}", t)
+                self.assertNotEqual(edit(text), text, "the mutation must change the retained rule")
+                errors = kept(edit)
                 self.assertRegex(" ".join(errors), rf"no rule sets {re.escape(sel)} \{{{prop}:{value}\}}")
 
     def test_caption_rule_must_be_in_the_stacked_query(self):

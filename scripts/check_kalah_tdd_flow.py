@@ -9,6 +9,7 @@ import re
 import sys
 import unittest
 import xml.etree.ElementTree as ET
+from collections import Counter
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -125,6 +126,60 @@ def items():
 
 
 class Flow(unittest.TestCase):
+    def test_compact_presentation_preserves_nodes_edges_and_loops(self):
+        f = flow()
+        duplicates = ([f.node("choose", "Choose next", lane="Host"), f.node("build-first", "Build", lane="Client", col=1),
+                       f.node("build-worker", "Build", lane="Worker", col=1, note=UNSAFE),
+                       f.node("build-next", "Build", lane="Client", col=2)],
+                      [f.edge("choose", "build-first", "first"), f.edge("choose", "build-worker", "other"),
+                       f.edge("build-first", "build-next")],
+                      [f.loop("build-next", UNSAFE, back_to="build-first")])
+        for name, (nodes, edges, loops) in {**charts(), "duplicate labels": duplicates}.items():
+            with self.subTest(name):
+                root = ET.fromstring(f.text_version("Compact " + UNSAFE, nodes, edges, loops))
+                cards = [el for el in root.iter() if "data-node" in el.attrib]
+                self.assertEqual(Counter(el.get("data-node") for el in cards), Counter(n.id for n in nodes))
+                by_id = {el.get("data-node"): el for el in cards}
+                words = lambda el: " ".join("".join(el.itertext()).split())
+                for node in nodes:
+                    card = by_id[node.id]
+                    self.assertEqual(card.get("data-lane"), node.lane)
+                    for text in (node.label, node.note, node.lane):
+                        self.assertIn(" ".join(text.split()), words(card))
+                links = [el for el in root.iter() if "data-from" in el.attrib or "data-to" in el.attrib]
+                forward = [el for el in links if "data-loop" not in el.attrib]
+                back = [el for el in links if "data-loop" in el.attrib]
+                self.assertEqual(Counter((el.get("data-from"), el.get("data-to")) for el in forward),
+                                 Counter((e.src, e.dst) for e in edges))
+                self.assertEqual(Counter((el.get("data-from"), el.get("data-to"), el.get("data-loop")) for el in back),
+                                 Counter((lp.node, lp.back_to or lp.node, lp.unit) for lp in loops))
+                parents = {child: parent for parent in root.iter() for child in parent}
+                canonical = {node.id: node for node in nodes}
+                for link in links:
+                    src, dst = canonical[link.get("data-from")], canonical[link.get("data-to")]
+                    context = link
+                    while context in parents and context.get("data-node") != src.id:
+                        context = parents[context]
+                    self.assertTrue(context.get("data-node") == src.id or src.label in words(link))
+                    self.assertIn(dst.label, words(link))
+                    self.assertNotIn("hidden", link.attrib)
+                    self.assertNotEqual(link.get("aria-hidden"), "true")
+                    same = [n for n in nodes if n.label == dst.label]
+                    if len(same) > 1:
+                        unique_lane = dst.lane and sum(n.lane == dst.lane for n in same) == 1
+                        self.assertTrue(re.search(rf"(?<![\w-]){re.escape(dst.id)}(?![\w-])", words(link)) or
+                                        (unique_lane and dst.lane in words(link)), words(link))
+                for edge in edges:
+                    link = next(el for el in forward if (el.get("data-from"), el.get("data-to")) == (edge.src, edge.dst))
+                    self.assertIn(edge.label, words(link))
+                for loop in loops:
+                    link = next(el for el in back if (el.get("data-from"), el.get("data-to"), el.get("data-loop")) ==
+                                (loop.node, loop.back_to or loop.node, loop.unit))
+                    self.assertIn(f"repeat per {loop.unit}", words(link))
+                    self.assertIn("back to", words(link))
+                ids = [el.get("id") for el in root.iter() if el.get("id")]
+                self.assertEqual(len(ids), len(set(ids)))
+
     def test_text_version_matches_nodes(self):
         nodes, _, _ = sample()
         got = items()

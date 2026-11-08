@@ -275,7 +275,7 @@ class CommittedSnapshot(unittest.TestCase):
 
     def test_manifest_matches(self):
         files = self.manifest["files"]
-        on_disk = sorted(str(p.relative_to(SNAPSHOT)) for p in SNAPSHOT.rglob("*") if p.is_file() and p.name != "MANIFEST.json")
+        on_disk = sorted(p.relative_to(SNAPSHOT).as_posix() for p in SNAPSHOT.rglob("*") if p.is_file() and p.name != "MANIFEST.json")
         self.assertEqual(on_disk, sorted(files))
         for path, entry in files.items():
             data = (SNAPSHOT / path).read_bytes()
@@ -284,8 +284,8 @@ class CommittedSnapshot(unittest.TestCase):
         self.assertEqual(json.loads((SNAPSHOT / "facts.json").read_text())["sha"], self.manifest["sha"])
 
     def test_bytes_survive_autocrlf(self):
-        paths = [str((FIXTURES / "args.json.fixture").relative_to(SCRIPTS.parent)),
-                 str((SNAPSHOT / "facts.json").relative_to(SCRIPTS.parent))]
+        paths = [(FIXTURES / "args.json.fixture").relative_to(SCRIPTS.parent).as_posix(),
+                 (SNAPSHOT / "facts.json").relative_to(SCRIPTS.parent).as_posix()]
         attrs = subprocess.run(["git", "-C", str(SCRIPTS.parent), "check-attr", "text", "--", *paths],
                                capture_output=True, text=True, check=True).stdout
         self.assertEqual(attrs.splitlines(), [f"{p}: text: unset" for p in paths])

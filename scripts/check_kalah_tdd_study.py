@@ -296,10 +296,20 @@ def needed(items):
     return dict(sorted(out.items(), key=lambda kv: order(kv[0])))
 
 
+def source_version(slug, html):
+    """Undo only reviewed narrative and award-label edits for the original completeness inventory."""
+    from kalah_tdd import pages
+    for expected, old, new in reversed(pages.REVIEWED):
+        if slug in expected:
+            html, _ = pages.narrative(html, new, old)
+    return re.sub(r'<(article|div) class="award">.*?</\1>',
+                  lambda m: re.sub(r'>(?:Joint third · Bronze|Bronze badge)</span>', '>Bronze</span>', m.group()), html, flags=re.S)
+
+
 def coverage(items, pages, final=False):
     """(errors, items checked). pages maps slug to html. An item on a stub page waits, as shared ones do while
     glossary or measures is a stub."""
-    parsed = {slug: parse(html) for slug, html in pages.items()}
+    parsed = {slug: parse(source_version(slug, html)) for slug, html in pages.items()}
     errors = [f"{label(s)} is a stub" for s in sorted(parsed, key=order) if final and parsed[s].stub]
     checked = []
     for page, counts in needed(items).items():

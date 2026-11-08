@@ -536,30 +536,8 @@ class MeasurePipeline:
                 raise ValueError(f"{name} no longer names {absent}, which Figure 4.1 draws into {target}")
 
     def caption(self):
-        said = []
-        for target, (kind, name, inputs) in COMPOSITES.items():
-            label = next(n.label for n in self.nodes if n.id == target).replace(", ", " and ")
-            whose = f"the doc of function {name}" if kind == "function" else f"the glossary row {name}"
-            said.append(f"{label} take{'' if ' and ' in label else 's'} {joined([t for terms in inputs.values() for t in terms])}, as {whose} states.")
-        return ("On a narrow screen scroll sideways to see the whole diagram. The text version below lists the same "
-                "steps. Each lane reads left to right from raw input to collected file to measure to score. "
-                + " ".join(said) + f" {self.undrawn()} Their cards below define them.")
-
-    def undrawn(self):
-        """The sentence naming each card in no lane and on no node, by whole family where a family has none drawn."""
-        drawn = {c for names in LANES.values() for c in names} | {n.label for n in self.nodes}
-        whole, cards = [], []
-        for _, title, names in FAMILIES + (TEST_ORDER,):
-            left = [n for n in names if n not in drawn]
-            if len(left) == len(names):
-                whole.append(title)
-            else:
-                cards += left
-        are = "is" if len(cards) == 1 else "are"
-        if not whole:
-            return f"{joined(cards)} {are} not drawn." if cards else ""
-        families = f"The {joined(whole)} famil{'y is' if len(whole) == 1 else 'ies are'} not drawn"
-        return f"{families}, nor {are} {joined(cards)}." if cards else f"{families}."
+        return ("Inputs feed collected files, measures and scores. Arrows into E combine test, PMD and mutation measures. "
+                "Definitions and formulas follow below.")
 
     def figure(self, n):
         title = "From raw inputs to scores"
