@@ -254,7 +254,7 @@ const epochs = slider("epochs", "Training passes", 1, 6, 1, 2);
     ],
     code: ["R ← completeRatings(); A ← zeros(shape(R))", "G ← R Rᵀ; [[a,b],[b,d]] ← G",
       "σ ← sqrt((a + d ± hypot(a − d, 2b)) / 2)",
-      "for f < rank: u ← unitEigenvector(G, σ[f]²); v ← Rᵀu / σ[f]",
+      "for f < rank: if σ[f] = 0: continue; u ← unitEigenvector(G, σ[f]²); v ← Rᵀu / σ[f]",
       "A ← A + σ[f] u vᵀ", "return A, sqrt(mean((R − A)²))"],
     trace(p, { rank }, rng) {
       const rows = ratings(p.rows, rng);
@@ -271,7 +271,11 @@ const epochs = slider("epochs", "Training passes", 1, 6, 1, 2);
       const rebuilt = rows.map(row => row.map(() => 0));
       for (let f = 0; f < rank; f++) {
         const sigma = Math.sqrt(eigenvalues[f]), u = left[f];
-        const v = transpose(rows).map(col => sigma ? dot(col, u) / sigma : 0);
+        if (sigma === 0) {
+          frames.push(frame(3, `Component ${f + 1} has σ = 0 and contributes zero to every cell. Skip this component.`, draw(rebuilt)));
+          continue;
+        }
+        const v = transpose(rows).map(col => dot(col, u) / sigma);
         frames.push(frame(3, `Component ${f + 1}: u = ${vec(u)}. Rᵀu / ${fmt(sigma)} = ${vec(v)}.`,
           [...u, ...v].map((value, i) => node("factor" + i, (i < 2 ? names[i] : titles[i - 2]) + " " + fmt(value),
             i < 2 ? i * 2 : (i - 2) * 2, value, i < 2 ? 0 : 3, value, i < 2 ? 0 : 1))));

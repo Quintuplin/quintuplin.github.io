@@ -185,6 +185,15 @@ test("batch holds weights fixed for a pass and SGD applies each residual gradien
   }
 });
 
+test("rank two skips a zero singular component and reconstructs the rank-one table", () => {
+  const spec = specs.get("truncated-svd"), p = spec.presets.find(p => p.name === "Parallel tastes");
+  const fs = run(spec, p, { rank: 2 }, playerRandom(7462739));
+  const components = fs.filter(f => f.line === 3);
+  assert.match(components[1].work, /contributes zero/i);
+  assert.equal(fs.filter(f => f.line === 4).length, 1);
+  fs.at(-1).nodes.forEach((n, i) => near(n.value, fs[0].nodes[i].value));
+});
+
 test("truncated SVD has rank one and exactly the discarded energy; rank two restores every cell", () => {
   const spec = specs.get("truncated-svd");
   for (const p of spec.presets) for (const seed of [21, 93]) for (const rank of [1, 2]) {
