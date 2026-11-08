@@ -67,7 +67,9 @@ for (const spec of specs.values()) {
         const ids = new Set(f.nodes.map(n => n.id));
         assert.equal(ids.size, f.nodes.length);
         for (const n of f.nodes) {
-          assert.ok(n.label && [n.x, n.y, n.z, n.value].every(Number.isFinite));
+          assert.ok(n.label && [n.x, n.y, n.z].every(Number.isFinite));
+          if (n.label.endsWith(" ?")) assert.ok(!Object.hasOwn(n, "value"));
+          else assert.ok(Number.isFinite(n.value));
           assert.ok(!identities.has(n), "a frame retained another frame’s node object");
           identities.add(n);
         }
@@ -156,6 +158,17 @@ test("cosine keeps full norms; Pearson uses all-rating means and common dimensio
       const correction = sum(selected.map(n => n.w * n.value)) / sum(selected.map(n => Math.abs(n.w)));
       near(cell(frames.at(-1), 0, 3), (residual ? baseline(0, 3) : 0) + correction);
     }
+  }
+});
+
+test("Pearson and latent SGD show a missing rating until a numeric prediction exists", () => {
+  for (const id of ["user-collaborative-filtering", "latent-factor-sgd"]) {
+    const spec = specs.get(id), fs = run(spec, spec.presets[0], { metric: "Pearson" });
+    const target = f => f.nodes.find(n => n.id === "r0c3");
+    assert.equal(target(fs[0]).label, "Ada/Fir ?");
+    assert.ok(!Object.hasOwn(target(fs[0]), "value"));
+    assert.ok(Number.isFinite(target(fs.at(-1)).value));
+    assert.doesNotMatch(target(fs.at(-1)).label, /\?/);
   }
 });
 

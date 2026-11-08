@@ -14,7 +14,7 @@
   const fmt = n => n === null ? "?" : String(+n.toFixed(4));
   const vec = xs => "[" + xs.map(fmt).join(", ") + "]";
   const node = (id, label, x, y, z, value, group, active = false) =>
-    ({ id, label, x, y, z, value, group, active });
+    ({ id, label, x, y, z, ...(value === null ? {} : { value }), group, active });
   const frame = (line, work, nodes) => ({ line, work, nodes });
 
   // Each deck describes a different pattern of tastes. Only observed cells vary.
@@ -35,7 +35,7 @@
   function matrixNodes(rows, rowNames, colNames, activeRow = -1, activeCol = -1) {
     return rows.flatMap((row, r) => row.map((v, c) =>
       ({ ...node(`r${r}c${c}`, `${rowNames[r]}/${colNames[c]} ${fmt(v)}`,
-        c * 3, v ?? 0, r * 3, v ?? 0, r, r === activeRow || c === activeCol), shape: "cell" })));
+        c * 3, v ?? 0, r * 3, v, r, r === activeRow || c === activeCol), shape: "cell" })));
   }
   function matrixWork(rows, rowNames, colNames) {
     return `${colNames.join(" / ")}. ${rows.map((row, i) => rowNames[i] + " " + vec(row)).join(". ")}`;
