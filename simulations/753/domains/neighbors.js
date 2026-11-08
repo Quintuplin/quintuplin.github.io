@@ -200,13 +200,13 @@
 
   register('hnsw', 'Hierarchical navigable small-world graph',
     'Insert points into nested graph layers, then route a query from the highest layer to the base. Each layer view shows the original three coordinates.',
-    [number('degree', 'Outgoing links per layer', 2, 4, 2), number('width', 'Base query search width', 1, 8, 3)], [
+    [number('degree', 'Maximum neighbours per layer', 2, 4, 2), number('width', 'Base query search width', 1, 8, 3)], [
       'layers[0..1] ← {A}; entry ← A; top ← 1',
       'for p in points[1:]: h ← cappedGeometric(0.5, 3); starts ← [entry]',
       '    for L from top down to h+1: starts ← searchLayer(p, starts, L, 1)',
       '    for L from min(h, top) down to 0: starts ← searchLayer(p, starts, L, 2 × linkLimit)',
       '        for n in starts[:linkLimit]: link(L, p, n); link(L, n, p)',
-      '        for n in starts[:linkLimit]: links[L,n] ← nearest(n, links[L,n])[:linkLimit]',
+      '        for n in starts[:linkLimit]: remove each excess farthest edge from both endpoints',
       '    if h > top: layers[top+1..h] ← {p}; top ← h; entry ← p',
       'starts ← [entry]; for L from top down to 1: starts ← searchLayer(Q, starts, L, 1)',
       'best ← searchLayer(Q, starts, 0, width)',
@@ -225,7 +225,7 @@
         const layer = layers[level];
         const present = new Set([...layer.keys(), target]);
         const visible = nodes.filter((_, i) => present.has(i));
-        const links = Array.from(layer, ([i, list]) => list.map(j => edge(i, j))).flat();
+        const links = Array.from(layer, ([i, list]) => list.filter(j => i < j).map(j => ({ from: name(i), to: name(j) }))).flat();
         add(line, 'Layer ' + level + '. ' + work, visible, active.map(name), links);
       }
       function search(line, level, starts, target, breadth) {
@@ -257,7 +257,10 @@
             if (links.length <= degree) continue;
             const order = ranked(links, n => Math.sqrt(sq(points[j], points[n])));
             layer.set(j, ids(order.slice(0, degree)));
-            show(5, level, 'From ' + name(j) + ': ' + scores(order) + '. Drop outgoing ' + names(ids(order.slice(degree))), [j], i);
+            const dropped = ids(order.slice(degree));
+            for (const n of dropped) layer.set(n, layer.get(n).filter(k => k !== j));
+            show(5, level, 'From ' + name(j) + ': ' + scores(order) + '. Remove ' +
+              dropped.map(n => name(j) + ' ↔ ' + name(n)).join(', '), [j], i);
           }
         }
         if (height > top) {

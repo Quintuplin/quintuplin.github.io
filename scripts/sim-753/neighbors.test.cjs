@@ -267,7 +267,22 @@ test('product codes choose nearest pair centroids and lookup sums match reconstr
   }
 });
 
-test('HNSW inserts nested layers, prunes the farthest outgoing link and searches by layer', () => {
+const adjacent = (frame, id) => frame.edges.flatMap(e =>
+  e.from === id ? [e.to] : e.to === id && !e.directed ? [e.from] : []);
+
+test('inserting D prunes both B–C adjacency entries in the tight clouds', () => {
+  const spec = specs.get('hnsw');
+  const frames = spec.trace(spec.presets[0], { degree: 2, width: 3 }, playerSeed(753));
+  const insert = frames.findIndex(f => f.line === 1 && f.work.includes('Insert D'));
+  const prune = frames.findIndex((f,i) => i > insert && f.line === 5 && active(f).includes('B'));
+  assert.ok(prune > insert);
+  assert.ok(adjacent(frames[prune-1], 'B').includes('C'));
+  assert.ok(!adjacent(frames[prune], 'B').includes('C'));
+  assert.ok(!adjacent(frames[prune], 'C').includes('B'));
+  assert.match(frames[prune].work, /B ↔ C/);
+});
+
+test('HNSW inserts nested layers, prunes the farthest undirected link and searches by layer', () => {
   const spec = specs.get('hnsw');
   let prunes = 0;
   let promotions = 0;
@@ -277,24 +292,24 @@ test('HNSW inserts nested layers, prunes the farthest outgoing link and searches
       let entry = 'A';
       const heights = { A: 1 };
       for (const [index, f] of frames.entries()) {
+        assert.ok(f.edges.every(e => !e.directed && e.from < e.to));
         if (f.line === 1) {
           const [, id, level] = /Insert ([A-H]) = .*up to layer (\d+)/.exec(f.work);
           heights[id] = Number(level);
         }
         if (f.line === 4) {
           const id = f.work.match(/([A-H]) ↔/)[1];
-          const links = f.edges.filter(e => e.from === id);
+          const links = adjacent(f, id);
           assert.ok(links.length && links.length <= degree);
-          for (const e of links) assert.ok(f.edges.some(r => r.to === id && r.from === e.to));
         }
         if (f.line === 5) {
           prunes++;
           const [owner] = active(f);
-          const prev = frames[index - 1].edges.filter(e => e.from === owner).map(e => e.to);
+          const prev = adjacent(frames[index - 1], owner);
           const v = vectors(f.nodes);
           assert.equal(prev.length, degree + 1);
           const expected = sorted(prev, id => sq(v[id], v[owner])).slice(0, degree);
-          assert.deepEqual(f.edges.filter(e => e.from === owner).map(e => e.to), expected);
+          assert.deepEqual(adjacent(f, owner).sort(), expected.sort());
         }
         if (f.line === 6) {
           promotions++;
@@ -310,7 +325,7 @@ test('HNSW inserts nested layers, prunes the farthest outgoing link and searches
         const f = steps[0];
         const v = vectors(f.nodes);
         assert.deepEqual(Object.keys(v).filter(id => id !== 'Q'), abc.filter(id => heights[id] >= level));
-        for (const id of Object.keys(v)) assert.ok(f.edges.filter(e => e.from === id).length <= degree);
+        for (const id of Object.keys(v)) assert.ok(adjacent(f, id).length <= degree);
         const score = id => sq(v[id], v.Q);
         const beam = level ? 1 : width;
         const visited = new Set([winner]);
@@ -322,7 +337,7 @@ test('HNSW inserts nested layers, prunes the farthest outgoing link and searches
           pending.delete(next);
           if (!retained.includes(next)) break;
           expanded.push(next);
-          const fresh = f.edges.filter(e => e.from === next && !visited.has(e.to)).map(e => e.to);
+          const fresh = adjacent(f, next).filter(id => !visited.has(id));
           fresh.forEach(id => visited.add(id));
           retained = sorted([...retained, ...fresh], score).slice(0, beam);
           fresh.filter(id => retained.includes(id)).forEach(id => pending.add(id));
