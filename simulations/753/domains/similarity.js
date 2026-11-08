@@ -10,7 +10,14 @@
   const cell = (...args) => ({ ...node(...args), shape: 'cell' });
   const register = spec => globalThis.Sims.register({ topic: 'Hashing and similarity', ...spec });
   const buckets = range('slots', 'Table slots', 2, 7, 4);
-  const prime = 17;
+  const radix = 17;
+  // Each accepted partition contains the same number of 32-bit player draws.
+  function uniformIndex(rng, count) {
+    const width = Math.floor(2 ** 32 / count);
+    let index;
+    do { index = Math.floor(draw(rng, 2 ** 32) / width); } while (index >= count);
+    return index;
+  }
   const keys = [
     { name: 'Shelf and bin', pairs: [[1, 2], [1, 4], [1, 6], [1, 8]] },
     { name: 'Diagonal tiles', pairs: [[2, 2], [4, 4], [6, 6], [8, 8]] },
@@ -19,33 +26,35 @@
 
   register({
     id: 'universal-hashing', title: 'Carter–Wegman universal hashing',
-    description: 'Follow a key through a prime field into a table slot. Depth separates input, field residue and bucket.',
+    description: 'Pack two base-17 fields into one number. A random nonzero multiplier and offset send distinct keys to distinct field residues before folding into slots. The collision probability is at most 1 / slots.',
     params: [choice('kind', 'Key type', ['Two fields', 'Single number']), buckets], presets: keys,
-    code: ['(keys, a, c) ← sampleInputsAndCoefficients(p = 17)', 'for x in keys: total ← c + Σⱼ a[j] × x[j]',
-      '  residue ← total mod 17', '  bucket[x] ← residue mod slots'],
+    code: ['p ← 17 for single keys or 293 for pairs; a ← uniform(1..p−1); b ← uniform(0..p−1)',
+      'for key in keys: x ← key or 17 × first + second; total ← a × x + b',
+      '  residue ← total mod p', '  bucket[key] ← residue mod slots'],
     trace(preset, { kind, slots }, rng) {
-      const shift = [draw(rng, prime), draw(rng, prime)];
+      const shift = [draw(rng, radix), draw(rng, radix)];
       const single = kind === 'Single number';
-      const a = single ? 1 + draw(rng, 16) : draw(rng, prime);
-      const b = draw(rng, prime);
-      const c = draw(rng, prime);
-      const input = preset.pairs.map(([x, y], i) => single ? [(x + i + shift[0]) % prime]
-        : [(x + shift[0]) % prime, (y + shift[1]) % prime]);
-      const frames = [{ line: 0, work: `Keys ${input.map(v => '(' + v + ')').join(' ')}. Coefficients ${single ? a : [a, b]}, offset ${c}, prime 17.`,
+      const prime = single ? 17 : 293;
+      const a = 1 + uniformIndex(rng, prime - 1);
+      const b = uniformIndex(rng, prime);
+      const input = preset.pairs.map(([x, y], i) => single ? [(x + i + shift[0]) % radix]
+        : [(x + shift[0]) % radix, (y + shift[1]) % radix]);
+      const frames = [{ line: 0, work: `Keys ${input.map(v => '(' + v + ')').join(' ')}. Coefficients a = ${a}, b = ${b}, prime ${prime}.`,
         nodes: input.map((v, i) => node('k' + i, v.join(','), i, v[0], 0, 0)) }];
       const results = [];
       input.forEach((v, i) => {
-        const sum = a * v[0] + (single ? 0 : b * v[1]) + c;
+        const encoded = single ? v[0] : radix * v[0] + v[1];
+        const sum = a * encoded + b;
         const residue = sum % prime;
         const slot = residue % slots;
         const steps = [
-          [`${a}×${v[0]}${single ? '' : ' + ' + b + '×' + v[1]} + ${c} = ${sum}`, sum],
-          [`${sum} mod 17 = ${residue}`, residue],
+          [(single ? '' : `Pack 17×${v[0]} + ${v[1]} = ${encoded}. `) + `${a}×${encoded} + ${b} = ${sum}`, sum],
+          [`${sum} mod ${prime} = ${residue}`, residue],
           [`${residue} mod ${slots} = ${slot}`, slot],
         ];
         const stages = [node('key', '(' + v + ')', i, v[0] / 16, 0, 0)];
         steps.forEach(([work, value], j) => {
-          const maximum = [single ? 272 : 528, 16, slots - 1][j];
+          const maximum = [(prime - 1) * prime, prime - 1, slots - 1][j];
           stages.push(node('s' + j, value, i, value / maximum, j + 1, j + 1));
           frames.push({ line: j + 1, work, nodes: [
             ...results.map(n => ({ ...n })),

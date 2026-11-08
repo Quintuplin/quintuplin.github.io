@@ -68,18 +68,38 @@ test('matrix entries and bucket heads render as cells', () => {
   }
 });
 
-test('scalar and composite hashes reduce the weighted sum twice', () => {
+test('scalar and packed composite keys use a nonzero multiplier in a field covering the input universe', () => {
   const spec = specs.get('universal-hashing');
   for (const kind of spec.params[0].options) {
     const [init, ...steps] = run(spec, spec.presets[2], { slots: 5, kind });
     const keys = [...init.work.matchAll(/\(([\d,]+)\)/g)].map(m => numbers(m[1]));
     const coeff = numbers(init.work.split('Coefficients ')[1]);
     keys.forEach((key, i) => {
-      const sum = key.reduce((s, x, j) => s + x * coeff[j], coeff[key.length]);
-      const expected = [sum, sum % 17, sum % 17 % 5];
+      const [a, b, prime] = coeff;
+      const x = kind === 'Single number' ? key[0] : key[0] * 17 + key[1];
+      assert.ok(prime >= (kind === 'Single number' ? 17 : 289));
+      assert.ok(a > 0 && a < prime && b >= 0 && b < prime);
+      const sum = a * x + b;
+      const expected = [sum, sum % prime, sum % prime % 5];
       assert.deepEqual(steps.slice(3 * i, 3 * i + 3).map(f => +f.nodes.at(-1).label), expected);
     });
   }
+});
+
+test('every affine coefficient pair on (1,2) and (1,4) respects the table collision bound', () => {
+  const spec = specs.get('universal-hashing');
+  const preset = { pairs: [[1,2],[1,4]] };
+  const p = 293;
+  const collisions = Array(8).fill(0);
+  for (let a = 1; a < p; a++) for (let b = 0; b < p; b++) {
+    const tape = [0, 0, (a - 0.5) / (p - 1), (b + 0.5) / p];
+    let i = 0;
+    const frames = spec.trace(preset, {kind: 'Two fields', slots: 4}, () => tape[i++]);
+    const residues = frames.filter(f => f.line === 2).map(f => Number(f.nodes.at(-1).label));
+    assert.deepEqual(residues, [(19*a + b) % p, (21*a + b) % p]);
+    for (let m = 2; m <= 7; m++) collisions[m] += Number(residues[0] % m === residues[1] % m);
+  }
+  for (let m = 2; m <= 7; m++) assert.ok(collisions[m] * m <= p * (p - 1));
 });
 
 test('dictionary probes the collision chain and unlinks only a present key', () => {
