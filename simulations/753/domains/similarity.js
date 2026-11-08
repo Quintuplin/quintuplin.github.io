@@ -7,6 +7,7 @@
   const draw = (rng, n) => Math.floor(rng() * n);
   const node = (id, label, x, y, z, group, active = false) =>
     ({ id, label: String(label), x, y, z, group, active });
+  const cell = (...args) => ({ ...node(...args), shape: 'cell' });
   const register = spec => globalThis.Sims.register({ topic: 'Hashing and similarity', ...spec });
   const buckets = range('slots', 'Table slots', 2, 7, 4);
   const prime = 17;
@@ -77,7 +78,7 @@
         const nodes = [], edges = [];
         table.forEach((chain, s) => {
           let from = 'b' + s;
-          nodes.push(node(from, '[' + s + ']', s, 0, 0, 0, s === slot));
+          nodes.push(cell(from, '[' + s + ']', s, 0, 0, 0, s === slot));
           chain.forEach((v, j) => {
             const to = 'k' + v;
             nodes.push(node(to, v, s, 1, j + 1, 1, v === key));
@@ -159,7 +160,7 @@
   const setWork = sets => `A = {${sets[0]}}, B = {${sets[1]}}.`;
   const show = x => Number.isFinite(x) ? x : '∞';
   const signatureScene = (sig, row, doc) => sig.flatMap((pair, i) => pair.map((v, d) =>
-    ({ ...node(i + '-' + d, 'AB'[d] + (i + 1) + '=' + show(v), i, Number.isFinite(v) ? v : 7, d * 2, d,
+    ({ ...cell(i + '-' + d, 'AB'[d] + (i + 1) + '=' + show(v), i, Number.isFinite(v) ? v : 7, d * 2, d,
       i === row && (doc === undefined || doc === d)), ...(Number.isFinite(v) ? { value: v } : {}) })));
   function agreement(frames, sig) {
     const matches = sig.filter(([a, b]) => a === b).length;
@@ -214,7 +215,7 @@
         const a = draw(rng, 7);
         return [a, preset.mask[(i + offset) % 8] === '1' ? a : (a + 1 + draw(rng, 6)) % 7];
       });
-      const scene = band => sig.flatMap((pair, i) => pair.map((v, d) => node(i + '-' + d, v,
+      const scene = band => sig.flatMap((pair, i) => pair.map((v, d) => cell(i + '-' + d, v,
         i % r, d, Math.floor(i / r), d, Math.floor(i / r) === band)));
       const frames = [{ line: 0, work: `A = [${sig.map(p => p[0])}], B = [${sig.map(p => p[1])}]. 8/${r} = ${8 / r} bands.`, nodes: scene() }];
       const hits = [];

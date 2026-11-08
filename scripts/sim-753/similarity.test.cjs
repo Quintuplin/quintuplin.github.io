@@ -62,6 +62,12 @@ test('all eight simulations register and replay independent snapshots for every 
   }
 });
 
+test('matrix entries and bucket heads render as cells', () => {
+  for (const id of ['minhash-permutation', 'minhash-one-pass', 'lsh-banding', 'chained-dictionary']) {
+    for (const n of run(specs.get(id))[0].nodes) assert.equal(n.shape, 'cell', id);
+  }
+});
+
 test('scalar and composite hashes reduce the weighted sum twice', () => {
   const spec = specs.get('universal-hashing');
   for (const kind of spec.params[0].options) {
