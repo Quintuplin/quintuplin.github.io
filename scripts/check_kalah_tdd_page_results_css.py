@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Check study.css computed styles on the built Kalah TDD results pages in headless Chrome (#89): summary markers,
-stacked .cols and .qtable first cells at 375px, the nested-card border and no sideways scroll at 375 and 768px.
-One Chrome launch loads every page as a srcdoc iframe with study.css inlined, plus a copy with the guarded rules removed.
+"""Check study.css in headless Chrome: results summary markers, stacked table cells and nested-card borders,
+all study pages without sideways page scroll, and Figure 4.1's region and labels at 375, 768 and 1440px.
+One Chrome launch loads srcdoc iframes with study.css inlined, plus copies with the guarded styles broken.
 $CHROME names the Chrome binary when it is not in a known place.
 
 Usage: check_kalah_tdd_page_results_css.py
@@ -20,11 +20,16 @@ from html import escape
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPTS))
+from kalah_tdd import pagemap  # noqa: E402
+
 STUDY = SCRIPTS.parent / "studies/kalah-tdd-study"
 FIXTURE = SCRIPTS / "fixtures/kalah-tdd/results-qtable.fixture"
 BASE = "/studies/kalah-tdd-study/"
 SLUGS = ("results/survey", "results/contrasts", "results/consistency", "results/test-order")
-WIDTHS = (375, 768)
+PAGE_SLUGS = tuple(p.slug for p in pagemap.PAGES)
+MEASURES = "methodology/measures"
+WIDTHS = (375, 768, 1440)
 CHROMES = ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
            "C:/Program Files/Google/Chrome/Application/chrome.exe", "google-chrome", "google-chrome-stable", "chromium",
            "chromium-browser")
@@ -80,6 +85,29 @@ addEventListener("load", () => {
       for (const t of svg.querySelectorAll("text"))
         check("chart-text", parseFloat(cs(t).fontSize) * scale >= 11.5, svg.closest("figure").id + " " + t.textContent.slice(0, 30));
     }
+    for (const region of d.querySelectorAll("#f4 .diagram")) {
+      counts.measurementRegions = (counts.measurementRegions || 0) + 1;
+      check("measurement-fit", region.scrollWidth <= region.clientWidth,
+        region.scrollWidth + " > " + region.clientWidth);
+      const box = region.getBoundingClientRect(), left = box.left + region.clientLeft, right = left + region.clientWidth;
+      const walker = d.createTreeWalker(region, w.NodeFilter.SHOW_TEXT);
+      for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+        const el = t.parentElement, label = t.textContent.trim();
+        if (!label || el.closest("title, desc, script, style")) continue;
+        counts.measurementTexts = (counts.measurementTexts || 0) + 1;
+        const range = d.createRange();
+        range.selectNodeContents(t);
+        const rect = range.getBoundingClientRect(), matrix = el.getScreenCTM?.();
+        const scale = matrix ? Math.hypot(matrix.a, matrix.b) :
+          (el.offsetWidth ? el.getBoundingClientRect().width / el.offsetWidth : 1);
+        const size = parseFloat(cs(el).fontSize) * scale;
+        check("measurement-text", size >= 11.9, label + " rendered at " + size.toFixed(2) + "px");
+        check("measurement-label", rect.width > 0 && rect.height > 0 && cs(el).visibility === "visible" &&
+          rect.left >= left - 1 && rect.right <= right + 1,
+          label + " bounds " + rect.left.toFixed(1) + ".." + rect.right.toFixed(1) +
+          " outside " + left.toFixed(1) + ".." + right.toFixed(1));
+      }
+    }
     const root = d.documentElement;
     check("sideways-scroll", root.scrollWidth <= root.clientWidth, root.scrollWidth + " > " + root.clientWidth);
     out[f.dataset.name] = {counts, fails};
@@ -131,19 +159,22 @@ def doc(slug, style, extra=""):
 def frames():
     """(name, width, document) for every probed frame."""
     fixture = FIXTURE.read_text(encoding="utf-8")
-    out = [(f"{slug} {w}", w, doc(slug, css())) for slug in SLUGS for w in WIDTHS]
+    out = [(f"{slug} {w}", w, doc(slug, css())) for slug in PAGE_SLUGS for w in WIDTHS]
     out.append(("fixture 375", 375, doc("results/contrasts", css(), fixture)))
     out += [("mutated contrasts 375", 375, doc("results/contrasts", mutated())),
             ("mutated fixture 375", 375, doc("results/contrasts", mutated(), fixture))]
+    clipped = (css() + "\n#f4 .diagram > *{min-width:1600px!important;width:1600px!important;max-width:none!important}"
+               "\n#f4 .diagram :is(text,[data-node],[data-node] *){font-size:4px!important}")
+    out.append(("clipped measurement 375", 375, doc(MEASURES, clipped)))
     return out
 
 
 @functools.cache
 def probe():
     """{frame name: {"counts", "fails", "summaries in html"}} from one headless Chrome launch."""
-    for slug in SLUGS:
+    for slug in PAGE_SLUGS:
         if 'name="kalah-tdd-stub"' in html(slug):
-            raise AssertionError(f"{slug} is a stub; the probe needs the built results pages")
+            raise AssertionError(f"{slug} is a stub; the probe needs the built study pages")
     made = frames()
     iframes = "".join(f'<iframe data-name="{name}" width="{w}" height="800" srcdoc="{escape(d)}"></iframe>'
                       for name, w, d in made)
@@ -169,8 +200,8 @@ def fails(name, check=None):
     return [f for f in probe()[name]["fails"] if check in (None, f[0])]
 
 
-def real(width=None):
-    return [f"{slug} {w}" for slug in SLUGS for w in WIDTHS if width in (None, w)]
+def real(width=None, slugs=SLUGS):
+    return [f"{slug} {w}" for slug in slugs for w in WIDTHS if width in (None, w)]
 
 
 class ResultsCss(unittest.TestCase):
@@ -200,9 +231,29 @@ class ResultsCss(unittest.TestCase):
         self.assertEqual(probe()["fixture 375"]["counts"]["nested"], 1)
 
     def test_no_sideways_scroll(self):
-        for name in real() + ["fixture 375"]:
+        for name in real(slugs=PAGE_SLUGS) + ["fixture 375"]:
             with self.subTest(name):
                 self.assertEqual(fails(name, "sideways-scroll"), [])
+
+    def test_measurement_pipeline_fits_region(self):
+        for name in real(slugs=(MEASURES,)):
+            with self.subTest(name):
+                self.assertEqual(probe()[name]["counts"].get("measurementRegions"), 1)
+                self.assertEqual(fails(name, "measurement-fit"), [])
+
+    def test_measurement_labels_are_readable(self):
+        for name in real(slugs=(MEASURES,)):
+            with self.subTest(name):
+                self.assertGreater(probe()[name]["counts"].get("measurementTexts", 0), 17)
+                self.assertEqual(fails(name, "measurement-text"), [])
+                self.assertEqual(fails(name, "measurement-label"), [])
+
+    def test_probe_rejects_clipped_measurement(self):
+        name = "clipped measurement 375"
+        self.assertEqual(probe()[name]["counts"].get("measurementRegions"), 1)
+        for check in ("measurement-fit", "measurement-label", "measurement-text"):
+            with self.subTest(check):
+                self.assertTrue(fails(name, check))
 
     def test_chart_text_full_size(self):
         for name in real():

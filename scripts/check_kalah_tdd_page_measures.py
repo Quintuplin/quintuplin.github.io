@@ -548,6 +548,36 @@ class Measures(unittest.TestCase):
                 with self.subTest(name):
                     self.assertRegex(caption, rf"(?<![\w-]){re.escape(name)}(?![\w-])")
 
+    def test_responsive_graph_keeps_nodes_and_edges(self):
+        nodes, edges = measures().pipeline(snap())
+        diagram = next(n for n in page().ids["f4"].iter() if "diagram" in n.classes())
+        drawn = [n for n in diagram.iter() if "data-node" in n.attrs]
+        self.assertEqual(Counter(n.attrs["data-node"] for n in drawn), Counter(n.id for n in nodes))
+        by_id = {n.attrs["data-node"]: n for n in drawn}
+        for n in nodes:
+            with self.subTest(node=n.id):
+                shown = by_id[n.id]
+                self.assertEqual(shown.attrs.get("data-lane"), n.lane)
+                for label in (n.label, n.note):
+                    if label:
+                        self.assertIn(" ".join(label.split()), check().spaced(shown))
+                self.assertNotIn("hidden", shown.attrs)
+                self.assertNotEqual(shown.attrs.get("aria-hidden"), "true")
+        links = [n for n in diagram.iter() if "data-from" in n.attrs or "data-to" in n.attrs]
+        self.assertEqual(Counter((n.attrs.get("data-from"), n.attrs.get("data-to")) for n in links),
+                         Counter((e.src, e.dst) for e in edges))
+        for lane in measures().LANES:
+            self.assertEqual([n.attrs["data-node"] for n in drawn if n.attrs.get("data-lane") == lane],
+                             [n.id for n in nodes if n.lane == lane])
+        labels = {n.id: n.label for n in nodes}
+        for edge in links:
+            src, dst = edge.attrs["data-from"], edge.attrs["data-to"]
+            with self.subTest(edge=(src, dst)):
+                self.assertIn(labels[src], check().spaced(edge))
+                self.assertIn(labels[dst], check().spaced(edge))
+                self.assertNotIn("hidden", edge.attrs)
+                self.assertNotEqual(edge.attrs.get("aria-hidden"), "true")
+
     def test_undrawn_sentence_well_formed(self):
         m = measures()
         families = m.FAMILIES + (m.TEST_ORDER,)
