@@ -20,6 +20,16 @@ function run(spec, preset = spec.presets[0], overrides = {}, seed = 54819) {
 
 const numbers = text => text.match(/-?\d+/g).map(Number);
 
+test('every highlighted code line contains an algorithm operation', () => {
+  for (const spec of specs.values()) {
+    const visited = new Set(run(spec).map(f => f.line));
+    spec.code.forEach((line, index) => {
+      assert.ok(visited.has(index), spec.id + ' unreachable line ' + index);
+      assert.match(line, /←|\breturn\b|\bif\b|\bfor\b/, spec.id + ' line ' + index);
+    });
+  }
+});
+
 test('all eight simulations register and replay independent snapshots for every preset', () => {
   assert.equal(specs.size, 8);
   for (const spec of specs.values()) {

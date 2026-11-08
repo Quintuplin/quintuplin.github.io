@@ -20,8 +20,8 @@
     id: 'universal-hashing', title: 'Carter–Wegman universal hashing',
     description: 'Follow a key through a prime field into a table slot. Depth separates input, field residue and bucket.',
     params: [choice('kind', 'Key type', ['Two fields', 'Single number']), buckets], presets: keys,
-    code: ['Choose field coefficients and translate the input keys.', 'Multiply each field by its coefficient and add the offset.',
-      'Reduce the sum modulo the prime.', 'Reduce the residue modulo the table size.'],
+    code: ['(keys, a, c) ← sampleInputsAndCoefficients(p = 17)', 'for x in keys: total ← c + Σⱼ a[j] × x[j]',
+      '  residue ← total mod 17', '  bucket[x] ← residue mod slots'],
     trace(preset, { kind, slots }, rng) {
       const shift = [draw(rng, prime), draw(rng, prime)];
       const single = kind === 'Single number';
@@ -66,8 +66,8 @@
       { name: 'Adjacent lockers', offsets: [0, 1, 2, 3] },
       { name: 'Spaced crates', offsets: [0, 6, 3, 9] },
     ],
-    code: ['Create empty chains.', 'Insert each new key at its bucket head.', 'Hash the query.',
-      'Compare the next key.', 'Report membership.', 'Unlink the matching key if present.'],
+    code: ['chain[0..slots−1] ← empty lists', 'for x in keys: prepend(chain[x mod slots], x)', 's ← query mod slots; hit ← null',
+      'for entry in chain[s]: if entry.key = query: hit ← entry; break', 'found ← (hit ≠ null)', 'if found: unlink(chain[s], hit)'],
     trace(preset, { slots, query }, rng) {
       const base = draw(rng, 31) + draw(rng, 31);
       const input = preset.offsets.map(x => x + base);
@@ -117,8 +117,8 @@
       { name: 'Reversed ending', docs: ['CABCDA', 'CABADC'] },
       { name: 'Different alphabets', docs: ['AABABB', 'CCDCDD'] },
     ],
-    code: ['Read both strings.', 'Take the next window and insert it into the document set.',
-      'Count shared and distinct shingles.', 'Divide intersection size by union size.'],
+    code: ['(A, B) ← inputStrings(); S[A], S[B] ← ∅, ∅', 'for d in [A,B], i in 0..len(d)−width: S[d] ← S[d] ∪ {d[i:i+width]}',
+      'I ← S[A] ∩ S[B]; U ← S[A] ∪ S[B]', 'return |I| / |U|'],
     trace(preset, { width }, rng) {
       const shift = (draw(rng, 26) + draw(rng, 26)) % 26;
       const docs = preset.docs.map(s => s.replace(/./g, ch => String.fromCharCode(65 + (ch.charCodeAt(0) - 65 + shift) % 26)));
@@ -172,7 +172,9 @@
     id: 'minhash-permutation', title: 'MinHash by row permutation',
     description: 'Scan a shuffled feature order until each set records its first rank. Height shows the rank and depth identifies the set.',
     params: [hashes], presets: setPairs,
-    code: ['Start two empty signatures.', 'Shuffle the feature rows.', 'Scan ranks, recording the first hit for each set.', 'Count equal ranks.'],
+    code: ['sig[0..count−1, A:B] ← ∞', 'for i in 0..count−1: order ← shuffle(0..6)',
+      '  for rank,x in enumerate(order): for d containing x: sig[i,d] ← min(sig[i,d], rank); stop scan when both finite',
+      'return countEqualRows(sig) / count'],
     trace(preset, { count }, rng) {
       const sets = featureSets(preset, rng);
       const sig = ints(count).map(() => [Infinity, Infinity]);
@@ -203,8 +205,8 @@
       { name: 'Alternating matches', mask: '10101010' },
       { name: 'Scattered gaps', mask: '11011101' },
     ],
-    code: ['Partition the two signatures into bands.', 'Compare all rows of the current band.',
-      'Add the pair if its full band matches.', 'Take the union of the candidate pairs.'],
+    code: ['bands ← partition(zip(A, B), rows); hits ← ∅', 'for band in bands: match ← all(a = b for (a,b) in band)',
+      '  if match: hits ← hits ∪ {band.index}', 'return {(A,B)} if hits ≠ ∅ else ∅'],
     trace(preset, { rows }, rng) {
       const r = Number(rows);
       const offset = draw(rng, 8);
@@ -237,8 +239,8 @@
       { name: 'Close thresholds', near: 65, far: 50 },
       { name: 'Similar documents', near: 90, far: 65 },
     ],
-    code: ['Set the near and far Jaccard similarity thresholds.', 'AND: multiply independent collision probabilities.',
-      'OR: subtract the probability every table misses from one.', 'Report near and far bounds at the distance thresholds.'],
+    code: ['p[near], p[far] ← nearSimilarity, farSimilarity', 'for d in [near,far]: band[d] ← p[d]^k',
+      'for d in [near,far]: hit[d] ← 1 − (1 − band[d])^tables', 'return (1 − p[near], 1 − p[far], hit[near], hit[far])'],
     trace(preset, { k, tables }, rng) {
       const percent = [preset.near, preset.far].map(x => x + draw(rng, 5) - draw(rng, 5));
       const p = percent.map(x => x / 100);
@@ -269,8 +271,8 @@
       { name: 'Opposing vectors', vectors: [[3, 2, 4], [-3, -2, -4]] },
       { name: 'Across axes', vectors: [[4, 0, 1], [0, 4, -1]] },
     ],
-    code: ['Read the vector coordinates.', 'Sample a nonzero integer plane normal.',
-      'Compute each dot product and take its sign bit (zero maps to one).', 'Count differing bits.'],
+    code: ['A, B ← inputVectors(); sig[A], sig[B] ← [], []', 'for i in 0..bits−1: n ← sample({−2..2}³ ∖ {0})',
+      '  for v in [A,B]: sig[v,i] ← int(dot(v,n) ≥ 0)', 'return count(i where sig[A,i] ≠ sig[B,i])'],
     trace(preset, { bits }, rng) {
       const scale = ints(3).map(() => 1 + draw(rng, 4));
       const vectors = preset.vectors.map(v => v.map((x, i) => x * scale[i]));
@@ -306,8 +308,8 @@
     id: 'minhash-one-pass', title: 'One-pass MinHash',
     description: 'Visit each feature once and update signature minima with affine permutations modulo seven. Depth separates the two document columns.',
     params: [hashes], presets: setPairs,
-    code: ['Initialise signature cells to infinity and choose affine hashes.', 'Read a feature and identify its sets.',
-      'For each hash, minimise the cells of sets containing this feature.', 'Count equal minima.'],
+    code: ['sig[:,:] ← ∞; for i in 0..count−1: hᵢ(x) ← (aᵢx + bᵢ) mod 7', 'for x in 0..6: docs ← {d where x ∈ d}',
+      '  for i in 0..count−1: for d in docs: sig[i,d] ← min(sig[i,d], hᵢ(x))', 'return countEqualRows(sig) / count'],
     trace(preset, { count }, rng) {
       const sets = featureSets(preset, rng);
       const coeff = ints(count).map(() => [1 + draw(rng, 6), draw(rng, 7)]);
