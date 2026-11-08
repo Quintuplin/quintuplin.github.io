@@ -1,6 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const playerSeed = require('./player-seed.cjs');
 
 const specs = new Map();
 globalThis.Sims = { register(spec) {
@@ -89,7 +90,19 @@ test('exact scan ranks by the selected metric and keeps k at every insertion', (
   }
 });
 
-test('LSH uses all cuts per key, unions matching buckets and stops at the distinct-candidate budget', () => {
+test('rNNS charges repeated bucket entries to the default two-per-table budget', () => {
+  const spec = specs.get('lsh-radius');
+  const defaults = Object.fromEntries(spec.params.map(p => [p.key, p.value]));
+  const params = { ...defaults, bits: 2, tables: 2, radius: 2, factor: 2 };
+  for (const budget of [params.budget, 4]) {
+    const frames = spec.trace(spec.presets[0], { ...params, budget }, playerSeed(15));
+    assert.deepEqual(frames.filter(f => f.line === 2).map(f => f.work.split(': ').at(-1)), ['E, G','F, G, H']);
+    assert.deepEqual(frames.filter(f => f.line === 3).map(f => active(f)[0]), ['E','G','F','G']);
+    assert.match(frames.at(-1).work, /miss.*4 retrieved entries/i);
+  }
+});
+
+test('LSH uses all cuts per key and stops at the retrieved-entry budget', () => {
   const spec = specs.get('lsh-radius');
   const outcomes = new Set();
   for (const preset of spec.presets) for (const seed of seeds) {
@@ -100,23 +113,22 @@ test('LSH uses all cuts per key, unions matching buckets and stops at the distin
         const filters = frames.filter(f => f.line === 0).map(f =>
           Array.from(f.work.matchAll(/([xyz]) ≥ (\d+)/g), m => ['xyz'.indexOf(m[1]), Number(m[2])]));
         assert.equal(filters.length, tables);
-        const seen = new Set();
+        const retrieved = [];
         let hit;
         for (const cuts of filters) {
           assert.equal(cuts.length, bits);
           const sameKey = id => cuts.every(([axis, cut]) => (v[id][axis] >= cut) === (v.Q[axis] >= cut));
           for (const id of abc.filter(sameKey)) {
-            if (seen.has(id)) continue;
-            seen.add(id);
+            retrieved.push(id);
             if (l1(v[id], v.Q) <= radius * factor) hit = id;
-            if (hit || seen.size === budget) break;
+            if (hit || retrieved.length === budget) break;
           }
-          if (hit || seen.size === budget) break;
+          if (hit || retrieved.length === budget) break;
         }
         const checked = frames.filter(f => f.line === 3).map(f => active(f).find(id => id !== 'Q'));
-        assert.deepEqual(checked, [...seen]);
+        assert.deepEqual(checked, retrieved);
         assert.deepEqual(active(frames.at(-1)), hit ? [hit] : []);
-        outcomes.add(hit ? 'hit' : seen.size === budget ? 'budget' : 'exhausted');
+        outcomes.add(hit ? 'hit' : retrieved.length === budget ? 'budget' : 'exhausted');
       }
     }
   }

@@ -82,12 +82,12 @@
   register('lsh-radius', 'Locality-sensitive hashing for a radius query',
     'When a point lies within the target radius, the search aims to find one within factor × radius. Random coordinate cuts form the bits. Match every bit in one table to become a candidate.',
     [number('bits', 'Cuts per table (AND)', 1, 5, 3), number('tables', 'Hash tables (OR)', 1, 5, 3),
-      number('budget', 'Distinct candidates to check', 1, 8, 6), number('radius', 'Target Manhattan radius', 1, 10, 4),
+      number('budget', 'Retrieved-entry limit (0 uses twice the table count)', 0, 10, 0), number('radius', 'Target Manhattan radius', 1, 10, 4),
       number('factor', 'Approximation factor', 1, 3, 2)], [
       'for t in 1..tables: cuts[t] ← sampleCuts(bits)',
       '    for p in points: index[t][bitTuple(p, cuts[t])].append(p)',
-      'for t in 1..tables: bucket ← index[t].get(bitTuple(Q, cuts[t]), [])',
-      '    for p in bucket − checked: checked.add(p); stop if L1(Q,p) ≤ factor × radius or size(checked) = budget',
+      'retrieved ← 0; limit ← budget or 2 × tables; for t in 1..tables: bucket ← index[t].get(bitTuple(Q, cuts[t]), [])',
+      '    for p in bucket: retrieved += 1; stop if L1(Q,p) ≤ factor × radius or retrieved = limit',
       'return firstCheckedWithin(factor × radius) or MISS'
     ], (preset, { bits, tables, budget, radius, factor }, rng) => {
       const { points, q, all, nodes } = sample(preset, rng);
@@ -109,26 +109,26 @@
         }
         index.push({ cuts, buckets });
       }
-      const seen = new Set();
+      const limit = budget || 2 * tables;
+      let retrieved = 0;
       let answer;
       for (const [t, { cuts, buckets }] of index.entries()) {
         const key = hash(q, cuts);
         const matches = buckets.get(key) || [];
         add(2, 'Q ' + tuple(q) + ' → table ' + (t + 1) + ' bucket ' + key + ': ' + names(matches), nodes, matches.map(name));
         for (const i of matches) {
-          if (seen.has(i)) continue;
-          seen.add(i);
+          retrieved++;
           const d = manhattan(q, points[i]);
           const ok = d <= radius * factor;
-          add(3, 'Check ' + seen.size + '/' + budget + '. d(Q,' + name(i) + ') = ' + d + (ok ? ' ≤ ' : ' > ') + factor + ' × ' + radius, nodes, ['Q', name(i)]);
+          add(3, 'Check ' + retrieved + '/' + limit + '. d(Q,' + name(i) + ') = ' + d + (ok ? ' ≤ ' : ' > ') + factor + ' × ' + radius, nodes, ['Q', name(i)]);
           if (ok) answer = i;
-          if (ok || seen.size === budget) break;
+          if (ok || retrieved === limit) break;
         }
-        if (answer !== undefined || seen.size === budget) break;
+        if (answer !== undefined || retrieved === limit) break;
       }
       const result = answer !== undefined ? 'Return ' + name(answer) + ' within ' + radius * factor :
-        'Search miss: ' + (seen.size === budget ? 'candidate budget exhausted' : 'matching buckets exhausted');
-      add(4, result + '. Checked ' + seen.size + ' distinct candidates.', nodes, answer === undefined ? [] : [name(answer)]);
+        'Search miss: ' + (retrieved === limit ? 'entry limit reached' : 'matching buckets exhausted');
+      add(4, result + '. Checked ' + retrieved + ' retrieved entries.', nodes, answer === undefined ? [] : [name(answer)]);
       return frames;
     });
 
