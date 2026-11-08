@@ -114,6 +114,16 @@ addEventListener("load", async () => {
       check("matrix-format", region.scrollWidth <= region.clientWidth, "a compact numeric matrix fits without forced widths");
       for (const cell of matrix.querySelectorAll("td.number"))
         check("matrix-format", cs(cell).whiteSpace === "nowrap", "numeric token stays whole");
+      if (f.width <= 899) for (const link of matrix.querySelectorAll("td a"))
+        check("matrix-format", link.getBoundingClientRect().height >= 44, "matrix links remain touch targets");
+    }
+    const runs = d.querySelector('.table-scroll[aria-label="Runs"] > table');
+    if (runs) {
+      if (f.width <= 640) check("run-records", runs.classList.contains("cols") &&
+        cs(runs.querySelector("thead")).display === "none", "Runs metadata stacks as records");
+      const links = [...runs.querySelectorAll("td a")]; counts.runLinks = links.length;
+      if (f.width <= 899) for (const link of links)
+        check("run-records", link.getBoundingClientRect().height >= 44, "rebuild link remains a touch target");
     }
     // Study dot charts hold their drawn width, so chart text stays at its 12px size and the region scrolls instead.
     for (const svg of d.querySelectorAll(".diagram svg.plot")) {
@@ -285,7 +295,7 @@ def frames():
     out += [(f"formatted table {w}", w, doc("results/contrasts", css(), formatted)) for w in WIDTHS]
     out.append(("mutated narrative 375", 375, doc("results/contrasts", mutated(), formatted)))
     matrix = parts.table('<table class="cols" id="format-matrix"><thead><tr><th>Method</th><th>M</th><th>E</th></tr></thead>'
-                         '<tbody><tr><td>A</td><td>470,362</td><td>5</td></tr><tr><td>B</td><td>at bound</td><td>2</td></tr></tbody></table>', 'Numeric comparison')
+                         '<tbody><tr><td><a href="#format-matrix">A</a></td><td>470,362</td><td>5</td></tr><tr><td>B</td><td>at bound</td><td>2</td></tr></tbody></table>', 'Numeric comparison')
     out += [(f"numeric matrix {w}", w, doc("results/contrasts", css(), matrix)) for w in WIDTHS]
     out.append(("small svg text 1440", 1440, doc("designs/annealed", css() + "\nsvg.flow text{font-size:11px!important}")))
     out.append(("obsolete axis 375", 375, doc("results/consistency", css()).replace(
@@ -374,6 +384,13 @@ class ResultsCss(unittest.TestCase):
         for width in WIDTHS:
             with self.subTest(width):
                 self.assertEqual(fails(f"numeric matrix {width}", "matrix-format"), [])
+
+    def test_runs_metadata_and_rebuild_links_remain_readable(self):
+        for width in (375, 768):
+            name = f"methodology {width}"
+            with self.subTest(width):
+                self.assertGreater(probe()[name]["counts"].get("runLinks", 0), 0)
+                self.assertEqual(fails(name, "run-records"), [])
 
     def test_small_svg_labels_select_compact(self):
         name = "small svg text 1440"

@@ -255,7 +255,7 @@ td.number{white-space:nowrap;overflow-wrap:normal;word-break:normal;text-align:r
 /* Code in a cell, such as a doc sha, breaks only when it alone overflows its line. */
 .table-scroll > table.cols code{overflow-wrap:anywhere}
 /* Cell links, such as a stage table's design, are touch targets where nav rows are. */
-@media (max-width:899.98px), (pointer:coarse){.cols td a{display:inline-flex;align-items:center;min-height:44px}}
+@media (max-width:899.98px), (pointer:coarse){.cols td a,.matrix td a{display:inline-flex;align-items:center;min-height:44px}}
 caption{caption-side:top;text-align:left;font-weight:600;font-size:14px;color:var(--muted);padding:var(--space-1) var(--space-3)}
 th,td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
 th{background:var(--wash);color:var(--muted);font-weight:600}

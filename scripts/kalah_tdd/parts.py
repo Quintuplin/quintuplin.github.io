@@ -23,7 +23,7 @@ def table(html, label):
     def cell(m):
         attrs, content = m.groups()
         value = unescape(re.sub(r"<[^>]+>", "", content)).strip()
-        if re.fullmatch(r"[-+−]?\d[\d.,%/()[\] ±–−+eE-]*", value):
+        if not re.search(r"<code\b", content) and re.fullmatch(r"[-+−]?\d[\d.,%/()[\] ±–−+eE-]*", value):
             attrs = re.sub(r'class="([^"]*)"', r'class="\1 number"', attrs) if 'class="' in attrs else attrs + ' class="number"'
         return f"<td{attrs}>{content}</td>"
     scope = lambda text, kind: re.sub(r'<th(?![^>]*\bscope=)(?=[\s>])', f'<th scope="{kind}"', text)

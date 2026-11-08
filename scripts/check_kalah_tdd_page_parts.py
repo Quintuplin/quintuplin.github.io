@@ -60,6 +60,14 @@ class Parts(unittest.TestCase):
         narrative = '<table class="cols"><tr><td>A description</td><td>5</td></tr><tr><td>Another description</td><td>2</td></tr></table>'
         self.assertIn('<table class="cols">', kalah("parts").table(narrative, "Records"))
 
+    def test_numeric_code_identifiers_do_not_make_a_measurement_column(self):
+        table = '<table class="cols"><thead><tr><th>Run</th><th>Builds</th><th>Methods doc</th></tr></thead>' \
+                '<tbody><tr><td>full-1</td><td>11</td><td><code>64606950</code></td></tr></tbody></table>'
+        out = kalah("parts").table(table, "Runs")
+        self.assertIn('<table class="cols">', out)
+        self.assertIn('<td><code>64606950</code></td>', out)
+        self.assertIn('<td class="number">11</td>', out)
+
     def test_table_is_named_scroll_region(self):
         self.assertEqual(kalah("parts").table("<table></table>", UNSAFE),
                          '<div class="table-scroll" role="region" tabindex="0" aria-label="a &lt;b&gt; &amp; &quot;c&quot;">'
