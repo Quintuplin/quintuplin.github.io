@@ -149,6 +149,24 @@ test("preset, both parameter kinds and seed rebuild the input, randomize retains
   assert.equal((await state(page)).count, "Step 1 of 3");
 });
 
+for (const [invalid, label, alternative] of [["", "Data preset", "1"], ["4294967296", "Sign", "Negative"]]) {
+  test(`changing ${label} with an invalid seed restores and runs the last valid seed`, async t => {
+    const page = await open(t);
+    const seed = page.getByLabel("Seed", {exact: true});
+    const control = page.getByLabel(label);
+    const original = await control.inputValue();
+    await seed.fill("427");
+    await seed.press("Enter");
+    await control.selectOption(alternative);
+    const expected = await state(page);
+    await control.selectOption(original);
+    await seed.fill(invalid);
+    await control.selectOption(alternative);
+    assert.equal(await seed.inputValue(), "427");
+    assert.deepEqual(await state(page), expected);
+  });
+}
+
 test("point projection preserves signed height and depth, hover and camera controls work", async t => {
   const page = await open(t);
   const dots = page.locator("circle.sp-dot");

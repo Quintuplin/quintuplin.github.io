@@ -73,6 +73,7 @@
     const run = get("run"), previous = get("prev"), next = get("next");
     const renderer = globalThis.SimsRenderer.create(get("plot"), get("info"));
     let frames, cursor, timer, activeLine;
+    let lastValidSeed = seed.valueAsNumber;
     const params = {};
     preset.replaceChildren(...spec.presets.map((p, i) => new Option(p.name, String(i))));
     code.replaceChildren(...spec.code.map(s => {
@@ -131,9 +132,11 @@
 
     function rebuild() {
       pause();
+      if (seed.validity.valid) lastValidSeed = seed.valueAsNumber;
+      else seed.valueAsNumber = lastValidSeed;
       // Domain code can sort a preset or retain references. Each run owns its input and output.
       const data = structuredClone(spec.presets[Number(preset.value)]);
-      frames = structuredClone(spec.trace(data, { ...params }, seeded(seed.valueAsNumber)));
+      frames = structuredClone(spec.trace(data, { ...params }, seeded(lastValidSeed)));
       if (!frames.length) throw new Error(id + " produced an empty trace");
       renderer.fit(frames);
       work.replaceChildren();
@@ -170,7 +173,7 @@
     seed.onchange = () => { if (seed.reportValidity()) rebuild(); };
     get("random").onclick = () => {
       const draw = crypto.getRandomValues(new Uint32Array(1))[0];
-      seed.value = draw === seed.valueAsNumber ? (draw + 1) >>> 0 : draw;
+      seed.value = draw === lastValidSeed ? (draw + 1) >>> 0 : draw;
       rebuild();
     };
     run.onclick = () => timer === undefined ? play() : pause();
