@@ -64,7 +64,7 @@
       "for d: v[d] ← C[d,:] ⊙ idf",
       "reader ← sum(v[d] for d in liked) / count(liked)",
       "for d in unread: score[d] ← dot(reader, v[d]) / (‖reader‖ × ‖v[d]‖)",
-      "return sort(unread, by = descending(score), tie = inputOrder)"],
+      "return sort(unread, by = descending(score), tieWithin = 1e-12, tie = inputOrder)"],
     trace(p, { liked }, rng) {
       const counts = p.counts.map(row => row.map(v => v && 2 * v + Math.floor(3 * rng())));
       const frames = [frame(0, matrixWork(counts, p.titles, p.terms), matrixNodes(counts, p.titles, p.terms))];
@@ -92,7 +92,7 @@
         frames.push(frame(4, `${p.titles[i]}: ${fmt(dot(profile, vectors[i]))} / (${fmt(norm(profile))} × ${fmt(norm(vectors[i]))}) = ${fmt(score)}.`,
           matrixNodes([profile, vectors[i]], ["Reader", p.titles[i]], p.terms)));
       }
-      scores.sort((a, b) => b.score - a.score || a.i - b.i);
+      scores.sort((a, b) => Math.abs(b.score - a.score) <= 1e-12 ? a.i - b.i : b.score - a.score);
       frames.push(frame(5, scores.map((s, i) => `${i + 1}. ${s.title} ${fmt(s.score)}`).join(" · "),
         scores.map((s, i) => ({ ...node(s.title, s.title + " " + fmt(s.score), i * 2, s.score, norm(vectors[s.i]), s.score, i), shape: "bar" }))));
       return frames;

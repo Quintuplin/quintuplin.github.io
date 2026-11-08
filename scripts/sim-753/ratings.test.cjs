@@ -90,6 +90,13 @@ for (const spec of specs.values()) {
   });
 }
 
+test("Field guides preserves reading order for cosines tied within roundoff", () => {
+  const spec = specs.get("content-profile"), p = spec.presets.find(p => p.name === "Field guides");
+  const result = run(spec, p, { liked: 1 }, playerRandom(1274)).at(-1);
+  assert.deepEqual(result.nodes.map(n => n.id), ["Grove", "Ridge", "Marsh", "Wings"]);
+  near(result.nodes[1].value, result.nodes[2].value, 1e-12);
+});
+
 test("TF-IDF uses document frequency, averages only liked vectors and sorts unread cosines", () => {
   const spec = specs.get("content-profile");
   for (const p of spec.presets) for (const liked of [1, 2]) {
