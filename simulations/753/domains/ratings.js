@@ -100,7 +100,6 @@
   });
 
   const metric = choice("metric", "Neighbour similarity", ["Cosine", "Pearson"]);
-  const neighbours = slider("k", "Neighbours by absolute similarity", 1, 3, 1, 2);
   function similarity(a, b, method) {
     let x, y;
     if (method === "Pearson") {
@@ -121,13 +120,16 @@
   }
   function neighbourSpec(id, title, byItem, residual) {
     const kind = byItem ? "items" : "users";
+    const signed = !byItem && !residual;
+    const priority = candidate => signed ? candidate.weight : Math.abs(candidate.weight);
+    const neighbours = slider("k", signed ? "Neighbours by signed similarity" : "Neighbours by absolute similarity", 1, 3, 1, 2);
     const code = [byItem ? "V ← transpose(R); target ← Fir; column ← Ada" : "V ← R; target ← Ada; column ← Fir",
       residual ? "μ ← mean(observed(R)); B[u,i] ← mean(observed(R[u,:])) + mean(observed(R[:,i])) − μ"
         : "for j: m[j] ← mean(observed(V[j,:]))",
       "for j with V[j,column] known: a,b ← V[target], V[j]",
       "if Pearson: x,y ← overlap(a − meanKnown(a), b − meanKnown(b)); else: x,y ← zeroFill(a), zeroFill(b)",
       "lengthProduct ← ‖x‖ × ‖y‖; w[j] ← lengthProduct > 0 ? dot(x,y)/lengthProduct : 0",
-      "N ← first(k, sort(eligible, by = descending(abs(w)), tie = inputOrder)); S,D ← 0,0",
+      `N ← first(k, sort(eligible, by = descending(${signed ? "w" : "abs(w)"}), tie = inputOrder)); S,D ← 0,0`,
       residual ? "for j in N: S += w[j] × (V[j,column] − B[j,column]); D += abs(w[j])"
         : "for j in N: S += w[j] × V[j,column]; D += abs(w[j])",
       "return D > 0 ? " + (residual ? "B[Ada,Fir] + " : "") + "S / D : baseline(Ada,Fir)"];
@@ -161,7 +163,7 @@
           candidates.push({ i, weight });
           frames.push(frame(4, `${metric} for ${names[target]} and ${names[i]}: ${calculation}.`, draw(i)));
         });
-        const selected = candidates.sort((a, b) => Math.abs(b.weight) - Math.abs(a.weight) || a.i - b.i).slice(0, k);
+        const selected = candidates.sort((a, b) => priority(b) - priority(a) || a.i - b.i).slice(0, k);
         frames.push(frame(5, `Keep ${selected.map(c => names[c.i] + " (" + fmt(c.weight) + ")").join(", ")}.`, draw()));
         let numerator = 0, denominator = 0;
         selected.forEach(({ i, weight }) => {

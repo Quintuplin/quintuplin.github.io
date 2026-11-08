@@ -19,6 +19,15 @@ function random(seed) {
     return seed / 2 ** 32;
   };
 }
+// Match the generator used by the player's Seed control.
+function playerRandom(seed) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) >>> 0;
+    let bits = Math.imul(seed ^ (seed >>> 15), seed | 1);
+    bits ^= bits + Math.imul(bits ^ (bits >>> 7), bits | 61);
+    return ((bits ^ (bits >>> 14)) >>> 0) / 4294967296;
+  };
+}
 function run(spec, p, params = {}, rng = () => 0.5) {
   return spec.trace(p, { ...defaults(spec), ...params }, rng);
 }
@@ -98,6 +107,14 @@ test("TF-IDF uses document frequency, averages only liked vectors and sorts unre
   }
 });
 
+test("user CF keeps the highest signed Pearson neighbour at k=1", () => {
+  const spec = specs.get("user-collaborative-filtering");
+  const p = spec.presets.find(p => p.name === "Two taste camps");
+  const fs = run(spec, p, { metric: "Pearson", k: 1 }, playerRandom(753));
+  assert.match(fs.find(f => f.line === 5).work, /Keep Bo \(0\.9608\)/);
+  near(cell(fs.at(-1), 0, 3), 4.63);
+});
+
 function referenceBaseline(rows) {
   const global = avg(known(rows.flat()));
   return (r, c) => avg(known(rows[r])) + avg(known(cols(rows)[c])) - global;
@@ -127,7 +144,8 @@ test("cosine keeps full norms; Pearson uses all-rating means and common dimensio
         const w = xx && yy ? xy / (Math.sqrt(xx) * Math.sqrt(yy)) : 0;
         neighbours.push({ w, value: other[column] - (residual ? baseline(j, column) : 0) });
       }
-      const selected = neighbours.sort((a, b) => Math.abs(b.w) - Math.abs(a.w)).slice(0, k);
+      const priority = n => id === "user-collaborative-filtering" ? n.w : Math.abs(n.w);
+      const selected = neighbours.sort((a, b) => priority(b) - priority(a)).slice(0, k);
       const correction = sum(selected.map(n => n.w * n.value)) / sum(selected.map(n => Math.abs(n.w)));
       near(cell(frames.at(-1), 0, 3), (residual ? baseline(0, 3) : 0) + correction);
     }
