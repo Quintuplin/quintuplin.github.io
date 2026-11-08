@@ -106,6 +106,17 @@ function walk(W, start, dest, beta, steps) {
   for (let t = 0; t < steps; t++) r = r.map((_, j) => sum(P.map((row, i) => row[j] * r[i])));
   return r;
 }
+test("PageRank at β=1 explains the restart from dangling pages", () => {
+  const spec = specs.get("pagerank"), p = spec.presets.find(p => p.name.includes("dead end"));
+  const fs = run(spec, p, 753, { follow: 1, rounds: 1 });
+  assert.match(spec.description, /dead ends? still restart/i);
+  const W = matrix(fs[0]);
+  const dangling = W.filter(row => !sum(row)).length / W.length;
+  assert.ok(dangling > 0);
+  const receipts = values(fs.find(f => f.line === 3));
+  values(fs.at(-1)).forEach((v, i) => close(v - receipts[i], dangling / W.length));
+});
+
 test("sparse iterations match dense walks including dangling redistribution, closed traps and restart sets", () => {
   for (const id of ["pagerank", "personalised-pagerank"]) each(id, (trace, preset) => {
     for (const follow of [0, 0.85, 1]) {

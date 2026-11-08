@@ -96,7 +96,7 @@
       id: personal ? "personalised-pagerank" : "pagerank",
       title: personal ? "Personalised PageRank" : "PageRank",
       description: personal ? "Watch a chosen restart set change where a walk spends its time." :
-        "Follow sparse links through dead ends and closed traps. Set link probability to 1 to switch off teleportation.",
+        "At link probability 1, the walk follows every available link step without ordinary teleportation. Walks at dead ends still restart uniformly.",
       presets: web, params: personal ? [damping, rounds, teleport] : [damping, rounds], code: rankCode,
       trace(preset, params, rng) {
         const g = graph(preset, rng, true);
