@@ -84,7 +84,7 @@
     code: ["R ← emptySlots(copies, s)", "for (i, tag) in enumerate(stream, start=1):",
       "    for r in reservoirs:", "        if i ≤ s: R[r,i] ← (i, tag); continue",
       "        j ← uniformInteger(1, i)", "        if j ≤ s: R[r,j] ← (i, tag)",
-      "        else: continue", "return R, min(s, i) / i"],
+      "        else: continue", "p ← min(s, i) / i; return R, p, 1 − (1 − p)^copies"],
     trace(preset, { slots, mode, firstTag, secondTag }, rng) {
       const { stream } = arrivals(preset, rng);
       if (firstTag) stream[0] = firstTag;
@@ -110,8 +110,10 @@
           emit(6, prefix + slot + " > " + slots + ". Keep the sample.", key);
         }
       }));
-      emit(7, "Each sighting has probability " + Math.min(slots, stream.length) + "/" + stream.length +
-        " of appearing in each reservoir. Slots identify sightings by arrival number.");
+      const i = stream.length, kept = Math.min(slots, i);
+      const denominator = i ** copies;
+      emit(7, `For each sighting, P(in one copy) = ${kept}/${i}. P(in at least one of ${copies}) = ` +
+        `1 − (1 − ${kept}/${i})^${copies} = ${denominator - (i - kept) ** copies}/${denominator}.`);
       return frames;
     }
   });

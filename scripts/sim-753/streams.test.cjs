@@ -177,6 +177,18 @@ test("RS1 and RSs give every subset equal probability and parallel RS1 copies us
   }
 });
 
+test("one of nine sightings reaches at least one of three independent reservoirs with probability 217/729", () => {
+  const spec = specs.get("reservoir-sampling");
+  for (const [mode, copies] of [["One reservoir", 1], ["Three independent reservoirs", 3]]) {
+    for (const slots of [1, 2, 4]) {
+      const result = run(spec, spec.presets[0], 753, {slots, mode}).at(-1).work;
+      assert.ok(result.includes(slots + "/9"));
+      assert.match(result, /at least one/i);
+      assert.ok(result.includes((9 ** copies - (9 - slots) ** copies) + "/" + 9 ** copies));
+    }
+  }
+});
+
 for (const id of ids.slice(2, 5)) {
   test(id + " updates the correct array and checks every required bit", () => {
     eachExample(id, trace => {
