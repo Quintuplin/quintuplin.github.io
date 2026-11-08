@@ -118,7 +118,9 @@ test("independent cascade uses one trial per eligible edge per frontier", () => 
           assert.equal(draw.line, 3);
           assert.deepEqual(live(draw).map(edgeId), [edgeId(e)]);
           if (rng() < e.p) next.add(e.to);
-          assert.deepEqual(lit(frames[frame++]), [...active, ...next].sort());
+          const decision = frames[frame++];
+          assert.deepEqual(lit(decision), [...active].sort());
+          assert.deepEqual(decision.nodes.filter(n => n.group === 3).map(n => n.id), [...next].sort());
         }
         for (const v of next) active.add(v);
         assert.deepEqual(lit(frames[frame++]), [...active].sort());
@@ -149,6 +151,19 @@ test("linear thresholds persist and only the previous wave contributes to each c
       assert.deepEqual(lit(frames.at(-1)), active);
     }
   });
+});
+
+test("inspecting a threshold or scoring a candidate preserves active membership", () => {
+  const threshold = lesson("linear-threshold").find(f => f.line === 1);
+  assert.match(threshold.work, /B = 13\/64/);
+  assert.deepEqual(lit(threshold), ["A"]);
+  const b = threshold.nodes.find(n => n.id === "B");
+  assert.notEqual(b.group, threshold.nodes.find(n => n.id === "C").group);
+  let selected = [];
+  for (const frame of lesson("greedy-influence")) {
+    if (frame.line === 2) assert.deepEqual(lit(frame), selected);
+    if (frame.line === 3) selected = lit(frame);
+  }
 });
 
 test("exclusive cascade assigns at most one incoming parent using its disjoint interval", () => {

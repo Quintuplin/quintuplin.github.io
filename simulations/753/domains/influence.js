@@ -21,8 +21,8 @@
     function emit(line, work, active, marked = [], focus = [], labels = {}) {
       const nodes = vertices.map(id => {
         const [x, y, z] = positions[id];
-        return { id, label: labels[id] || id, x, y, z, group: start.has(id) ? 2 : active.has(id) ? 1 : 0,
-          active: active.has(id) || focus.includes(id) };
+        const group = focus.includes(id) ? 3 : start.has(id) ? 2 : active.has(id) ? 1 : 0;
+        return { id, label: labels[id] || id, x, y, z, group, active: active.has(id) };
       });
       const edges = links.map(e => ({ from: e.from, to: e.to, directed: true, active: marked.includes(e) }));
       frames.push(Object.freeze({ line, work, nodes: freezeList(nodes), edges: freezeList(edges) }));
