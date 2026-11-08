@@ -30,6 +30,26 @@ const frequency = (stream, key) => stream.filter(x => x === key).length;
 const ids = ["fixed-proportion-sampling", "reservoir-sampling", "standard-bloom-filter",
   "partitioned-bloom-filter", "repeated-bloom-filter", "misra-gries", "count-min-sketch", "count-sketch"];
 
+test("every domain displays code and uses a cell or a height bar for memory", () => {
+  for (const spec of specs.values()) {
+    assert.ok(spec.code.some(line => /\bfor\b/.test(line)), spec.id);
+    for (const line of spec.code) assert.match(line, /←|\+=|\b(for|if|else|return)\b/);
+    const frame = run(spec, spec.presets[0], 1)[1];
+    const shape = /reservoir|bloom/.test(spec.id) ? "cell" : "bar";
+    assert.ok(memory(frame).every(n => n.shape === shape), spec.id);
+  }
+});
+
+test("edited reservoir sightings keep separate arrival identities and show the admission odds", () => {
+  const spec = specs.get("reservoir-sampling");
+  const frames = run(spec, spec.presets[0], 17, { firstTag: 64, secondTag: 64, slots: 2 });
+  assert.deepEqual(input(frames).slice(0, 2), [64, 64]);
+  assert.match(memory(frames[2])[1].label, /Slot 2.*arrival 2.*tag 64/i);
+  const draw = frames.find(f => f.work.includes("P(admit) = s/i = 2/3"));
+  assert.ok(draw.work.includes("P(replace a given slot) = 1/i = 1/3"));
+  assert.match(spec.code[draw.line], /uniformInteger\(1, i\)/);
+});
+
 test("catalog, bounded inputs, replay, independent snapshots and working controls", () => {
   assert.deepEqual([...specs.keys()].sort(), [...ids].sort());
   for (const spec of specs.values()) {
@@ -55,7 +75,8 @@ test("catalog, bounded inputs, replay, independent snapshots and working control
         const alternatives = p.options || [p.min, p.max];
         for (const alt of alternatives.filter(x => x !== p.value)) {
           const changed = run(spec, preset, 91, { [p.key]: alt });
-          assert.deepEqual(input(changed), input(frames));
+          if (["firstTag", "secondTag"].includes(p.key)) assert.notDeepEqual(input(changed), input(frames));
+          else assert.deepEqual(input(changed), input(frames));
           assert.notDeepEqual(changed, frames);
         }
       }
@@ -79,7 +100,7 @@ test("fixed-proportion sampling routes every repeat to its original bucket", () 
       const stream = input(frames);
       const counts = Array(6).fill(0);
       const byKey = new Map();
-      atLine(frames, 2).forEach((f, i) => {
+      atLine(frames, 3).forEach((f, i) => {
         const b = Number(active(f).id.split("-")[1]);
         if (byKey.has(stream[i])) assert.equal(b, byKey.get(stream[i]));
         byKey.set(stream[i], b);
@@ -106,14 +127,14 @@ test("reservoir snapshots match every independent integer draw and preserve occu
             let j = i + 1;
             if (j > slots) {
               const draw = frames[frame++];
-              assert.equal(draw.line, 2);
+              assert.equal(draw.line, 4);
               assert.deepEqual(values(draw), expected);
               j = Number(draw.work.match(/= (\d+)\./)[1]);
               assert.ok(j >= 1 && j <= i + 1);
             }
             const decision = frames[frame++];
             if (j <= slots) expected[r * slots + j - 1] = i + 1;
-            assert.equal(decision.line, i < slots ? 1 : j <= slots ? 3 : 4);
+            assert.equal(decision.line, i < slots ? 3 : j <= slots ? 5 : 6);
             assert.deepEqual(values(decision), expected);
             assert.equal(focus(decision), key);
           }
@@ -177,13 +198,13 @@ for (const id of ids.slice(2, 5)) {
           assignments.set(lookup, b);
           return r * bits + b;
         }
-        const writes = atLine(frames, 1);
+        const writes = atLine(frames, 3);
         assert.equal(writes.length, stream.length * copies * hashes);
         writes.forEach((f, i) => {
           expected[address(f, i, stream[Math.floor(i / (copies * hashes))])] = 1;
           assert.deepEqual(values(f), expected);
         });
-        const reads = atLine(frames, 2);
+        const reads = atLine(frames, 5);
         assert.equal(reads.length, copies * hashes);
         const key = focus(frames.at(-1));
         const hits = reads.map((f, i) => expected[address(f, i, key)]);
@@ -193,7 +214,7 @@ for (const id of ids.slice(2, 5)) {
           assert.ok(hits.every(Boolean));
           assert.equal(key, selection === "First arrival" ? stream[0] : stream.at(-1));
         }
-        const work = atLine(frames, 3)[0].work;
+        const work = atLine(frames, 6)[0].work;
         assert.ok(work.includes(hits.every(Boolean) ? "possibly present" : "definitely absent"));
         assert.ok(work.includes("Exact membership = " + (present ? "present" : "absent")));
         assert.equal(work.includes("false positive"), !present && hits.every(Boolean));
@@ -260,7 +281,7 @@ for (const signed of [false, true]) {
         const stream = input(frames);
         const counts = Array(rows * width).fill(0);
         const lookups = new Map();
-        atLine(frames, 1).forEach((f, i) => {
+        atLine(frames, 2).forEach((f, i) => {
           const key = stream[Math.floor(i / rows)];
           assert.equal(focus(f), key);
           const n = active(f);
@@ -280,7 +301,7 @@ for (const signed of [false, true]) {
         const final = frames.at(-1);
         const key = focus(final);
         const exact = frequency(stream, key);
-        const readings = atLine(frames, 2).map((f, r) => {
+        const readings = atLine(frames, 4).map((f, r) => {
           const n = active(f);
           const b = Number(n.id.split("-")[1]);
           const delta = signed ? Number(f.work.match(/Read (-?1) ×/)[1]) : 1;
