@@ -215,6 +215,17 @@ test("notebook and pseudocode share the desktop right column and stack below the
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 });
 
+test("reservoir SVG labels expose both tags and sighting numbers after replacement", async t => {
+  const page = await open(t);
+  await page.addScriptTag({path: resolve(shared, "../domains/streams.js")});
+  await page.evaluate(() => Sims.boot("reservoir-sampling"));
+  for (let i = 0; i < 4; i++) await button(page, "Step").click();
+  for (const label of ["S1: 60 (#1)", "S2: 64 (#3)"]) {
+    assert.ok(await page.locator(".sp-labels").getByText(label, {exact: true}).isVisible(), label);
+  }
+  assert.match(await page.locator("#sp-work li").last().innerText(), /tag 60 → 64.*#2 → #3/);
+});
+
 test("dense slots fit the viewport and expose omitted labels in the accessible data view", async t => {
   const page = await open(t, {id: "dense", width: 360, source: false});
   assert.match(await page.getByRole("link", {name: "JavaScript source"}).getAttribute("href"), /fixture\.js$/);

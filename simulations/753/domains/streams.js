@@ -92,7 +92,8 @@
       const copies = mode === "One reservoir" ? 1 : 3;
       const rows = list(copies, () => Array(slots).fill(null));
       const { emit, frames } = recorder(stream, active => rows.flatMap((row, r) => row.map((t, s) =>
-        node(r + "-" + s, "R" + (r + 1) + " Slot " + (s + 1) + (t ? " · arrival " + t + " · tag " + stream[t - 1] : " · empty"),
+        node(r + "-" + s, (copies > 1 ? "R" + (r + 1) + " " : "") + "S" + (s + 1) + ": " +
+          (t ? stream[t - 1] + " (#" + t + ")" : "empty"),
           s * 3, t ? 1 : 0, r * 3, r + 1, active === r + "-" + s, t || 0, "cell"))));
       stream.forEach((key, i) => rows.forEach((row, r) => {
         const t = i + 1;
@@ -105,7 +106,8 @@
           const old = row[slot - 1];
           row[slot - 1] = t;
           emit(old ? 5 : 3, prefix + (old ? slot + " ≤ " + slots + ". " : "P(admit) = 1. ") +
-            "Slot " + slot + " changes from " + (old ? "arrival " + old : "empty") + " to arrival " + t + ".", key, id);
+            "Slot " + slot + ": " + (old ? "tag " + stream[old - 1] + " → " + key + " (#" + old + " → #" + t + ")"
+              : "empty → tag " + key + " (#" + t + ")") + ".", key, id);
         } else {
           emit(6, prefix + slot + " > " + slots + ". Keep the sample.", key);
         }

@@ -45,10 +45,16 @@ test("edited reservoir sightings keep separate arrival identities and show the a
   const spec = specs.get("reservoir-sampling");
   const frames = run(spec, spec.presets[0], 17, { firstTag: 64, secondTag: 64, slots: 2 });
   assert.deepEqual(input(frames).slice(0, 2), [64, 64]);
-  assert.match(memory(frames[2])[1].label, /Slot 2.*arrival 2.*tag 64/i);
+  assert.equal(memory(frames[2])[1].label, "S2: 64 (#2)");
   const draw = frames.find(f => f.work.includes("P(admit) = s/i = 2/3"));
   assert.ok(draw.work.includes("P(replace a given slot) = 1/i = 1/3"));
   assert.match(spec.code[draw.line], /uniformInteger\(1, i\)/);
+});
+
+test("parallel slot labels distinguish reservoirs while retaining the tag and occurrence", () => {
+  const spec = specs.get("reservoir-sampling");
+  const frames = run(spec, spec.presets[0], 17, { firstTag: 64, slots: 1, mode: "Three independent reservoirs" });
+  assert.deepEqual(memory(frames[3]).map(n => n.label), ["R1 S1: 64 (#1)", "R2 S1: 64 (#1)", "R3 S1: 64 (#1)"]);
 });
 
 test("catalog, bounded inputs, replay, independent snapshots and working controls", () => {
