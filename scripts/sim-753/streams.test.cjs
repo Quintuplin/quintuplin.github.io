@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const playerSeed = require("./player-seed.cjs");
 const specs = new Map();
 globalThis.Sims = { register(spec) {
   assert.ok(!specs.has(spec.id));
@@ -186,6 +187,23 @@ test("one of nine sightings reaches at least one of three independent reservoirs
       assert.match(result, /at least one/i);
       assert.ok(result.includes((9 ** copies - (9 - slots) ** copies) + "/" + 9 ** copies));
     }
+  }
+});
+
+test("Bloom estimates use distinct inserted keys and distinguish course odds from realized occupancy", () => {
+  for (const id of ids.slice(2, 5)) {
+    const spec = specs.get(id);
+    const copies = id.startsWith("repeated") ? 2 : 1;
+    const frames = spec.trace(spec.presets[0], {bits: 12, hashes: 2, copies, query: "Unseen key"}, playerSeed(753));
+    const keys = [...new Set(input(frames))];
+    assert.equal(keys.length, 4);
+    const course = frames.at(-2).work;
+    assert.ok(course.includes("4 distinct keys {" + keys.join(", ") + "}"));
+    assert.ok(course.includes(id.startsWith("partitioned") ? "exp(−4/6)" : "exp(−8/12)"));
+    const expected = (1 - Math.exp(-8/12)) ** (2 * copies);
+    assert.ok(course.includes(expected.toFixed(4)));
+    assert.match(frames.at(-1).work, /given these bits/i);
+    if (copies === 2) assert.ok(frames.at(-1).work.includes("4.34%"));
   }
 });
 

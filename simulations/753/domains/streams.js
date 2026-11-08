@@ -133,7 +133,9 @@
       code: ["B ← zeros(filters, bits)", partitioned ? "addr(r,h,x) ← h × (bits / hashes) + hash[r,h](x)" : "addr(r,h,x) ← hash[r,h](x)",
         "for x in stream, r in filters, h in hashes:", "    B[r, addr(r,h,x)] ← 1",
         "for r in filters, h in hashes:", "    read[r,h] ← B[r, addr(r,h,q)]",
-        "positive ← all(read)", partitioned ? "p ← product(occupiedFraction(slice) for slice in slices)" :
+        "positive ← all(read)", partitioned ? "d ← countDistinct(stream); estimate ← (1 − exp(−d / sliceWidth))^hashes" :
+          "d ← countDistinct(stream); estimate ← (1 − exp(−hashes × d / bits))^(hashes × filters)",
+        partitioned ? "p ← product(occupiedFraction(slice) for slice in slices)" :
           "p ← product(occupiedFraction(B[r]) ^ hashes for r in filters)"],
       trace(preset, { bits, hashes, copies = 1, query }, rng) {
         const data = arrivals(preset, rng);
@@ -169,10 +171,17 @@
         const member = data.stream.includes(key);
         emit(6, "Tag " + key + " tests [" + readings.join(", ") + "] → " + (pass ? "possibly present" : "definitely absent") +
           ". Exact membership = " + (member ? "present" : "absent") + (pass && !member ? " (false positive)." : "."), key);
+        const distinct = [...new Set(data.stream)];
+        const draws = distinct.length * (partitioned ? 1 : hashes);
+        const probes = hashes * copies;
+        const estimate = (1 - Math.exp(-draws / width)) ** probes;
+        emit(7, `${distinct.length} distinct keys {${distinct.join(", ")}}. ` +
+          (partitioned ? `${draws} draws per ${width}-bit slice. ` : `${draws} draws per ${bits}-bit filter. `) +
+          `Course false-positive approximation = (1 − exp(−${draws}/${width}))^${probes} ≈ ${estimate.toFixed(4)}.`, key);
         const occupied = bank.flatMap(row => list(hashes, h =>
           partitioned ? total(row.slice(h * width, (h + 1) * width)) : total(row)));
         const probability = occupied.reduce((p, n) => p * (n / width), 1);
-        emit(7, "Given these bits, a fresh unseen tag passes with probability " +
+        emit(8, "Given these bits, a fresh unseen tag passes with probability " +
           occupied.map(n => n + "/" + width).join(" × ") + " ≈ " + (probability * 100).toFixed(2) + "%.", key);
         return frames;
       }
