@@ -312,6 +312,23 @@ for (const id of ["quickselect", "random-pivot-quicksort"]) {
   });
 }
 
+test("quickselect keeps the requested bar marked through equal and singleton returns", () => {
+  const branches = new Set();
+  for (const [i, preset] of specs.get("quickselect").presets.entries()) {
+    for (let rank = 1; rank <= preset.values.length; rank++) {
+      const frames = lesson("quickselect", i, { rank });
+      const branch = frames.at(-2), final = frames.at(-1);
+      branches.add(branch.line);
+      const bar = final.nodes[rank - 1];
+      assert.deepEqual(lit(final), [bar.id]);
+      assert.deepEqual(lit(branch), [bar.id]);
+      assert.equal(final.work, "Rank " + rank + " = " + bar.label + ".");
+      if (i === 0 && rank === 3) assert.equal(bar.label, "23");
+    }
+  }
+  assert.deepEqual(branches, new Set([2, 7]));
+});
+
 test("find-a returns a matching zero-based index or an inconclusive result at exactly the limit", () => {
   let boundedMiss = false;
   for (const id of ["las-vegas-find-a", "monte-carlo-find-a"]) {

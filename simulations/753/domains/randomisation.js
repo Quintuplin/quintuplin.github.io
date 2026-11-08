@@ -57,7 +57,7 @@
         emit(0, "Input A = " + show(vals(a)) + ". " + setting + ".", 0, a.length);
         function visit(lo, hi) {
           if (hi - lo <= 1) {
-            emit(2, "A[" + lo + ":" + hi + "] = " + show(vals(a.slice(lo, hi))) + ". Base case.", lo, hi);
+            emit(2, "A[" + lo + ":" + hi + "] = " + show(vals(a.slice(lo, hi))) + ". Base case.", lo, hi, undefined, select ? a[lo] : undefined);
             return a[lo]?.v;
           }
           const pivot = a[lo + index(rng, hi - lo)];
@@ -78,7 +78,7 @@
           if (select) {
             const side = rank <= first ? "left" : rank <= last ? "equal" : "right";
             emit(side === "left" ? 6 : side === "equal" ? 7 : 8, "Pivot ranks = " + (first + 1) + "…" + last +
-              ". Rank " + rank + " lies in " + side + ".", lo, hi, groups, pivot);
+              ". Rank " + rank + " lies in " + side + ".", lo, hi, groups, side === "equal" ? a[rank - 1] : pivot);
             if (side === "equal") return pivot.v;
             return side === "left" ? visit(lo, first) : visit(last, hi);
           }
@@ -87,7 +87,8 @@
           visit(last, hi);
         }
         const answer = visit(0, a.length);
-        emit(select ? 9 : 7, select ? "Rank " + rank + " = " + answer + "." : "Sorted A = " + show(vals(a)) + ".", 0, a.length);
+        emit(select ? 9 : 7, select ? "Rank " + rank + " = " + answer + "." : "Sorted A = " + show(vals(a)) + ".",
+          0, a.length, undefined, select ? a[rank - 1] : undefined);
         return frames;
       }
     });
