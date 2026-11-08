@@ -371,23 +371,39 @@ test("coupon collection stops on the final distinct type and matches the harmoni
   });
 });
 
+test("card positions first appear on their reveal frames", () => {
+  const frames = lesson("card-guessing");
+  const order = ["wren", "owl", "tern", "ibis", "swift"];
+  assert.deepEqual(bracket(frames[0].work), [...order].sort());
+  assert.match(frames[0].work, /^Card types = /);
+  const seen = new Set();
+  order.forEach((card, i) => {
+    const guess = frames[2*i + 1], reveal = frames[2*i + 2];
+    assert.deepEqual(guess.nodes.filter(n => n.y > 0).map(n => n.id).sort(), [...seen].sort());
+    assert.doesNotMatch(guess.work, /reveal|position/i);
+    assert.ok(reveal.work.startsWith("Reveal card " + (i+1) + " = " + card + "."));
+    seen.add(card);
+  });
+});
+
 test("card guesses use the chosen memory rule, reveal each card once and score only matches", () => {
   examples("card-guessing", run => {
     for (const memory of ["Unseen cards", "All cards"]) {
       const frames = run({ size: 5, memory });
-      const deck = bracket(frames[0].work), seen = new Set();
+      const types = bracket(frames[0].work), seen = new Set();
       let score = 0;
-      deck.forEach((card, i) => {
+      for (let i = 0; i < types.length; i++) {
         const guessFrame = frames[1 + 2*i], reveal = frames[2 + 2*i];
+        const card = reveal.nodes.find(n => n.active).id;
         const guess = guessFrame.nodes.find(n => n.active).id;
         const pool = bracket(guessFrame.work);
-        assert.deepEqual(new Set(pool), new Set(deck.filter(t => memory === "All cards" || !seen.has(t))));
+        assert.deepEqual(new Set(pool), new Set(types.filter(t => memory === "All cards" || !seen.has(t))));
         assert.ok(pool.includes(guess));
-        assert.equal(reveal.nodes.find(n => n.active).id, card);
+        assert.ok(types.includes(card) && !seen.has(card));
         if (guess === card) score++;
         assert.ok(reveal.work.endsWith("Score = " + score + "."));
         seen.add(card);
-      });
+      }
       assert.equal(seen.size, 5);
       assert.ok(frames.at(-1).work.includes("= " + score + "/5"));
       assert.ok(frames.at(-1).work.endsWith(memory === "Unseen cards" ? "2.2833." : " = 1."));

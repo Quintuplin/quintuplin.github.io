@@ -169,15 +169,15 @@
           const deck = shuffled(types, rng);
           const unseen = new Set(types);
           let score = 0;
-          emit(0, "Deck in reveal order = " + show(deck) + ". Score = 0.");
-          for (const card of deck) {
+          emit(0, "Card types = " + show([...types].sort()) + ". Score = 0.");
+          for (const [i, card] of deck.entries()) {
             const pool = params.memory === "Unseen cards" ? [...unseen] : types;
             const guess = pool[index(rng, pool.length)];
             emit(2, "Guess " + guess + " from " + show(pool) + ". P(correct) = 1/" + pool.length + ".", guess);
             unseen.delete(card);
             counts[types.indexOf(card)]++;
             score += Number(guess === card);
-            emit(3, "Reveal " + card + ". " + guess + (guess === card ? " = " : " ≠ ") + card + ". Score = " + score + ".", card);
+            emit(3, "Reveal card " + (i + 1) + " = " + card + ". " + guess + (guess === card ? " = " : " ≠ ") + card + ". Score = " + score + ".", card);
           }
           emit(4, "Correct guesses = " + score + "/" + n + ". Expected correct = " +
             (params.memory === "Unseen cards" ? "H(" + n + ") ≈ " + harmonic.toFixed(4) : n + " × 1/" + n + " = 1") + ".");
