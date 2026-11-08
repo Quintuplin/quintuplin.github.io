@@ -274,19 +274,25 @@
 
   register({
     id: 'simhash', title: 'SimHash by random hyperplanes',
-    description: 'Hash two three-dimensional vectors by their dot products with sampled integer plane normals. Compare the resulting sign bits.',
+    description: 'Sample a plane with three independent standard normal coordinates for its normal. Its orientation is uniform in space. Two nonzero vectors at angle θ have matching sign bits with probability 1 − θ/π.',
     params: [range('bits', 'Hyperplanes (bits)', 1, 8, 4)],
     presets: [
       { name: 'Aligned vectors', vectors: [[4, 2, 1], [4, 3, 1]] },
       { name: 'Opposing vectors', vectors: [[3, 2, 4], [-3, -2, -4]] },
       { name: 'Across axes', vectors: [[4, 0, 1], [0, 4, -1]] },
     ],
-    code: ['A, B ← inputVectors(); sig[A], sig[B] ← [], []', 'for i in 0..bits−1: n ← sample({−2..2}³ ∖ {0})',
+    code: ['A, B ← inputVectors(); sig[A], sig[B] ← [], []', 'for i in 0..bits−1: draw n ~ Normal(0,I₃) until each nonzero input has nonzero projection',
       '  for v in [A,B]: sig[v,i] ← int(dot(v,n) ≥ 0)', 'return count(i where sig[A,i] ≠ sig[B,i])'],
     trace(preset, { bits }, rng) {
       const scale = ints(3).map(() => 1 + draw(rng, 4));
       const vectors = preset.vectors.map(v => v.map((x, i) => x * scale[i]));
       const signatures = ['', ''];
+      const display = x => Number(x.toPrecision(4));
+      function gaussianPair() {
+        const radius = Math.sqrt(-2 * Math.log1p(-rng()));
+        const angle = 2 * Math.PI * rng();
+        return [radius * Math.cos(angle), radius * Math.sin(angle)];
+      }
       function scene(normal, active) {
         const points = [...vectors, ...(normal ? [normal] : [])];
         const labels = ['A', 'B', 'n'];
@@ -296,16 +302,17 @@
       }
       const frames = [{ line: 0, work: `A = (${vectors[0]}), B = (${vectors[1]}).`, ...scene() }];
       for (let i = 0; i < bits; i++) {
-        // Index the 5×5×5 lattice with the central zero vector removed.
-        let index = draw(rng, 124);
-        if (index >= 62) index++;
-        const normal = [Math.floor(index / 25) - 2, Math.floor(index / 5) % 5 - 2, index % 5 - 2];
-        frames.push({ line: 1, work: `Plane ${i + 1}: n = (${normal}), n·x = 0.`, ...scene(normal, 2) });
+        let normal, projections;
+        do {
+          normal = [...gaussianPair(), gaussianPair()[0]];
+          projections = vectors.map(v => v.reduce((sum, x, j) => sum + x * normal[j], 0));
+        } while (projections.some((dot, d) => dot === 0 && vectors[d].some(x => x !== 0)));
+        frames.push({ line: 1, work: `Plane ${i + 1}: n ≈ (${normal.map(display)}), n·x = 0.`, ...scene(normal, 2) });
         vectors.forEach((v, d) => {
-          const dot = v.reduce((sum, x, j) => sum + x * normal[j], 0);
+          const dot = projections[d];
           const bit = Number(dot >= 0);
           signatures[d] += bit;
-          frames.push({ line: 2, work: `${'AB'[d]}·n = ${v.map((x, j) => '(' + x + '×' + normal[j] + ')').join(' + ')} = ${dot}. Bit = ${bit}; prefix ${signatures[d]}.`, ...scene(normal, d) });
+          frames.push({ line: 2, work: `${'AB'[d]}·n ≈ ${v.map((x, j) => '(' + x + '×' + display(normal[j]) + ')').join(' + ')} ≈ ${display(dot)}. Bit = ${bit}; prefix ${signatures[d]}.`, ...scene(normal, d) });
         });
       }
       const distance = [...signatures[0]].filter((b, i) => b !== signatures[1][i]).length;

@@ -1,5 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const playerSeed = require('./player-seed.cjs');
 
 const specs = new Map();
 globalThis.Sims = { register(spec) {
@@ -173,22 +174,38 @@ test('independent AND and OR stages transform near and far bounds', () => {
   }
 });
 
-test('SimHash projects actual vectors, maps zero to one and counts bit differences', () => {
+test('opposing vectors at player seed 11 have four complementary SimHash bits', () => {
   const spec = specs.get('simhash');
-  let ties = 0;
+  const frames = spec.trace(spec.presets[1], {bits: 4}, playerSeed(11));
+  assert.match(frames.at(-1).work, /= 4\. Agreement = 0\/4/);
+});
+
+test('Box–Muller redraws a tied plane and keeps the accepted Gaussian coordinates finite', () => {
+  const spec = specs.get('simhash');
+  const tape = [0,0,0, 0,0,0.75,0.5, 0.5,0.125,0.75,0.5];
+  const frames = spec.trace({vectors: [[1,0,0],[-1,0,0]]}, {bits: 1}, () => { assert.ok(tape.length); return tape.shift(); });
+  const n = frames.find(f => f.line === 1).nodes.at(-1);
+  const diagonal = Math.sqrt(Math.log(2));
+  for (const [v, expected] of [[n.x, diagonal], [n.y, diagonal], [n.z, -Math.sqrt(2 * Math.log(4))]]) {
+    assert.ok(Math.abs(v - expected) < 1e-12);
+  }
+  assert.equal(tape.length, 0);
+});
+
+test('SimHash projects actual vectors without ties and counts bit differences', () => {
+  const spec = specs.get('simhash');
   for (let seed = 10; seed < 40; seed++) {
     const frames = run(spec, spec.presets[2], { bits: 8 }, seed);
     const signatures = ['', ''];
     for (const f of frames.filter(f => f.line === 2)) {
       const v = f.nodes.find(n => n.active), n = f.nodes.at(-1);
       const dot = v.x * n.x + v.y * n.y + v.z * n.z;
-      if (dot === 0) ties++;
+      assert.notEqual(dot, 0);
       const bit = Number(dot >= 0);
       signatures[v.id === 'A' ? 0 : 1] += bit;
-      assert.ok(f.work.includes('= ' + dot + '. Bit = ' + bit));
+      assert.ok(f.work.includes('≈ ' + Number(dot.toPrecision(4)) + '. Bit = ' + bit));
     }
     const distance = [...signatures[0]].filter((v, i) => signatures[1][i] !== v).length;
     assert.ok(frames.at(-1).work.includes('(' + signatures.join(', ') + ') = ' + distance));
   }
-  assert.ok(ties > 0);
 });
