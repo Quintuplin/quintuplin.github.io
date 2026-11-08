@@ -573,7 +573,10 @@ class Measures(unittest.TestCase):
         for edge in links:
             src, dst = edge.attrs["data-from"], edge.attrs["data-to"]
             with self.subTest(edge=(src, dst)):
-                self.assertIn(labels[src], check().spaced(edge))
+                context = edge
+                while context.parent and context.attrs.get("data-node") != src:
+                    context = context.parent
+                self.assertTrue(context.attrs.get("data-node") == src or labels[src] in check().spaced(edge))
                 self.assertIn(labels[dst], check().spaced(edge))
                 self.assertNotIn("hidden", edge.attrs)
                 self.assertNotEqual(edge.attrs.get("aria-hidden"), "true")

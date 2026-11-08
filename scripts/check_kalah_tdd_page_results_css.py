@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Check study.css in headless Chrome: results summary markers, stacked table cells and nested-card borders,
-all study pages without sideways page scroll, and Figure 4.1's region and labels at 375, 768 and 1440px.
+all study pages without sideways page scroll, and every workflow's active presentation at 375, 768 and 1440px.
 One Chrome launch loads srcdoc iframes with study.css inlined, plus copies with the guarded styles broken.
 $CHROME names the Chrome binary when it is not in a known place.
 
@@ -43,8 +43,17 @@ FONTS = re.compile(r'<link rel="(?:preconnect|stylesheet)" href="https://fonts\.
 LINK = f'<link rel="stylesheet" href="{BASE}study.css">'
 # Runs in the top page once every frame has loaded and writes {frame: {"counts", "fails"}} into #out.
 PROBE = """<pre id="out"></pre><script>
-addEventListener("load", () => {
-  const out = {};
+addEventListener("load", async () => {
+  const out = {}, resizes = [];
+  const resized = () => new Promise(resolve => {
+    const pending = new Set(resizes.map(r => r.region));
+    if (!pending.size) return resolve();
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) pending.delete(entry.target);
+      if (!pending.size) { observer.disconnect(); resolve(); }
+    });
+    for (const region of pending) { observer.observe(region); region.getBoundingClientRect(); }
+  });
   for (const f of document.querySelectorAll("iframe")) {
     const d = f.contentDocument, w = f.contentWindow, cs = (el, p) => w.getComputedStyle(el, p);
     const fails = [], counts = {summaries: 0, cols: 0, qtables: 0, nested: 0};
@@ -85,32 +94,82 @@ addEventListener("load", () => {
       for (const t of svg.querySelectorAll("text"))
         check("chart-text", parseFloat(cs(t).fontSize) * scale >= 11.5, svg.closest("figure").id + " " + t.textContent.slice(0, 30));
     }
-    for (const region of d.querySelectorAll("#f4 .diagram")) {
-      counts.measurementRegions = (counts.measurementRegions || 0) + 1;
-      check("measurement-fit", region.scrollWidth <= region.clientWidth,
-        region.scrollWidth + " > " + region.clientWidth);
-      const box = region.getBoundingClientRect(), left = box.left + region.clientLeft, right = left + region.clientWidth;
-      const walker = d.createTreeWalker(region, w.NodeFilter.SHOW_TEXT);
-      for (let t = walker.nextNode(); t; t = walker.nextNode()) {
-        const el = t.parentElement, label = t.textContent.trim();
-        if (!label || el.closest("title, desc, script, style")) continue;
-        counts.measurementTexts = (counts.measurementTexts || 0) + 1;
-        const range = d.createRange();
-        range.selectNodeContents(t);
-        const rect = range.getBoundingClientRect(), matrix = el.getScreenCTM?.();
-        const scale = matrix ? Math.hypot(matrix.a, matrix.b) :
-          (el.offsetWidth ? el.getBoundingClientRect().width / el.offsetWidth : 1);
-        const size = parseFloat(cs(el).fontSize) * scale;
-        check("measurement-text", size >= 11.9, label + " rendered at " + size.toFixed(2) + "px");
-        check("measurement-label", rect.width > 0 && rect.height > 0 && cs(el).visibility === "visible" &&
-          rect.left >= left - 1 && rect.right <= right + 1,
-          label + " bounds " + rect.left.toFixed(1) + ".." + rect.right.toFixed(1) +
-          " outside " + left.toFixed(1) + ".." + right.toFixed(1));
+    const shown = (el) => {
+      for (let p = el; p; p = p.parentElement) {
+        const s = cs(p);
+        if (s.display === "none" || s.visibility !== "visible" || Number(s.opacity) === 0) return false;
       }
+      return el.getClientRects().length > 0;
+    };
+    const workflows = [];
+    for (const svg of d.querySelectorAll(".diagram svg.flow")) {
+      const region = svg.closest(".diagram"), id = svg.closest("figure").id;
+      const compact = [...region.children].find(el => el !== svg && el.querySelector("[data-node]"));
+      const presentations = [svg, compact].filter(Boolean), active = presentations.filter(shown);
+      const measurement = id === "f4", natural = svg.viewBox.baseVal.width;
+      const expected = f.dataset.name.startsWith("no-js ") || natural > region.clientWidth ? compact : svg;
+      counts.workflowRegions = (counts.workflowRegions || 0) + 1;
+      const fits = region.scrollWidth <= region.clientWidth;
+      check("workflow-fit", fits, id + " " + region.scrollWidth + " > " + region.clientWidth);
+      check("workflow-presentations", presentations.length === 2 && active.length === 1,
+        id + " " + presentations.length + " available, " + active.length + " visible");
+      check("workflow-selection", active.length === 1 && active[0] === expected, id + " natural width " + natural);
+      if (measurement) {
+        counts.measurementRegions = (counts.measurementRegions || 0) + 1;
+        check("measurement-fit", fits, region.scrollWidth + " > " + region.clientWidth);
+      }
+      const box = region.getBoundingClientRect(), left = box.left + region.clientLeft, right = left + region.clientWidth;
+      let texts = 0, smallest = Infinity;
+      for (const presentation of active) {
+        const walker = d.createTreeWalker(presentation, w.NodeFilter.SHOW_TEXT);
+        for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+          const el = t.parentElement, label = t.textContent.trim();
+          if (!label || el.closest("title, desc, script, style")) continue;
+          texts++;
+          if (measurement) counts.measurementTexts = (counts.measurementTexts || 0) + 1;
+          const range = d.createRange();
+          range.selectNodeContents(t);
+          const rect = range.getBoundingClientRect(), matrix = el.getScreenCTM?.();
+          const scale = matrix ? Math.hypot(matrix.a, matrix.b) :
+            (el.offsetWidth ? el.getBoundingClientRect().width / el.offsetWidth : 1);
+          const size = parseFloat(cs(el).fontSize) * scale;
+          smallest = Math.min(smallest, size);
+          const visible = shown(el), readable = visible && rect.width > 0 && rect.height > 0 &&
+            rect.left >= left - 1 && rect.right <= right + 1;
+          const where = id + " " + label + " bounds " + rect.left.toFixed(1) + ".." + rect.right.toFixed(1) +
+            " outside " + left.toFixed(1) + ".." + right.toFixed(1) + (visible ? "" : " [hidden]");
+          check("workflow-text", size >= 11.9, id + " " + label + " rendered at " + size.toFixed(2) + "px");
+          check("workflow-label", readable, where);
+          if (measurement) {
+            check("measurement-text", size >= 11.9, label + " rendered at " + size.toFixed(2) + "px");
+            check("measurement-label", readable, where);
+          }
+        }
+      }
+      check("workflow-text-count", texts > 0, id + " has no active labels");
+      workflows.push({id, natural, clientWidth: region.clientWidth, scrollWidth: region.scrollWidth, texts, smallest,
+        active: active.map(el => el === svg ? "svg" : "compact")});
+      if (!f.dataset.name.startsWith("no-js ")) resizes.push({region, svg, compact, presentations, shown, check, id,
+        width: region.style.maxWidth});
     }
+    const ids = [...d.querySelectorAll("[id]")].map(el => el.id);
+    if (workflows.length) check("workflow-ids", ids.length === new Set(ids).size, "duplicate page ids");
     const root = d.documentElement;
     check("sideways-scroll", root.scrollWidth <= root.clientWidth, root.scrollWidth + " > " + root.clientWidth);
-    out[f.dataset.name] = {counts, fails};
+    out[f.dataset.name] = {counts, fails, workflows};
+  }
+  for (const r of resizes) r.region.style.maxWidth = "180px";
+  await resized();
+  for (const r of resizes) {
+    const active = r.presentations.filter(r.shown);
+    r.check("workflow-resize", active.length === 1 && active[0] === r.compact, r.id + " after narrowing to 180px");
+    r.region.style.maxWidth = r.width;
+  }
+  await resized();
+  for (const r of resizes) {
+    const active = r.presentations.filter(r.shown);
+    const expected = r.svg.viewBox.baseVal.width > r.region.clientWidth ? r.compact : r.svg;
+    r.check("workflow-resize", active.length === 1 && active[0] === expected, r.id + " after restoring width");
   }
   document.getElementById("out").textContent = JSON.stringify(out);
 });
@@ -147,6 +206,11 @@ def html(slug):
     return (STUDY / slug / "index.html").read_text(encoding="utf-8")
 
 
+@functools.cache
+def workflow_slugs():
+    return tuple(slug for slug in PAGE_SLUGS if re.search(r'<svg\b[^>]*class="flow"', html(slug)))
+
+
 def doc(slug, style, extra=""):
     """A page with style inlined for study.css, extra before </main> and the font links dropped, so no server or
     network is needed."""
@@ -166,6 +230,12 @@ def frames():
     clipped = (css() + "\n#f4 .diagram > *{min-width:1600px!important;width:1600px!important;max-width:none!important}"
                "\n#f4 .diagram :is(text,[data-node],[data-node] *){font-size:4px!important}")
     out.append(("clipped measurement 375", 375, doc(MEASURES, clipped)))
+    out += [("no-js " + name, w, page)
+            for name, w, page in out if name.rsplit(" ", 1)[0] in workflow_slugs()]
+    forced = (css() + "\n.diagram:has(svg.flow) > *{min-width:1600px!important;width:1600px!important;max-width:none!important}")
+    out.append(("forced workflow overflow 375", 375, doc("experimental-design", forced)))
+    hidden = css() + "\n.diagram svg.flow text:first-of-type,.diagram [data-node]{visibility:hidden!important}"
+    out.append(("hidden workflow label 375", 375, doc("experimental-design", hidden)))
     return out
 
 
@@ -176,8 +246,11 @@ def probe():
         if 'name="kalah-tdd-stub"' in html(slug):
             raise AssertionError(f"{slug} is a stub; the probe needs the built study pages")
     made = frames()
-    iframes = "".join(f'<iframe data-name="{name}" width="{w}" height="800" srcdoc="{escape(d)}"></iframe>'
-                      for name, w, d in made)
+    iframes = []
+    for name, w, d in made:
+        policy = ' sandbox="allow-same-origin"' if name.startswith("no-js ") else ""
+        iframes.append(f'<iframe{policy} data-name="{name}" width="{w}" height="800" srcdoc="{escape(d)}"></iframe>')
+    iframes = "".join(iframes)
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         top = Path(tmp) / "probe.html"
         top.write_text(f'<!doctype html><html><head><meta charset="utf-8"></head><body>{iframes}{PROBE}</body></html>',
@@ -202,6 +275,11 @@ def fails(name, check=None):
 
 def real(width=None, slugs=SLUGS):
     return [f"{slug} {w}" for slug in slugs for w in WIDTHS if width in (None, w)]
+
+
+def workflow_frames():
+    names = real(slugs=workflow_slugs())
+    return names + ["no-js " + name for name in names]
 
 
 class ResultsCss(unittest.TestCase):
@@ -254,6 +332,35 @@ class ResultsCss(unittest.TestCase):
         for check in ("measurement-fit", "measurement-label", "measurement-text"):
             with self.subTest(check):
                 self.assertTrue(fails(name, check))
+
+    def test_every_workflow_region_fits(self):
+        for width in WIDTHS:
+            for prefix in ("", "no-js "):
+                names = [prefix + name for name in real(width, workflow_slugs())]
+                self.assertEqual(sum(probe()[name]["counts"].get("workflowRegions", 0) for name in names), 19)
+        for name in workflow_frames():
+            with self.subTest(name):
+                self.assertEqual(fails(name, "workflow-fit"), [])
+
+    def test_active_workflow_labels_remain_readable(self):
+        for name in workflow_frames():
+            with self.subTest(name):
+                for check in ("workflow-text-count", "workflow-text", "workflow-label"):
+                    self.assertEqual(fails(name, check), [])
+
+    def test_exactly_one_workflow_presentation_is_visible(self):
+        for name in workflow_frames():
+            with self.subTest(name):
+                for check in ("workflow-presentations", "workflow-selection", "workflow-resize", "workflow-ids"):
+                    self.assertEqual(fails(name, check), [])
+
+    def test_probe_detects_forced_workflow_overflow(self):
+        name = "forced workflow overflow 375"
+        self.assertEqual(probe()[name]["counts"].get("workflowRegions"), 2)
+        self.assertTrue(all(r["scrollWidth"] >= 1600 for r in probe()[name]["workflows"]))
+        self.assertEqual(len(fails(name, "workflow-fit")), 2)
+        self.assertTrue(fails(name, "workflow-label"))
+        self.assertTrue(any(what.endswith(" [hidden]") for _, what in fails("hidden workflow label 375", "workflow-label")))
 
     def test_chart_text_full_size(self):
         for name in real():
