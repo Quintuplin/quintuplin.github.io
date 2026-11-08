@@ -16,6 +16,15 @@ function random(seed) {
     return seed / 4294967296;
   };
 }
+// Match the generator used by the player's Seed control.
+function playerRandom(seed) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) >>> 0;
+    let bits = Math.imul(seed ^ (seed >>> 15), seed | 1);
+    bits ^= bits + Math.imul(bits ^ (bits >>> 7), bits | 61);
+    return ((bits ^ (bits >>> 14)) >>> 0) / 4294967296;
+  };
+}
 function run(spec, preset, seed = 11, controls = {}) {
   const defaults = Object.fromEntries(spec.params.map(p => [p.key, p.value]));
   return spec.trace(preset, { ...defaults, ...controls }, random(seed));
@@ -164,6 +173,22 @@ function pathScores(frame, roots) {
   return scores;
 }
 const readScores = s => [...s.matchAll(/([A-Z])–([A-Z]) ([\d.]*\d)/g)].map(([, a, b, v]) => [[a, b].sort().join("–"), Number(v)]);
+test("Brandes highlights the outgoing edges that receive shortest-path counts", () => {
+  const spec = specs.get("brandes"), p = spec.presets.find(p => p.name === "Workshop rings");
+  const visits = spec.trace(p, { roots: "A only" }, playerRandom(753)).filter(f => f.line === 2);
+  const lit = f => f.edges.filter(e => e.active).map(e => [e.from, e.to].sort().join(""));
+  assert.deepEqual(lit(visits[0]), ["AB", "AD"]);
+  assert.deepEqual(lit(visits[1]), ["BC"]);
+  for (const f of visits) {
+    const v = f.nodes.find(n => n.active);
+    const depth = new Map(f.nodes.map(n => [n.id, n.z]));
+    for (const e of f.edges) {
+      const w = e.from === v.id ? e.to : e.to === v.id ? e.from : undefined;
+      assert.equal(e.active, depth.get(w) === v.z + 1);
+    }
+  }
+});
+
 test("Brandes fractional reverse credits and all-root halving match shortest-path enumeration", () => {
   each("brandes", trace => {
     for (const roots of ["A only", "All vertices"]) {

@@ -138,6 +138,7 @@
       describe?.(1, `Root ${id(root)}. Start with one empty path at ${id(root)} and zero paths elsewhere. Depth tracks BFS distance (−1 until discovered).`,
         { active: [root], values: paths, depth: dist });
       for (const v of queue) {
+        const updated = [];
         for (const w of adj[v]) {
           if (dist[w] < 0) {
             dist[w] = dist[v] + 1;
@@ -146,11 +147,12 @@
           if (dist[w] === dist[v] + 1) {
             parents[w].push(v);
             paths[w] += paths[v];
+            updated.push([v, w]);
           }
         }
         const fromParents = parents[v].map(u => paths[u]).join(" + ") || "1";
         describe?.(2, `Root ${id(root)}. At distance ${dist[v]}, paths to ${id(v)} = ${fromParents} = ${paths[v]}. After visiting its neighbours the counts are [${paths.join(", ")}].`,
-          { active: [v], values: paths, depth: dist, lit: parents[v].map(u => [u, v]) });
+          { active: [v], values: paths, depth: dist, lit: updated });
       }
       const credit = Array(g.n).fill(1);
       for (const w of queue.reverse()) {
