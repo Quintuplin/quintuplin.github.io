@@ -196,6 +196,34 @@ test('opposing vectors at player seed 11 have four complementary SimHash bits', 
   assert.match(frames.at(-1).work, /= 4\. Agreement = 0\/4/);
 });
 
+test('printed SimHash operands reproduce the dot and bit at seed 427 and near cancellation', () => {
+  const spec = specs.get('simhash');
+  const reported = spec.trace(spec.presets[1], {bits: 4}, playerSeed(427));
+  assert.match(reported[11].work, /0\.0000281\. Bit = 1/);
+  function verify(frames) {
+    let plane;
+    for (const f of frames) {
+      if (f.line === 1) plane = f.work.match(/n ≈ \(([^)]+)\)/)[1].split(',').map(Number);
+      if (f.line !== 2) continue;
+      const terms = [...f.work.matchAll(/\(([^×()]+)×([^()]+)\)/g)];
+      assert.deepEqual(terms.map(m => Number(m[2])), plane);
+      const dot = terms.reduce((sum,m) => sum + Number(m[1]) * Number(m[2]), 0);
+      const [, shown, bit] = f.work.match(/≈ ([\deE.+-]+)\. Bit = ([01])/);
+      assert.equal(Number(dot >= 0), Number(bit), f.work);
+      assert.equal(Number(dot.toPrecision(4)), Number(shown), f.work);
+    }
+  }
+  verify(reported);
+  for (const radiusDraw of [2 ** -32, 1 - 2 ** -32]) {
+    // At 45 degrees the two Gaussian coordinates can differ by a single ULP.
+    const tape = [0,0,0, radiusDraw,0.125, 0.5,0, 0.5,0,0.5,0];
+    verify(spec.trace({vectors: [[1,-1,0],[-1,1,0]]}, {bits: 1}, () => {
+      assert.ok(tape.length);
+      return tape.shift();
+    }));
+  }
+});
+
 test('Box–Muller redraws a tied plane and keeps the accepted Gaussian coordinates finite', () => {
   const spec = specs.get('simhash');
   const tape = [0,0,0, 0,0,0.75,0.5, 0.5,0.125,0.75,0.5];

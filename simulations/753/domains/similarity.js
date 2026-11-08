@@ -288,6 +288,15 @@
       const vectors = preset.vectors.map(v => v.map((x, i) => x * scale[i]));
       const signatures = ['', ''];
       const display = x => Number(x.toPrecision(4));
+      const dotProduct = (v, n) => v.reduce((sum, x, j) => sum + x * n[j], 0);
+      function workingNormal(normal, projections) {
+        // Increase operand precision when rounding would change either displayed calculation.
+        for (let digits = 4; digits < 17; digits++) {
+          const rounded = normal.map(x => Number(x.toPrecision(digits)));
+          if (vectors.every((v, d) => display(dotProduct(v, rounded)) === display(projections[d]))) return rounded;
+        }
+        return normal;
+      }
       function gaussianPair() {
         const radius = Math.sqrt(-2 * Math.log1p(-rng()));
         const angle = 2 * Math.PI * rng();
@@ -305,14 +314,15 @@
         let normal, projections;
         do {
           normal = [...gaussianPair(), gaussianPair()[0]];
-          projections = vectors.map(v => v.reduce((sum, x, j) => sum + x * normal[j], 0));
+          projections = vectors.map(v => dotProduct(v, normal));
         } while (projections.some((dot, d) => dot === 0 && vectors[d].some(x => x !== 0)));
-        frames.push({ line: 1, work: `Plane ${i + 1}: n ≈ (${normal.map(display)}), n·x = 0.`, ...scene(normal, 2) });
+        const operands = workingNormal(normal, projections);
+        frames.push({ line: 1, work: `Plane ${i + 1}: n ≈ (${operands}), n·x = 0.`, ...scene(normal, 2) });
         vectors.forEach((v, d) => {
           const dot = projections[d];
           const bit = Number(dot >= 0);
           signatures[d] += bit;
-          frames.push({ line: 2, work: `${'AB'[d]}·n ≈ ${v.map((x, j) => '(' + x + '×' + display(normal[j]) + ')').join(' + ')} ≈ ${display(dot)}. Bit = ${bit}; prefix ${signatures[d]}.`, ...scene(normal, d) });
+          frames.push({ line: 2, work: `${'AB'[d]}·n ≈ ${v.map((x, j) => '(' + x + '×' + operands[j] + ')').join(' + ')} ≈ ${display(dot)}. Bit = ${bit}; prefix ${signatures[d]}.`, ...scene(normal, d) });
         });
       }
       const distance = [...signatures[0]].filter((b, i) => b !== signatures[1][i]).length;
