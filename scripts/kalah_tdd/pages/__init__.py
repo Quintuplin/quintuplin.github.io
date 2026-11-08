@@ -7,7 +7,7 @@ import re
 from html import escape
 
 from .. import pagemap
-from ..blocks import plain
+from ..blocks import OPEN, close, plain
 
 # Exact narrative corrections from the whole-study evidence review. Counts are per rendered page.
 REVIEWED = (
@@ -85,11 +85,20 @@ QUOTED = ("The glossary row ", "The report section ", "Function ", "List phase s
 
 def narrative(html, old, new):
     """Replace one exact narrative claim while preserving source quotes and structural content."""
+    canonical = []
+    for m in OPEN.finditer(html):
+        classes = re.search(r'''(?:^|\s)class\s*=\s*(["'])(.*?)\1''', m.group(2))
+        if classes and "flow-cards" in classes.group(2).split():
+            end = close(html, m.group(1), m.end())
+            if end == -1:
+                raise ValueError("unclosed canonical flow-cards element")
+            canonical.append((m.start(), end))
     count = 0
     def replace(m):
         nonlocal count
         block = m.group()
-        if m.group(1) or "<code" in block or plain(block, " ").startswith(QUOTED):
+        if (m.group(1) or "<code" in block or plain(block, " ").startswith(QUOTED) or
+                any(start <= m.start() < end for start, end in canonical)):
             return block
         chunks = re.split(r"(<[^>]+>)", block)
         for i in range(0, len(chunks), 2):

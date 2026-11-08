@@ -137,6 +137,25 @@ class ReviewedClaims(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "reviewed narrative"):
                     pages.reviewed("questions", changed)
 
+    def test_editorial_mapping_preserves_nested_canonical_flow_cards(self):
+        pages = kalah("pages")
+        _, old, new = pages.REVIEWED[0]
+        for classes in ('class="flow-cards"', "class='nested flow-cards compact'"):
+            with self.subTest(classes):
+                canonical = (f'<ol {classes}><li data-node="a"><p>{old}</p>'
+                             f'<ol><li><dl><dd>{old}</dd></dl></li></ol></li></ol>')
+                with mock.patch.object(pages, "REVIEWED", (({"questions": 1}, old, new),)):
+                    self.assertEqual(pages.reviewed("questions", canonical + f"<p>{old}</p>"),
+                                     canonical + f"<p>{new}</p>")
+
+    def test_canonical_flow_card_cannot_satisfy_a_narrative_target(self):
+        pages = kalah("pages")
+        _, old, new = pages.REVIEWED[0]
+        canonical = f'<ol class="flow-cards"><li><p>{old}</p></li></ol>'
+        with mock.patch.object(pages, "REVIEWED", (({"questions": 1}, old, new),)):
+            with self.assertRaisesRegex(ValueError, "matched 0, expected 1"):
+                pages.reviewed("questions", canonical)
+
 
 if __name__ == "__main__":
     unittest.main()
