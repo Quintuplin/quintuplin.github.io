@@ -11,6 +11,7 @@ import sys
 import tempfile
 import types
 import unittest
+from html import escape
 from pathlib import Path
 from unittest import mock
 
@@ -255,7 +256,9 @@ class Pages(unittest.TestCase):
                 self.assertEqual("This part is being written" in html, stub)
         page = kalah("pagemap").PAGES[1]
         marker = '<svg><marker id="m"/><path marker-end="url(#m)"/></svg>'
-        fake = types.SimpleNamespace(body=lambda page, snap, idx: ['<h2 id="intro">Intro</h2>' + marker, marker])
+        claims = "".join(f"<p>{escape(old)}</p>" * expected.get(page.slug, 0)
+                         for expected, old, _ in pages.REVIEWED)
+        fake = types.SimpleNamespace(body=lambda page, snap, idx: ['<h2 id="intro">Intro</h2>' + marker + claims, marker])
         with mock.patch.object(pages, "built", return_value=fake):
             html = build().render_page(page, snap(), kalah("links").index(snap()))
         self.assertNotIn("kalah-tdd-stub", html)
