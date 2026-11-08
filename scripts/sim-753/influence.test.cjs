@@ -89,6 +89,19 @@ test("independent registration, replay, raw input changes, snapshots, edge endpo
   }
 });
 
+test("sampled cascades report activated nodes in this run and live-edge reports their expectation", () => {
+  for (const id of ["independent-cascade", "linear-threshold", "mutually-exclusive-cascade"]) {
+    const final = lesson(id).at(-1);
+    const active = lit(final);
+    if (id === "independent-cascade") assert.equal(active.length, 2);
+    assert.match(final.work, /^Activated nodes in this run = /);
+    assert.ok(final.work.endsWith(" = " + active.length + "."));
+  }
+  const weighted = lesson("live-edge-spread");
+  assert.equal(expected(["A"], graph(weighted[0])), 1.6547253131866455);
+  assert.match(weighted.at(-1).work, /^Expected spread = .* = 1\.6547253131866455\.$/);
+});
+
 test("independent cascade uses one trial per eligible edge per frontier", () => {
   examples("independent-cascade", (run, preset, seed) => {
     for (const seeds of ["A", "B", "A and B"]) {
