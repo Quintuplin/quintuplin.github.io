@@ -30,6 +30,7 @@ SLUGS = ("results/survey", "results/contrasts", "results/consistency", "results/
 PAGE_SLUGS = tuple(p.slug for p in pagemap.PAGES)
 MEASURES = "methodology/measures"
 WIDTHS = (375, 768, 1440)
+MODE = os.environ.get("KALAH_COLOR_MODE", "light")
 CHROMES = ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
            "C:/Program Files/Google/Chrome/Application/chrome.exe", "google-chrome", "google-chrome-stable", "chromium",
            "chromium-browser")
@@ -59,10 +60,13 @@ addEventListener("load", async () => {
   });
   for (const f of document.querySelectorAll("iframe")) {
     const d = f.contentDocument, w = f.contentWindow, cs = (el, p) => w.getComputedStyle(el, p);
+    const forced = w.matchMedia("(forced-colors: active)").matches;
     const fails = [], counts = {summaries: 0, cols: 0, qtables: 0, nested: 0};
     const check = (name, ok, what) => { if (!ok) fails.push([name, what]); };
     const first = (td) => check("stacked-first-cell", cs(td).position === "static" &&
-      cs(td).backgroundColor === "rgba(0, 0, 0, 0)", td.textContent.slice(0, 40));
+      (cs(td).backgroundColor === "rgba(0, 0, 0, 0)" ||
+       forced && cs(td).backgroundColor === cs(td.closest("table")).backgroundColor),
+      td.textContent.slice(0, 40) + " " + cs(td).position + "/" + cs(td).backgroundColor + "/" + cs(td.closest("table")).backgroundColor);
     for (const det of d.querySelectorAll("details")) det.open = true;
     for (const s of d.querySelectorAll("summary")) {
       counts.summaries++;
@@ -101,6 +105,15 @@ addEventListener("load", async () => {
           cs(cell).fontVariantNumeric.includes("tabular-nums"), cell.textContent);
       }
       if (f.width <= 640) check("table-format", cs(region).borderTopWidth === "0px", "record cards have one border");
+    }
+    const matrix = d.getElementById("format-matrix");
+    if (matrix) {
+      const region = matrix.parentElement;
+      check("matrix-format", matrix.classList.contains("matrix") && cs(matrix.querySelector("thead")).display ===
+        "table-header-group" && cs(matrix.querySelector("tbody tr")).display === "table-row", "matrix keeps table semantics");
+      check("matrix-format", region.scrollWidth <= region.clientWidth, "a compact numeric matrix fits without forced widths");
+      for (const cell of matrix.querySelectorAll("td.number"))
+        check("matrix-format", cs(cell).whiteSpace === "nowrap", "numeric token stays whole");
     }
     // Study dot charts hold their drawn width, so chart text stays at its 12px size and the region scrolls instead.
     for (const svg of d.querySelectorAll(".diagram svg.plot")) {
@@ -182,7 +195,8 @@ addEventListener("load", async () => {
     if (workflows.length) check("workflow-ids", ids.length === new Set(ids).size, "duplicate page ids");
     const root = d.documentElement;
     check("sideways-scroll", root.scrollWidth <= root.clientWidth, root.scrollWidth + " > " + root.clientWidth);
-    out[f.dataset.name] = {counts, fails, workflows};
+    out[f.dataset.name] = {counts, fails, workflows,
+      environment: {scheme: cs(root).colorScheme, forced: w.matchMedia("(forced-colors: active)").matches}};
   }
   for (const r of resizes) r.region.style.maxWidth = "180px";
   await resized();
@@ -243,6 +257,7 @@ def doc(slug, style, extra=""):
     page = html(slug)
     if page.count(LINK) != 1 or page.count("</main>") != 1:
         raise AssertionError(f"{slug} has no single study.css link and main")
+    page = page.replace('<html lang="en">', f'<html lang="en" data-theme="{"dark" if MODE == "dark" else "light"}">', 1)
     return FONTS.sub("", page).replace(LINK, f"<style>{style}</style>").replace("</main>", extra + "</main>")
 
 
@@ -268,6 +283,10 @@ def frames():
                             '<tr><td data-th="Method">Most informative next test</td><td data-th="Score">15/15</td>'
                             '<td data-th="Notes">A longer explanation keeps the score intact.</td></tr></tbody></table>', 'Scores')
     out += [(f"formatted table {w}", w, doc("results/contrasts", css(), formatted)) for w in WIDTHS]
+    out.append(("mutated narrative 375", 375, doc("results/contrasts", mutated(), formatted)))
+    matrix = parts.table('<table class="cols" id="format-matrix"><thead><tr><th>Method</th><th>M</th><th>E</th></tr></thead>'
+                         '<tbody><tr><td>A</td><td>470,362</td><td>5</td></tr><tr><td>B</td><td>at bound</td><td>2</td></tr></tbody></table>', 'Numeric comparison')
+    out += [(f"numeric matrix {w}", w, doc("results/contrasts", css(), matrix)) for w in WIDTHS]
     out.append(("small svg text 1440", 1440, doc("designs/annealed", css() + "\nsvg.flow text{font-size:11px!important}")))
     out.append(("obsolete axis 375", 375, doc("results/consistency", css()).replace(
         ">Relative spread, 1 = pooled reference spread</text>", ">Relative spread, 1 is the average</text>")))
@@ -277,6 +296,8 @@ def frames():
 @functools.cache
 def probe():
     """{frame name: {"counts", "fails", "summaries in html"}} from one headless Chrome launch."""
+    if MODE not in ("light", "dark", "forced"):
+        raise ValueError(f"unknown KALAH_COLOR_MODE {MODE!r}")
     for slug in PAGE_SLUGS:
         if 'name="kalah-tdd-stub"' in html(slug):
             raise AssertionError(f"{slug} is a stub; the probe needs the built study pages")
@@ -291,7 +312,9 @@ def probe():
         top.write_text(f'<!doctype html><html><head><meta charset="utf-8"></head><body>{iframes}{PROBE}</body></html>',
                        encoding="utf-8")
         start = time.monotonic()
+        flags = ["--force-high-contrast"] if MODE == "forced" else []
         run = subprocess.run([chrome(), "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+                              *flags,
                               f"--user-data-dir={tmp}/profile", "--window-size=1400,1000", "--virtual-time-budget=10000",
                               "--dump-dom", top.as_uri()], capture_output=True, encoding="utf-8", timeout=120, check=False)
         print(f"Chrome probe of {len(made)} frames took {time.monotonic() - start:.2f} s", file=sys.stderr)
@@ -330,10 +353,27 @@ class ResultsCss(unittest.TestCase):
         # One contents summary per frame; the rest are figure table views.
         self.assertGreater(sum(probe()[n]["counts"]["summaries"] - 1 for n in real()), 0)
 
+    def test_requested_colour_mode_is_active(self):
+        for name in real(slugs=PAGE_SLUGS):
+            with self.subTest(name):
+                environment = probe()[name]["environment"]
+                if MODE == "forced":
+                    self.assertTrue(environment["forced"])
+                else:
+                    self.assertEqual(environment["scheme"], MODE)
+                    self.assertFalse(environment["forced"])
+
     def test_numeric_tokens_and_record_cards_remain_readable(self):
         for width in WIDTHS:
             with self.subTest(width):
                 self.assertEqual(fails(f"formatted table {width}", "table-format"), [])
+        for check in ("stacked-head", "stacked-first-cell", "stacked-label"):
+            self.assertEqual(fails("formatted table 375", check), [])
+
+    def test_numeric_matrices_keep_comparison_rows(self):
+        for width in WIDTHS:
+            with self.subTest(width):
+                self.assertEqual(fails(f"numeric matrix {width}", "matrix-format"), [])
 
     def test_small_svg_labels_select_compact(self):
         name = "small svg text 1440"
@@ -354,7 +394,7 @@ class ResultsCss(unittest.TestCase):
             with self.subTest(name):
                 for check in ("stacked-head", "stacked-first-cell", "stacked-label"):
                     self.assertEqual(fails(name, check), [])
-        self.assertEqual([probe()[f"{s} 375"]["counts"]["cols"] > 0 for s in SLUGS], [True, True, True, False])
+        self.assertGreater(sum(probe()[name]["counts"]["cols"] for name in real(375, PAGE_SLUGS)), 0)
 
     def test_qtable_fixture_375(self):
         self.assertEqual(fails("fixture 375", "stacked-first-cell"), [])
@@ -423,8 +463,10 @@ class ResultsCss(unittest.TestCase):
         self.assertEqual([probe()[f"{s} 375"]["counts"].get("charts", 0) for s in SLUGS], [0, 1, 0, 1])
 
     def test_probe_catches_regression(self):
-        failed = {n: {f[0] for f in fails(n)} for n in ("mutated contrasts 375", "mutated fixture 375")}
-        self.assertEqual(failed["mutated contrasts 375"], {"summary-marker", "stacked-first-cell"})
+        failed = {n: {f[0] for f in fails(n)} for n in ("mutated contrasts 375", "mutated fixture 375", "mutated narrative 375")}
+        expected = {"summary-marker"} | ({"stacked-first-cell"} if probe()["mutated contrasts 375"]["counts"]["cols"] else set())
+        self.assertEqual(failed["mutated contrasts 375"], expected)
+        self.assertEqual(failed["mutated narrative 375"], {"summary-marker", "stacked-first-cell"})
         self.assertEqual(failed["mutated fixture 375"], set(GUARDED))
         for env, known in (({"CHROME": "/no/such/chrome"}, CHROMES), ({}, ())):
             with self.subTest(env), self.assertRaisesRegex(FileNotFoundError, "set CHROME to"):

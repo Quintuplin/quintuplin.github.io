@@ -249,8 +249,8 @@ details > .shaped{margin:0;padding:0 0 10px}
 table{border-collapse:collapse;font-size:.875rem;line-height:1.5;width:100%}
 .table-scroll > table{margin:0}
 /* A long cell no longer squeezes short columns to one letter a line; a wide table scrolls instead. */
-.table-scroll > table.cols :is(th,td){overflow-wrap:normal}
-.cols td:not(.number){white-space:normal}
+.table-scroll > :is(table.cols,table.matrix) :is(th,td){overflow-wrap:normal}
+:is(.cols,.matrix) td:not(.number){white-space:normal}
 td.number{white-space:nowrap;overflow-wrap:normal;word-break:normal;text-align:right;font-variant-numeric:tabular-nums}
 /* Code in a cell, such as a doc sha, breaks only when it alone overflows its line. */
 .table-scroll > table.cols code{overflow-wrap:anywhere}

@@ -53,6 +53,13 @@ class Parts(unittest.TestCase):
         out = kalah("parts").source_figure("1.1", fig)
         self.assertRegex(out, r'<div class="table-scroll" role="region" tabindex="0" aria-label="[^"]+"><table')
 
+    def test_numeric_comparisons_keep_table_semantics(self):
+        table = '<table class="cols"><thead><tr><th>Method</th><th>M</th><th>E</th></tr></thead><tbody>' \
+                '<tr><td>A</td><td>470,362</td><td>5</td></tr><tr><td>B</td><td>at bound</td><td>2</td></tr></tbody></table>'
+        self.assertIn('<table class="matrix">', kalah("parts").table(table, "Comparison"))
+        narrative = '<table class="cols"><tr><td>A description</td><td>5</td></tr><tr><td>Another description</td><td>2</td></tr></table>'
+        self.assertIn('<table class="cols">', kalah("parts").table(narrative, "Records"))
+
     def test_table_is_named_scroll_region(self):
         self.assertEqual(kalah("parts").table("<table></table>", UNSAFE),
                          '<div class="table-scroll" role="region" tabindex="0" aria-label="a &lt;b&gt; &amp; &quot;c&quot;">'

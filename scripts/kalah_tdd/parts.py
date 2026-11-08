@@ -29,6 +29,13 @@ def table(html, label):
     scope = lambda text, kind: re.sub(r'<th(?![^>]*\bscope=)(?=[\s>])', f'<th scope="{kind}"', text)
     html = re.sub(r"<thead\b.*?</thead>", lambda m: scope(m.group(), "col"), html, flags=re.S)
     html = re.sub(r"<td\b([^>]*)>(.*?)</td>", cell, scope(html, "row"), flags=re.S)
+    def matrix(m):
+        block = m.group()
+        columns = {i for row in re.findall(r"<tr>(.*?)</tr>", block, re.S)
+                   for i, attrs in enumerate(re.findall(r"<(?:td|th)\b([^>]*)>", row))
+                   if re.search(r'class="[^"]*\bnumber\b', attrs)}
+        return re.sub(r'(<table\b[^>]*class=")cols(")', r'\1matrix\2', block, count=1) if len(columns) >= 2 else block
+    html = re.sub(r"<table\b.*?</table>", matrix, html, flags=re.S)
     return f'<div class="table-scroll" role="region" tabindex="0" aria-label="{escape(label)}">{html}</div>'
 
 
