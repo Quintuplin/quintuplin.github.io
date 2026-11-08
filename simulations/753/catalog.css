@@ -1,0 +1,62 @@
+:root {
+  color-scheme: light dark;
+  --lab-ink: #172d35;
+  --lab-muted: #485e65;
+  --lab-accent: #075c58;
+  --lab-paper: rgb(248 250 247 / 95%);
+  --lab-rule: #bccbc7;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lab-ink: #e6efed;
+    --lab-muted: #b6c9c9;
+    --lab-accent: #93dfcf;
+    --lab-paper: rgb(19 35 40 / 96%);
+    --lab-rule: #496064;
+  }
+}
+html { background: #263e48; }
+body {
+  margin: 0;
+  padding: clamp(.6rem, 3vw, 3rem);
+  color: var(--lab-ink);
+  font: 1rem/1.55 "Source Sans 3", "Segoe UI", sans-serif;
+}
+.backdrop { position: fixed; inset: 0; z-index: -1; background-position: center; background-size: cover; }
+html.local body:has(#sim) { background: transparent; }
+.lab-sheet {
+  box-sizing: border-box;
+  max-width: 72rem;
+  margin: auto;
+  padding: clamp(1.1rem, 4vw, 3.8rem);
+  border-radius: .85rem;
+  background: var(--lab-paper);
+  box-shadow: 0 .5rem 2rem rgb(0 0 0 / 18%);
+}
+.lab-sheet a { color: var(--lab-accent); text-underline-offset: .21em; }
+.lab-sheet a:focus-visible { outline: 3px solid currentColor; outline-offset: 3px; }
+.site-bar, .topics { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; }
+.site-bar { padding-bottom: .65rem; border-bottom: 1px solid var(--lab-rule); }
+.site-bar a { color: var(--lab-muted); font-weight: 600; text-decoration: none; }
+.site-bar a:hover { text-decoration: underline; }
+.site-bar .external { margin-inline-start: auto; }
+.lab-sheet h1, .lab-sheet h2 { font-family: "STIX Two Text", Georgia, serif; font-weight: 500; line-height: 1.1; text-wrap: balance; }
+.lab-sheet h1 { margin: .25em 0; font-size: clamp(2rem, 5vw, 3.8rem); letter-spacing: -.035em; }
+.lab-sheet h2 { font-size: clamp(1.65rem, 3vw, 2.25rem); margin: 2.4rem 0 .65rem; scroll-margin-top: 1rem; }
+.lab-sheet p { color: var(--lab-muted); }
+.course { margin: clamp(2rem, 5vw, 4rem) 0 0; font-size: .85rem; font-weight: 700; letter-spacing: .1em; }
+.directory header > p:last-child { max-width: 44rem; font-size: 1.1rem; }
+.topics { padding: 1rem 0; border-block: 1px solid var(--lab-rule); }
+.lab-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 2.5rem; list-style: none; margin: 0; padding: 0; }
+.lab-list li { padding: 1rem 0; border-top: 1px solid var(--lab-rule); overflow-wrap: anywhere; }
+.lab-list a { font-size: 1.12rem; font-weight: 650; }
+.lab-list p { margin: .35rem 0 0; }
+.lab-heading { max-width: 85rem; padding: 1rem clamp(1rem, 3vw, 2rem); }
+.lab-heading h1 { font-size: clamp(1.75rem, 4vw, 2.65rem); }
+.lab-heading p { margin: .35rem 0; }
+.catalog-link { display: inline-block; margin-top: .9rem; }
+@media (max-width: 43rem) {
+  .lab-list { grid-template-columns: 1fr; }
+  .site-bar { gap: .2rem 1rem; }
+  .site-bar .external { margin-inline-start: 0; }
+}
