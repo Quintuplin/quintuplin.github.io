@@ -15,10 +15,20 @@ function random(seed) {
     return seed / 2 ** 32;
   };
 }
-function run(id, preset, seed, changes = {}) {
+function run(id, preset, seed, changes = {}, rng = random(seed)) {
   const spec = specs.get(id);
   const params = Object.fromEntries(spec.params.map(p => [p.key, p.value]));
-  return spec.trace(preset, { ...params, ...changes }, random(seed));
+  return spec.trace(preset, { ...params, ...changes }, rng);
+}
+// Reproduce the shared player's seed-753 lesson fixtures alongside the independent LCG cases.
+function lesson(id, preset = 0, changes = {}) {
+  let state = 753;
+  return run(id, specs.get(id).presets[preset], state, changes, () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let bits = Math.imul(state ^ (state >>> 15), state | 1);
+    bits ^= bits + Math.imul(bits ^ (bits >>> 7), bits | 61);
+    return ((bits ^ (bits >>> 14)) >>> 0) / 2 ** 32;
+  });
 }
 function examples(id, check) {
   for (const preset of specs.get(id).presets) {
@@ -171,6 +181,28 @@ test("live-edge enumeration covers every mask, normalises and weights directed r
     assert.equal(spread, expected(["A","B"], edges));
     assert.ok(frames.at(-1).work.endsWith(" = " + spread + "."));
   });
+});
+
+test("displayed greedy argmax selects two distinct seeds on Relay with shortcut", () => {
+  const frames = lesson("greedy-influence");
+  const spec = specs.get("greedy-influence");
+  const selected = [];
+  const gains = new Map();
+  for (const frame of frames) {
+    if (frame.line === 2) {
+      const [, v, gain] = frame.work.match(/^Gain\((\w).* = ([\d.]+)\.$/);
+      gains.set(v, Number(gain));
+    }
+    if (frame.line === 3) {
+      // A stale score remains in the table. Apply the displayed candidate domain.
+      const eligible = [...gains].filter(([v]) => !spec.code[3].includes("v outside S") || !selected.includes(v));
+      const [v] = eligible.sort((a, b) => b[1] - a[1])[0];
+      selected.push(v);
+      assert.ok(frame.work.startsWith("Select " + v + " "));
+    }
+  }
+  assert.deepEqual(selected, ["A", "C"]);
+  assert.ok(frames.at(-1).work.endsWith(" = 2.671875."));
 });
 
 test("greedy scores every remaining node against the updated seed set", () => {

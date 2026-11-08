@@ -173,7 +173,7 @@
     params: [{ key: "budget", label: "Nodes to select", min: 1, max: 3, step: 1, value: 2 }, boost],
     description: "Add the node with the largest gain in expected spread. Recalculate every remaining gain after each choice. Alphabetical order breaks ties.",
     code: ["S ← ∅; spread ← 0", "while size(S) < budget:", "    for v outside S: gain[v] ← E[reach(S ∪ {v})] − spread",
-      "    v ← firstArgMax(gain); S.add(v); spread ← spread + gain[v]", "return S, spread"],
+      "    v ← firstArgMax(gain[v] for v outside S); S.add(v); spread ← spread + gain[v]", "return S, spread"],
     trace(preset, params, rng) {
       const { links, vertices, emit, frames } = network(preset, params, rng);
       const all = worlds(links);
