@@ -48,11 +48,14 @@ addEventListener("load", async () => {
   const resized = () => new Promise(resolve => {
     const pending = new Set(resizes.map(r => r.region));
     if (!pending.size) return resolve();
-    const observer = new ResizeObserver(entries => {
+    const observers = [], delivered = entries => {
       for (const entry of entries) pending.delete(entry.target);
-      if (!pending.size) { observer.disconnect(); resolve(); }
-    });
-    for (const region of pending) { observer.observe(region); region.getBoundingClientRect(); }
+      if (!pending.size) { observers.forEach(observer => observer.disconnect()); resolve(); }
+    };
+    for (const region of pending) {
+      const observer = new region.ownerDocument.defaultView.ResizeObserver(delivered);
+      observers.push(observer); observer.observe(region); region.getBoundingClientRect();
+    }
   });
   for (const f of document.querySelectorAll("iframe")) {
     const d = f.contentDocument, w = f.contentWindow, cs = (el, p) => w.getComputedStyle(el, p);
@@ -119,7 +122,8 @@ addEventListener("load", async () => {
       const compact = [...region.children].find(el => el !== svg && el.querySelector("[data-node]"));
       const presentations = [svg, compact].filter(Boolean), active = presentations.filter(shown);
       const measurement = id === "f4", natural = svg.viewBox.baseVal.width;
-      const expected = f.dataset.name.startsWith("no-js ") || natural > region.clientWidth ? compact : svg;
+      const readable = [...svg.querySelectorAll("text")].every(t => parseFloat(cs(t).fontSize) >= 12);
+      const expected = f.dataset.name.startsWith("no-js ") || natural > region.clientWidth || !readable ? compact : svg;
       counts.workflowRegions = (counts.workflowRegions || 0) + 1;
       const fits = region.scrollWidth <= region.clientWidth;
       check("workflow-fit", fits, id + " " + region.scrollWidth + " > " + region.clientWidth);
@@ -162,7 +166,7 @@ addEventListener("load", async () => {
       workflows.push({id, natural, clientWidth: region.clientWidth, scrollWidth: region.scrollWidth, texts, smallest,
         active: active.map(el => el === svg ? "svg" : "compact")});
       if (!f.dataset.name.startsWith("no-js ")) resizes.push({region, svg, compact, presentations, shown, check, id,
-        width: region.style.maxWidth});
+        width: region.style.maxWidth, readable});
     }
     const ids = [...d.querySelectorAll("[id]")].map(el => el.id);
     if (workflows.length) check("workflow-ids", ids.length === new Set(ids).size, "duplicate page ids");
@@ -180,7 +184,7 @@ addEventListener("load", async () => {
   await resized();
   for (const r of resizes) {
     const active = r.presentations.filter(r.shown);
-    const expected = r.svg.viewBox.baseVal.width > r.region.clientWidth ? r.compact : r.svg;
+    const expected = r.svg.viewBox.baseVal.width > r.region.clientWidth || !r.readable ? r.compact : r.svg;
     r.check("workflow-resize", active.length === 1 && active[0] === expected, r.id + " after restoring width");
   }
   document.getElementById("out").textContent = JSON.stringify(out);
@@ -254,6 +258,7 @@ def frames():
                             '<tr><td data-th="Method">Most informative next test</td><td data-th="Score">15/15</td>'
                             '<td data-th="Notes">A longer explanation keeps the score intact.</td></tr></tbody></table>', 'Scores')
     out += [(f"formatted table {w}", w, doc("results/contrasts", css(), formatted)) for w in WIDTHS]
+    out.append(("small svg text 1440", 1440, doc("designs/annealed", css() + "\nsvg.flow text{font-size:11px!important}")))
     return out
 
 
@@ -317,6 +322,12 @@ class ResultsCss(unittest.TestCase):
         for width in WIDTHS:
             with self.subTest(width):
                 self.assertEqual(fails(f"formatted table {width}", "table-format"), [])
+
+    def test_small_svg_labels_select_compact(self):
+        name = "small svg text 1440"
+        self.assertEqual(probe()[name]["workflows"][0]["active"], ["compact"])
+        for check in ("workflow-selection", "workflow-text", "workflow-label"):
+            self.assertEqual(fails(name, check), [])
 
     def test_stacked_cols_375(self):
         for name in real(375):

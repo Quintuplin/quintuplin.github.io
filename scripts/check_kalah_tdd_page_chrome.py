@@ -24,7 +24,9 @@ const toc = {open: false, querySelector: () => null};
 globalThis.location = {hash: "#cell"};
 globalThis.matchMedia = () => ({matches: false, addEventListener() {}});
 globalThis.addEventListener = (type, f) => { listeners[type] = f; };
+globalThis.ResizeObserver = class { observe() {} };
 globalThis.document = {readyState: "complete", getElementById: (id) => ({toc, cell})[id] || null,
+                       querySelectorAll: () => [],
                        addEventListener: (type, f) => clicks.push(f)};
 """
 RUN = """

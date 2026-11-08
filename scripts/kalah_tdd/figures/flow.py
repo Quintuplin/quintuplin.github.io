@@ -186,16 +186,24 @@ def text_version(title, nodes, edges=(), loops=()):
     """A "Text version: <title>" disclosure, one list item per node in the given order, naming its edges and loops.
     The title tells apart several charts' disclosures on one page."""
     check(nodes, edges, loops)
-    label = {n.id: n.label for n in nodes}
+    by_id = {n.id: n for n in nodes}
+    def label(id):
+        n = by_id[id]
+        return n.label + (f" ({n.lane + ', ' if n.lane else ''}{id})" if sum(p.label == n.label for p in nodes) > 1 else "")
     items = []
     for n in nodes:
-        parts = [n.label + "."] + ([n.note + "."] if n.note else []) + ([f"Lane: {n.lane}."] if n.lane else [])
-        nexts = [label[e.dst] + (f" ({e.label})" if e.label else "") for e in edges if e.src == n.id]
+        parts = [f"<b>{escape(label(n.id))}.</b>"] + ([escape(n.note) + "."] if n.note else [])
+        if n.lane:
+            parts.append(f'<span class="flow-lane">Lane: {escape(n.lane)}.</span>')
+        nexts = [f'<span data-from="{escape(e.src)}" data-to="{escape(e.dst)}">{escape(label(e.dst))}'
+                 + (f" ({escape(e.label)})" if e.label else "") + "</span>" for e in edges if e.src == n.id]
         if nexts:
-            parts.append("Next: " + "; ".join(nexts) + ".")
-        parts += [f"Loop: repeat per {lp.unit}, back to {label[lp.back_to or lp.node]}." for lp in loops if lp.node == n.id]
-        items.append(f"<li>{escape(' '.join(parts))}</li>")
-    return details(title, "".join(items))
+            parts.append("<p>Next: " + "; ".join(nexts) + ".</p>")
+        parts += [f'<p data-from="{escape(lp.node)}" data-to="{escape(lp.back_to or lp.node)}" data-loop="{escape(lp.unit)}">'
+                  f'Loop: repeat per {escape(lp.unit)}, back to {escape(label(lp.back_to or lp.node))}.</p>'
+                  for lp in loops if lp.node == n.id]
+        items.append(f'<li data-node="{escape(n.id)}" data-lane="{escape(n.lane)}">{" ".join(parts)}</li>')
+    return details(title, "".join(items)).replace("<ol>", '<ol class="flow-cards">', 1)
 
 
 def details(title, items_html):

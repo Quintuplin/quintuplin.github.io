@@ -313,7 +313,13 @@ line.ci{stroke-width:1.5}
 figure > :is(h4,h5,h6){margin:0;font-size:1rem}
 
 /* Flowcharts from the site flow module: S stages are plain boxes, L stages add a loop-back arrow. */
-/* Inside a .diagram wrapper a flow keeps readable labels and scrolls; the text version covers narrow screens. */
+/* Compact cards are the no-script default. The routed SVG appears where its natural size fits. */
+.flow-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr));gap:12px;list-style:none;padding:0;margin:0;font:14px/1.5 var(--sans)}
+.flow-cards > li{min-width:0;padding:12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);overflow-wrap:anywhere}
+.flow-cards p{margin:4px 0}.flow-lane{display:block;color:var(--muted)}
+.diagram[data-flow] > svg.flow{display:none}
+.diagram[data-flow="svg"] > svg.flow{display:block}
+.diagram[data-flow="svg"] > .flow-cards{display:none}
 svg.flow{display:block;width:100%;height:auto;font-family:var(--sans)}
 .diagram svg.flow{min-width:640px}
 .flow .lane{fill:var(--wash);opacity:.6}

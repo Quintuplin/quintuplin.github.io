@@ -47,7 +47,15 @@ OPENER = ('<script>(() => { const contents = document.getElementById("toc"), wid
           'const load = () => reveal(location.hash); if (document.readyState === "loading") '
           'addEventListener("DOMContentLoaded", load); else load(); addEventListener("hashchange", load); '
           'document.addEventListener("click", (event) => { const link = event.target.closest(\'a[href^="#"]\'); '
-          'if (link) reveal(link.hash); }); })();</script>')
+          'if (link) reveal(link.hash); }); '
+          'const widths = new WeakMap(), fit = (region) => { const width = region.clientWidth; '
+          'if (widths.get(region) === width) return; widths.set(region, width); '
+          'const svg = region.querySelector("svg.flow"), readable = [...svg.querySelectorAll("text")]'
+          '.every(t => parseFloat(getComputedStyle(t).fontSize) >= 12); '
+          'region.dataset.flow = svg.viewBox.baseVal.width <= width && readable ? "svg" : "compact"; }; '
+          'const observer = new ResizeObserver(entries => entries.forEach(e => fit(e.target))); '
+          'document.querySelectorAll(".diagram[data-flow]").forEach(region => { fit(region); observer.observe(region); }); '
+          '})();</script>')
 SUBHEAD = re.compile(r'<h([23])\b[^>]*' + ID_ATTR + r'([^"]+)"[^>]*>(.*?)</h\1>', re.S)
 
 

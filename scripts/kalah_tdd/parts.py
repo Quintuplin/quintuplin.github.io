@@ -54,10 +54,12 @@ def figure(n, id, title, svg, caption, data_href, text, level=3):
         text = flow.details(title, "".join(f"<li>{escape(t)}</li>" for t in text))
     if not text.startswith("<details>"):
         raise ValueError(f"text is not a text version disclosure: {text[:60]!r}")
+    cards = re.search(r'<ol class="flow-cards">.*</ol>', text, re.S)
+    compact, state = (cards.group(), ' data-flow="compact"') if cards else ("", "")
     text = f'<details id="{escape(id)}-data">' + text.removeprefix("<details>")
     data_href = data_href or f"#{id}-data"
     return (f'<figure id="{escape(id)}" aria-label="Figure {n}: {escape(title)}"><p class="fig-n">Figure {n}</p>'
-            f'<h{level}>{escape(title)}</h{level}><div class="diagram" role="region" tabindex="0" aria-label="Figure {n} diagram">{svg}</div>'
+            f'<h{level}>{escape(title)}</h{level}><div class="diagram"{state} role="region" tabindex="0" aria-label="Figure {n} diagram">{svg}{compact}</div>'
             f'<figcaption><p>{caption}</p><div class="fig-foot">{foot(n, data_href)}</div>{text}</figcaption></figure>')
 
 
