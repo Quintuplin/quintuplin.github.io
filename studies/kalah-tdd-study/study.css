@@ -72,9 +72,10 @@ a{color:var(--accent);text-underline-offset:2px}
 code{font-family:var(--mono);font-size:.875em;background:var(--wash);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
 pre{font:14px/1.6 var(--mono);overflow-x:auto;white-space:pre-wrap;background:var(--wash);padding:var(--space-3);border-radius:var(--radius)}
 img{max-width:100%;height:auto}
-.skip{position:absolute;left:var(--space-4);top:-100px;z-index:10;padding:var(--space-3) var(--space-4);
+.skip{position:absolute;left:var(--space-4);top:var(--space-4);z-index:10;padding:var(--space-3) var(--space-4);
   background:var(--sheet);color:var(--accent);border:2px solid var(--accent);border-radius:var(--radius)}
-.skip:focus{top:var(--space-4)}
+/* Clipping hides it at any sheet offset. A negative top left an edge showing inside the sheet. */
+.skip:not(:focus){clip-path:inset(50%)}
 
 /* Layout: contents rail beside one reading column; below 900px the rail folds into a disclosure under the top pager. */
 /* The 1fr row takes the slack when the rail is taller than a short page, so header and pager stay together. */

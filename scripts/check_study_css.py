@@ -241,12 +241,22 @@ def label_wrap(parsed):
             and not any(r > rank(d, s, i) and ("+" not in f or "+" in s) for r, f in fixes)]
 
 
+def skip_hidden(parsed):
+    """The unfocused skip link is clipped away. An offscreen top showed an edge inside the backdrop-filtered sheet (#136)."""
+    errors = [] if any(m is None and ".skip:not(:focus)" in sels and re.sub(r"\s+", "", d.get("clip-path", "")) == "inset(50%)"
+                       for m, sels, d in parsed) else \
+        [f"{CSS}: no .skip:not(:focus){{clip-path:inset(50%)}} rule hides the unfocused skip link"]
+    return errors + [f"{CSS}: {s} sets top:{d['top']}, so the hidden skip link can show an edge inside the sheet"
+                     for _, sels, d in parsed for s in sels
+                     if re.search(r"\.skip(?![\w-])", s) and re.match(r"\s*(-|calc\(\s*-)", d.get("top", ""))]
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
     text = re.sub(r"/\*.*?\*/", "", (root / CSS).read_text(encoding="utf-8"), flags=re.S)
     parsed = list(rules(text))
     errors = summary_marker(parsed) + stacked_reset(parsed) + nested_card_reset(parsed) + forced_flow(parsed) + \
-        touch_targets(parsed) + kept_rules(parsed) + diagram_pull(parsed) + label_wrap(parsed)
+        touch_targets(parsed) + kept_rules(parsed) + diagram_pull(parsed) + label_wrap(parsed) + skip_hidden(parsed)
     for e in errors:
         print("FAIL:", e, file=sys.stderr)
     if not errors:
