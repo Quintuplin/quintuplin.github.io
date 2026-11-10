@@ -53,7 +53,8 @@ body{margin:0;color:var(--ink);font:16px/1.6 var(--sans);font-variant-numeric:ta
 .backdrop{position:fixed;inset:0;z-index:-1;background:url("/assets/bg.jpg") center / cover no-repeat}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .backdrop{filter:brightness(.6) saturate(.9)}}
 :root[data-theme="dark"] .backdrop{filter:brightness(.6) saturate(.9)}
-.sheet{max-width:1180px;margin:0 auto;padding:28px 40px 40px;background:var(--glass);
+/* The skip link anchors here. backdrop-filter does that too, but reduced transparency drops it. */
+.sheet{position:relative;max-width:1180px;margin:0 auto;padding:28px 40px 40px;background:var(--glass);
   -webkit-backdrop-filter:blur(10px) saturate(120%);backdrop-filter:blur(10px) saturate(120%);
   border:1px solid var(--glass-border);border-radius:var(--radius-sheet);box-shadow:var(--glass-shadow)}
 @media (prefers-reduced-transparency: reduce){.sheet{background:var(--glass-solid);-webkit-backdrop-filter:none;backdrop-filter:none}}
@@ -72,9 +73,10 @@ a{color:var(--accent);text-underline-offset:2px}
 code{font-family:var(--mono);font-size:.875em;background:var(--wash);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
 pre{font:14px/1.6 var(--mono);overflow-x:auto;white-space:pre-wrap;background:var(--wash);padding:var(--space-3);border-radius:var(--radius)}
 img{max-width:100%;height:auto}
-.skip{position:absolute;left:var(--space-4);top:-100px;z-index:10;padding:var(--space-3) var(--space-4);
+.skip{position:absolute;left:var(--space-4);top:var(--space-4);z-index:10;padding:var(--space-3) var(--space-4);
   background:var(--sheet);color:var(--accent);border:2px solid var(--accent);border-radius:var(--radius)}
-.skip:focus{top:var(--space-4)}
+/* Clipping hides it at any sheet offset. A negative top left an edge showing inside the sheet. */
+.skip:not(:focus){clip-path:inset(50%)}
 
 /* Layout: contents rail beside one reading column; below 900px the rail folds into a disclosure under the top pager. */
 /* The 1fr row takes the slack when the rail is taller than a short page, so header and pager stay together. */

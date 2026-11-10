@@ -241,12 +241,33 @@ def label_wrap(parsed):
             and not any(r > rank(d, s, i) and ("+" not in f or "+" in s) for r, f in fixes)]
 
 
+def skip_hidden(parsed):
+    """The unfocused skip link is clipped away. An offscreen top showed an edge inside the backdrop-filtered sheet (#136)."""
+    clip = lambda m, s, d: m is None and s == ".skip:not(:focus)" and re.sub(r"\s+", "", d.get("clip-path", "")) == "inset(50%)"
+    errors = [] if any(clip(m, s, d) for m, sels, d in parsed for s in sels) else \
+        [f"{CSS}: no .skip:not(:focus){{clip-path:inset(50%)}} rule hides the unfocused skip link"]
+    skips = [(m, s, d) for m, sels, d in parsed for s in sels if re.search(r"\.skip(?![\w-])", s)]
+    # Only a focused state may reset the clip, so any other clip-path can show the unfocused link.
+    errors += [f"{CSS}: {s} sets clip-path:{d['clip-path']}, so it can undo the unfocused skip link's clip"
+               for m, s, d in skips if "clip-path" in d and not clip(m, s, d)
+               and not re.search(r"(?<!:not\():focus(-visible)?(?![\w-])", s)]
+    # backdrop-filter also makes the sheet a containing block, but reduced transparency drops it.
+    if not any(m is None and ".sheet" in sels and d.get("position") == "relative" for m, sels, d in parsed):
+        errors.append(f"{CSS}: no top-level .sheet rule sets position:relative, so the focused skip link "
+                      f"leaves the sheet under prefers-reduced-transparency")
+    # A static reset in any rule or media query undoes it where that rule applies.
+    errors += [f"{CSS}: .sheet sets position:{d['position']}, so the focused skip link can leave the sheet"
+               for _, sels, d in parsed if ".sheet" in sels and d.get("position", "").startswith("static")]
+    return errors + [f"{CSS}: {s} sets {p}:{d[p]}, so the hidden skip link can show an edge inside the sheet"
+                     for _, s, d in skips for p in ("top", "inset") if re.match(r"\s*(-|calc\(\s*-)", d.get(p, ""))]
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
     text = re.sub(r"/\*.*?\*/", "", (root / CSS).read_text(encoding="utf-8"), flags=re.S)
     parsed = list(rules(text))
     errors = summary_marker(parsed) + stacked_reset(parsed) + nested_card_reset(parsed) + forced_flow(parsed) + \
-        touch_targets(parsed) + kept_rules(parsed) + diagram_pull(parsed) + label_wrap(parsed)
+        touch_targets(parsed) + kept_rules(parsed) + diagram_pull(parsed) + label_wrap(parsed) + skip_hidden(parsed)
     for e in errors:
         print("FAIL:", e, file=sys.stderr)
     if not errors:

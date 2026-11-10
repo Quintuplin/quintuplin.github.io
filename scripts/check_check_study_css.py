@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the study stylesheet touch target (#60), figure pull (#69) and card label (#70) checks on edited copies of study.css.
+"""Check the study stylesheet touch target (#60), figure pull (#69), card label (#70) and skip link (#136) checks on edited copies of study.css.
 
 Usage: check_check_study_css.py
 """
@@ -208,6 +208,61 @@ class LabelWrap(unittest.TestCase):
                       lambda t: t + ".cols td.nowrap::before{white-space:pre-wrap}"):
             with self.subTest():
                 self.assertEqual(wrap(probe), [])
+
+
+CLIP = ".skip:not(:focus){clip-path:inset(50%)}"
+
+
+def skip(edit=lambda text: text):
+    """skip_hidden on the committed study.css after edit."""
+    c = css()
+    text = re.sub(r"/\*.*?\*/", "", (SCRIPTS.parent / c.CSS).read_text(encoding="utf-8"), flags=re.S)
+    return c.skip_hidden(list(c.rules(edit(text))))
+
+
+class SkipHidden(unittest.TestCase):
+    def test_committed_passes(self):
+        self.assertEqual(skip(), [])
+
+    def test_offscreen_top_rule_fails(self):
+        # The #136 rule: top:-100px left the link's bottom edge visible inside the sheet.
+        old = lambda t: t.replace("top:var(--space-4);z-index:10", "top:-100px;z-index:10").replace(CLIP, ".skip:focus{top:var(--space-4)}")
+        errors = " ".join(skip(old))
+        self.assertRegex(errors, r"no \.skip:not\(:focus\)\{clip-path:inset\(50%\)\} rule")
+        self.assertRegex(errors, r"\.skip sets top:-100px")
+
+    def test_clip_needed_and_negative_top_fails(self):
+        for probe in (lambda t: t.replace(CLIP, ""), lambda t: t.replace(CLIP, "@media (min-width:1px){" + CLIP + "}"),
+                      lambda t: t + "a.skip{top:calc(-1 * var(--space-7))}"):
+            with self.subTest():
+                self.assertNotEqual(skip(probe), [])
+
+    def test_later_unhide_or_inset_offset_fails(self):
+        # The clip rule alone passed while a later rule undid it or moved the link with inset.
+        for probe, message in ((".skip{clip-path:none}", r"\.skip sets clip-path:none"),
+                               (".skip:not(:focus-visible){clip-path:none}", r"sets clip-path:none"),
+                               (".skip{inset:-100px auto auto}", r"\.skip sets inset:-100px auto auto")):
+            with self.subTest(probe):
+                self.assertRegex(" ".join(skip(lambda t: t + probe)), message)
+
+    def test_sheet_needs_position_relative(self):
+        # Reduced transparency drops the sheet's backdrop-filter, which was the link's only containing block.
+        drop = lambda t: t.replace(".sheet{position:relative;", ".sheet{", 1)
+        text = (SCRIPTS.parent / css().CSS).read_text(encoding="utf-8")
+        self.assertNotEqual(drop(text), text, "the mutation must remove the declaration")
+        errors = skip(drop)
+        self.assertRegex(" ".join(errors), r"no top-level \.sheet rule sets position:relative")
+
+    def test_sheet_static_reset_fails(self):
+        # A later or reduced-transparency rule that resets the sheet to static lets the focused link leave it.
+        for probe in ("@media (prefers-reduced-transparency: reduce){.sheet{position:static}}", ".sheet{position:static}"):
+            with self.subTest(probe):
+                self.assertRegex(" ".join(skip(lambda t: t + probe)), r"\.sheet sets position:static")
+
+    def test_focused_clip_reset_passes(self):
+        for probe in (".skip:focus{clip-path:none}", ".skip:focus-visible{clip-path:none}"):
+            with self.subTest(probe):
+                self.assertEqual(skip(lambda t: t + probe), [])
 
 
 if __name__ == "__main__":
