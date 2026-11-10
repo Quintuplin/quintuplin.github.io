@@ -237,6 +237,19 @@ class SkipHidden(unittest.TestCase):
             with self.subTest():
                 self.assertNotEqual(skip(probe), [])
 
+    def test_later_unhide_or_inset_offset_fails(self):
+        # The clip rule alone passed while a later rule undid it or moved the link with inset.
+        for probe, message in ((".skip{clip-path:none}", r"\.skip sets clip-path:none"),
+                               (".skip:not(:focus-visible){clip-path:none}", r"sets clip-path:none"),
+                               (".skip{inset:-100px auto auto}", r"\.skip sets inset:-100px auto auto")):
+            with self.subTest(probe):
+                self.assertRegex(" ".join(skip(lambda t: t + probe)), message)
+
+    def test_focused_clip_reset_passes(self):
+        for probe in (".skip:focus{clip-path:none}", ".skip:focus-visible{clip-path:none}"):
+            with self.subTest(probe):
+                self.assertEqual(skip(lambda t: t + probe), [])
+
 
 if __name__ == "__main__":
     unittest.main()

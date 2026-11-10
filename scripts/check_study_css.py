@@ -243,12 +243,16 @@ def label_wrap(parsed):
 
 def skip_hidden(parsed):
     """The unfocused skip link is clipped away. An offscreen top showed an edge inside the backdrop-filtered sheet (#136)."""
-    errors = [] if any(m is None and ".skip:not(:focus)" in sels and re.sub(r"\s+", "", d.get("clip-path", "")) == "inset(50%)"
-                       for m, sels, d in parsed) else \
+    clip = lambda m, s, d: m is None and s == ".skip:not(:focus)" and re.sub(r"\s+", "", d.get("clip-path", "")) == "inset(50%)"
+    errors = [] if any(clip(m, s, d) for m, sels, d in parsed for s in sels) else \
         [f"{CSS}: no .skip:not(:focus){{clip-path:inset(50%)}} rule hides the unfocused skip link"]
-    return errors + [f"{CSS}: {s} sets top:{d['top']}, so the hidden skip link can show an edge inside the sheet"
-                     for _, sels, d in parsed for s in sels
-                     if re.search(r"\.skip(?![\w-])", s) and re.match(r"\s*(-|calc\(\s*-)", d.get("top", ""))]
+    skips = [(m, s, d) for m, sels, d in parsed for s in sels if re.search(r"\.skip(?![\w-])", s)]
+    # Only a focused state may reset the clip, so any other clip-path can show the unfocused link.
+    errors += [f"{CSS}: {s} sets clip-path:{d['clip-path']}, so it can undo the unfocused skip link's clip"
+               for m, s, d in skips if "clip-path" in d and not clip(m, s, d)
+               and not re.search(r"(?<!:not\():focus(-visible)?(?![\w-])", s)]
+    return errors + [f"{CSS}: {s} sets {p}:{d[p]}, so the hidden skip link can show an edge inside the sheet"
+                     for _, s, d in skips for p in ("top", "inset") if re.match(r"\s*(-|calc\(\s*-)", d.get(p, ""))]
 
 
 def main():
