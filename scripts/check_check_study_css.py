@@ -253,6 +253,12 @@ class SkipHidden(unittest.TestCase):
         errors = skip(drop)
         self.assertRegex(" ".join(errors), r"no top-level \.sheet rule sets position:relative")
 
+    def test_sheet_static_reset_fails(self):
+        # A later or reduced-transparency rule that resets the sheet to static lets the focused link leave it.
+        for probe in ("@media (prefers-reduced-transparency: reduce){.sheet{position:static}}", ".sheet{position:static}"):
+            with self.subTest(probe):
+                self.assertRegex(" ".join(skip(lambda t: t + probe)), r"\.sheet sets position:static")
+
     def test_focused_clip_reset_passes(self):
         for probe in (".skip:focus{clip-path:none}", ".skip:focus-visible{clip-path:none}"):
             with self.subTest(probe):

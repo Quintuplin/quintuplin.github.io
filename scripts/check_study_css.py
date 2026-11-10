@@ -255,6 +255,9 @@ def skip_hidden(parsed):
     if not any(m is None and ".sheet" in sels and d.get("position") == "relative" for m, sels, d in parsed):
         errors.append(f"{CSS}: no top-level .sheet rule sets position:relative, so the focused skip link "
                       f"leaves the sheet under prefers-reduced-transparency")
+    # A static reset in any rule or media query undoes it where that rule applies.
+    errors += [f"{CSS}: .sheet sets position:{d['position']}, so the focused skip link can leave the sheet"
+               for _, sels, d in parsed if ".sheet" in sels and d.get("position", "").startswith("static")]
     return errors + [f"{CSS}: {s} sets {p}:{d[p]}, so the hidden skip link can show an edge inside the sheet"
                      for _, s, d in skips for p in ("top", "inset") if re.match(r"\s*(-|calc\(\s*-)", d.get(p, ""))]
 
