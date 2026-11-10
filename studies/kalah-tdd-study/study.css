@@ -53,7 +53,8 @@ body{margin:0;color:var(--ink);font:16px/1.6 var(--sans);font-variant-numeric:ta
 .backdrop{position:fixed;inset:0;z-index:-1;background:url("/assets/bg.jpg") center / cover no-repeat}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .backdrop{filter:brightness(.6) saturate(.9)}}
 :root[data-theme="dark"] .backdrop{filter:brightness(.6) saturate(.9)}
-.sheet{max-width:1180px;margin:0 auto;padding:28px 40px 40px;background:var(--glass);
+/* The skip link anchors here. backdrop-filter does that too, but reduced transparency drops it. */
+.sheet{position:relative;max-width:1180px;margin:0 auto;padding:28px 40px 40px;background:var(--glass);
   -webkit-backdrop-filter:blur(10px) saturate(120%);backdrop-filter:blur(10px) saturate(120%);
   border:1px solid var(--glass-border);border-radius:var(--radius-sheet);box-shadow:var(--glass-shadow)}
 @media (prefers-reduced-transparency: reduce){.sheet{background:var(--glass-solid);-webkit-backdrop-filter:none;backdrop-filter:none}}

@@ -251,6 +251,10 @@ def skip_hidden(parsed):
     errors += [f"{CSS}: {s} sets clip-path:{d['clip-path']}, so it can undo the unfocused skip link's clip"
                for m, s, d in skips if "clip-path" in d and not clip(m, s, d)
                and not re.search(r"(?<!:not\():focus(-visible)?(?![\w-])", s)]
+    # backdrop-filter also makes the sheet a containing block, but reduced transparency drops it.
+    if not any(m is None and ".sheet" in sels and d.get("position") == "relative" for m, sels, d in parsed):
+        errors.append(f"{CSS}: no top-level .sheet rule sets position:relative, so the focused skip link "
+                      f"leaves the sheet under prefers-reduced-transparency")
     return errors + [f"{CSS}: {s} sets {p}:{d[p]}, so the hidden skip link can show an edge inside the sheet"
                      for _, s, d in skips for p in ("top", "inset") if re.match(r"\s*(-|calc\(\s*-)", d.get(p, ""))]
 

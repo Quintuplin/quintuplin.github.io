@@ -245,6 +245,14 @@ class SkipHidden(unittest.TestCase):
             with self.subTest(probe):
                 self.assertRegex(" ".join(skip(lambda t: t + probe)), message)
 
+    def test_sheet_needs_position_relative(self):
+        # Reduced transparency drops the sheet's backdrop-filter, which was the link's only containing block.
+        drop = lambda t: t.replace(".sheet{position:relative;", ".sheet{", 1)
+        text = (SCRIPTS.parent / css().CSS).read_text(encoding="utf-8")
+        self.assertNotEqual(drop(text), text, "the mutation must remove the declaration")
+        errors = skip(drop)
+        self.assertRegex(" ".join(errors), r"no top-level \.sheet rule sets position:relative")
+
     def test_focused_clip_reset_passes(self):
         for probe in (".skip:focus{clip-path:none}", ".skip:focus-visible{clip-path:none}"):
             with self.subTest(probe):
